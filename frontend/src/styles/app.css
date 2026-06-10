@@ -660,9 +660,17 @@ button[type="submit"],
   display: grid;
   gap: 8px;
   padding: 10px;
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--group-color) 30%, var(--border));
   border-radius: 8px;
-  background: var(--surface-alt);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--group-color) 13%, var(--surface)) 0%,
+      color-mix(in srgb, var(--group-color) 6%, var(--surface-alt)) 100%
+    );
+  box-shadow:
+    inset 4px 0 0 color-mix(in srgb, var(--group-color) 70%, transparent),
+    0 8px 18px color-mix(in srgb, var(--group-color) 9%, transparent);
 }
 
 .attendance-player-main {
@@ -696,8 +704,9 @@ button[type="submit"],
   width: fit-content;
   padding: 3px 8px;
   border-radius: 999px;
-  background: #fff1f1;
-  color: var(--primary-strong);
+  background: color-mix(in srgb, var(--group-color) 16%, var(--surface));
+  color: color-mix(in srgb, var(--group-color) 72%, var(--ink));
+  border: 1px solid color-mix(in srgb, var(--group-color) 24%, transparent);
   font-size: 0.74rem;
   font-style: normal;
   font-weight: 800;
