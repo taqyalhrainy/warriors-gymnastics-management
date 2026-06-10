@@ -26,11 +26,38 @@ const bcrypt = require('bcryptjs');
 
 const app = express();
 
-const allowedOrigins = [process.env.CLIENT_URL || 'http://localhost:5173'];
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'https://warriors-gymnastics-frontend.onrender.com',
+  process.env.CLIENT_URL,
+  process.env.FRONTEND_URL
+].filter(Boolean);
 
-app.use(helmet()); // Security headers for Express
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log('Blocked by CORS:', origin);
+      callback(null, false);
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  optionsSuccessStatus: 204
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+app.use(
+  helmet({
+    crossOriginResourcePolicy: false,
+    crossOriginEmbedderPolicy: false,
+  })
+);
 app.use(express.json({ limit: '15kb' }));
-app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(express.urlencoded({ extended: false }));
 
 const authLimiter = rateLimit({
