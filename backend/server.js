@@ -1,0 +1,118 @@
+const dotenv = require('dotenv');
+dotenv.config();
+
+const express = require('express');
+const helmet = require('helmet');
+const cors = require('cors');
+const rateLimit = require('express-rate-limit');
+const connectDB = require('./config/db');
+const authRoutes = require('./routes/auth');
+const playerRoutes = require('./routes/players');
+const groupRoutes = require('./routes/groups');
+const attendanceRoutes = require('./routes/attendance');
+const subscriptionRoutes = require('./routes/subscriptions');
+const paymentRoutes = require('./routes/payments');
+const notificationRoutes = require('./routes/notifications');
+const reportRoutes = require('./routes/reports');
+const auditRoutes = require('./routes/auditLogs');
+const parentRoutes = require('./routes/parents');
+const programRoutes = require('./routes/programs');
+const coachRoutes = require('./routes/coaches');
+const errorHandler = require('./middleware/errorHandler');
+const User = require('./models/User');
+const Program = require('./models/Program');
+const TrainingGroup = require('./models/TrainingGroup');
+const bcrypt = require('bcryptjs');
+
+const app = express();
+
+const allowedOrigins = [process.env.CLIENT_URL || 'http://localhost:5173'];
+
+app.use(helmet()); // Security headers for Express
+app.use(express.json({ limit: '15kb' }));
+app.use(cors({ origin: allowedOrigins, credentials: true }));
+app.use(express.urlencoded({ extended: false }));
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { message: 'Too many requests from this IP, please try again later.' }
+});
+
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/players', playerRoutes);
+app.use('/api/groups', groupRoutes);
+app.use('/api/parents', parentRoutes);
+app.use('/api/programs', programRoutes);
+app.use('/api/coaches', coachRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/audit-logs', auditRoutes);
+
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok', time: new Date().toISOString() });
+});
+
+app.use((req, res, next) => {
+  res.status(404).json({ message: 'Resource not found' });
+});
+
+app.use(errorHandler);
+
+const initializeDefaultData = async () => {
+  const existingAdmin = await User.findOne({ email: 'admin@warriorsgym.com' });
+  if (!existingAdmin) {
+    const passwordHash = await bcrypt.hash('Admin@12345', 12);
+    await User.create({ name: 'Warriors Admin', email: 'admin@warriorsgym.com', passwordHash, role: 'admin', phone: '', isActive: true });
+    console.log('Seeded default admin user');
+  }
+
+  const programs = [
+    { name: 'Beginner Program', description: 'Foundation gymnastics for new athletes', level: 'Beginner' },
+    { name: 'Intermediate Program', description: 'Skill advancement and discipline', level: 'Intermediate' },
+    { name: 'Advanced Program', description: 'Competitive training for experienced gymnasts', level: 'Advanced' }
+  ];
+
+  for (const program of programs) {
+    const exists = await Program.findOne({ name: program.name });
+    if (!exists) {
+      await Program.create(program);
+    }
+  }
+
+  const groups = [
+    { name: 'Saturday / Wednesday 4:00 PM - 5:00 PM', days: ['Saturday', 'Wednesday'], startTime: '16:00', endTime: '17:00', maxCapacity: 20 },
+    { name: 'Saturday / Wednesday 5:00 PM - 6:30 PM', days: ['Saturday', 'Wednesday'], startTime: '17:00', endTime: '18:30', maxCapacity: 20 },
+    { name: 'Saturday / Wednesday 6:30 PM - 8:00 PM', days: ['Saturday', 'Wednesday'], startTime: '18:30', endTime: '20:00', maxCapacity: 20 },
+    { name: 'Sunday / Tuesday 4:00 PM - 5:00 PM', days: ['Sunday', 'Tuesday'], startTime: '16:00', endTime: '17:00', maxCapacity: 20 },
+    { name: 'Sunday / Tuesday 5:00 PM - 6:30 PM', days: ['Sunday', 'Tuesday'], startTime: '17:00', endTime: '18:30', maxCapacity: 20 },
+    { name: 'Sunday / Tuesday 6:30 PM - 8:00 PM', days: ['Sunday', 'Tuesday'], startTime: '18:30', endTime: '20:00', maxCapacity: 20 },
+    { name: 'Monday / Thursday 4:00 PM - 5:00 PM', days: ['Monday', 'Thursday'], startTime: '16:00', endTime: '17:00', maxCapacity: 20 },
+    { name: 'Monday / Thursday 5:00 PM - 6:30 PM', days: ['Monday', 'Thursday'], startTime: '17:00', endTime: '18:30', maxCapacity: 20 },
+    { name: 'Monday / Thursday 6:30 PM - 8:00 PM', days: ['Monday', 'Thursday'], startTime: '18:30', endTime: '20:00', maxCapacity: 20 }
+  ];
+
+  for (const group of groups) {
+    const exists = await TrainingGroup.findOne({ name: group.name });
+    if (!exists) {
+      await TrainingGroup.create(group);
+    }
+  }
+};
+
+const startServer = async () => {
+  await connectDB();
+  await initializeDefaultData();
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`Backend running on port ${PORT}`);
+  });
+};
+
+startServer().catch((error) => {
+  console.error('Startup failure:', error.message);
+  process.exit(1);
+});

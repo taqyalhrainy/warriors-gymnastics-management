@@ -1,0 +1,16 @@
+import api from './api.js';
+
+export const markPresent = async (data) => {
+  const response = await api.post('/attendance/present', data);
+  return response.data;
+};
+
+export const markAbsent = async (data) => {
+  const response = await api.post('/attendance/absent', data);
+  return response.data;
+};
+
+export const fetchAttendanceByPlayer = async (playerId) => {
+  const response = await api.get(`/attendance/player/${playerId}`);
+  return response.data;
+};
