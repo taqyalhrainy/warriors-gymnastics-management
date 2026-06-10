@@ -9,6 +9,9 @@ const getAuthErrorMessage = (err, mode) => {
   const message = err.response?.data?.message || '';
   const lowerMessage = message.toLowerCase();
 
+  if (err.code === 'ECONNABORTED') {
+    return 'انتهت مهلة الاتصال بالخادم. يبدو أن الباك إند على Render لا يستجيب حالياً، جرّب بعد لحظات أو افحص Logs.';
+  }
   if (!err.response) {
     return 'تعذر الاتصال بالخادم. تأكد أن الباك إند يعمل وأن رابط API مضبوط على Render.';
   }
@@ -54,6 +57,7 @@ const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [generalError, setGeneralError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { login: authLogin } = useAuth();
   const navigate = useNavigate();
 
@@ -64,45 +68,51 @@ const LoginPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
     clearErrors();
+    setIsSubmitting(true);
 
-    if (isRegisterMode) {
-      const newErrors = {};
-      if (!name.trim()) newErrors.name = 'الاسم مطلوب.';
-      if (!phone.trim()) newErrors.phone = 'رقم الهاتف مطلوب.';
-      if (!email.trim()) newErrors.email = 'البريد الإلكتروني مطلوب.';
-      if (!password) newErrors.password = 'كلمة المرور مطلوبة.';
-      if (password.length > 0 && password.length < 6) newErrors.password = 'كلمة المرور يجب أن تكون 6 أحرف على الأقل.';
-      if (password !== confirmPassword) newErrors.confirmPassword = 'تأكيد كلمة المرور غير مطابق.';
-      if (Object.keys(newErrors).length) {
-        setFieldErrors(newErrors);
+    try {
+      if (isRegisterMode) {
+        const newErrors = {};
+        if (!name.trim()) newErrors.name = 'الاسم مطلوب.';
+        if (!phone.trim()) newErrors.phone = 'رقم الهاتف مطلوب.';
+        if (!email.trim()) newErrors.email = 'البريد الإلكتروني مطلوب.';
+        if (!password) newErrors.password = 'كلمة المرور مطلوبة.';
+        if (password.length > 0 && password.length < 6) newErrors.password = 'كلمة المرور يجب أن تكون 6 أحرف على الأقل.';
+        if (password !== confirmPassword) newErrors.confirmPassword = 'تأكيد كلمة المرور غير مطابق.';
+        if (Object.keys(newErrors).length) {
+          setFieldErrors(newErrors);
+          return;
+        }
+
+        try {
+          const data = await register({ name, email, password, phone, role: 'parent' });
+          authLogin(data);
+          navigate('/parent');
+        } catch (err) {
+          setGeneralError(getAuthErrorMessage(err, 'register'));
+        }
+        return;
+      }
+
+      if (!email.trim() || !password) {
+        setFieldErrors({
+          email: !email.trim() ? 'البريد الإلكتروني مطلوب.' : '',
+          password: !password ? 'كلمة المرور مطلوبة.' : ''
+        });
         return;
       }
 
       try {
-        const data = await register({ name, email, password, phone, role: 'parent' });
+        const data = await login({ email, password });
         authLogin(data);
-        navigate('/parent');
+        navigate(data.user.role === 'parent' ? '/parent' : '/admin');
       } catch (err) {
-        setGeneralError(getAuthErrorMessage(err, 'register'));
+        setGeneralError(getAuthErrorMessage(err, 'login'));
       }
-      return;
-    }
-
-    if (!email.trim() || !password) {
-      setFieldErrors({
-        email: !email.trim() ? 'البريد الإلكتروني مطلوب.' : '',
-        password: !password ? 'كلمة المرور مطلوبة.' : ''
-      });
-      return;
-    }
-
-    try {
-      const data = await login({ email, password });
-      authLogin(data);
-      navigate(data.user.role === 'parent' ? '/parent' : '/admin');
-    } catch (err) {
-      setGeneralError(getAuthErrorMessage(err, 'login'));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -150,7 +160,9 @@ const LoginPage = () => {
               {fieldErrors.confirmPassword && <p className="field-error">{fieldErrors.confirmPassword}</p>}
             </>
           )}
-          <button type="submit">{isRegisterMode ? 'Sign Up' : 'Sign In'}</button>
+          <button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? (isRegisterMode ? 'Signing Up...' : 'Signing In...') : (isRegisterMode ? 'Sign Up' : 'Sign In')}
+          </button>
         </form>
         <div className="auth-switch">
           {isRegisterMode ? (

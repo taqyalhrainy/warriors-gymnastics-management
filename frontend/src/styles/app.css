@@ -60,6 +60,12 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  transform: none;
+}
+
 .app-shell {
   min-height: 100vh;
 }
