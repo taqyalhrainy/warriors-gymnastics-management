@@ -99,14 +99,20 @@ const AttendancePage = () => {
   const presentGroups = attendedGroups.filter((group) => group.presentCount > 0);
   const totalPresent = presentGroups.reduce((sum, group) => sum + group.presentCount, 0);
   const donutRadius = 46;
+  const donutCenter = 60;
+  const donutStrokeWidth = 14;
   const donutCircumference = 2 * Math.PI * donutRadius;
   let donutOffset = 0;
   const donutSegments = presentGroups.map((group) => {
     const segmentLength = totalPresent ? (group.presentCount / totalPresent) * donutCircumference : 0;
+    const startOffset = donutOffset;
+    const startAngle = (startOffset / donutCircumference) * Math.PI * 2;
     const segment = {
       ...group,
-      dashLength: Math.max(0, segmentLength - 3),
-      dashOffset: -donutOffset
+      dashLength: Math.max(0, segmentLength),
+      dashOffset: -startOffset,
+      capX: donutCenter + donutRadius * Math.cos(startAngle),
+      capY: donutCenter + donutRadius * Math.sin(startAngle)
     };
     donutOffset += segmentLength;
     return segment;
@@ -135,6 +141,19 @@ const AttendancePage = () => {
                     stroke={group.color}
                     strokeDasharray={`${group.dashLength} ${donutCircumference}`}
                     strokeDashoffset={group.dashOffset}
+                    onMouseEnter={() => setHoveredSummaryGroup(group)}
+                    onMouseLeave={() => setHoveredSummaryGroup(null)}
+                    onClick={() => setSelectedSummaryGroup(group)}
+                  />
+                ))}
+                {donutSegments.map((group) => (
+                  <circle
+                    className="attendance-donut-cap"
+                    cx={group.capX}
+                    cy={group.capY}
+                    fill={group.color}
+                    key={`${group._id}-cap`}
+                    r={donutStrokeWidth / 2}
                     onMouseEnter={() => setHoveredSummaryGroup(group)}
                     onMouseLeave={() => setHoveredSummaryGroup(null)}
                     onClick={() => setSelectedSummaryGroup(group)}

@@ -504,13 +504,18 @@ button[type="submit"],
 }
 
 .attendance-donut-segment {
-  stroke-linecap: round;
+  stroke-linecap: butt;
   cursor: pointer;
   transition: stroke-width 160ms ease;
 }
 
 .attendance-donut-segment:hover {
   stroke-width: 18;
+}
+
+.attendance-donut-cap {
+  cursor: pointer;
+  transition: r 160ms ease;
 }
 
 .attendance-donut-center {
