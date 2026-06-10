@@ -4,6 +4,46 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { login, register } from '../services/auth.js';
 import warriorsLogo from '../assets/warriors-logo.png';
 
+const getAuthErrorMessage = (err, mode) => {
+  const status = err.response?.status;
+  const message = err.response?.data?.message || '';
+  const lowerMessage = message.toLowerCase();
+
+  if (!err.response) {
+    return 'تعذر الاتصال بالخادم. تأكد أن الباك إند يعمل وأن رابط API مضبوط على Render.';
+  }
+  if (status === 409 || lowerMessage.includes('already registered')) {
+    return 'هذا البريد الإلكتروني مسجل مسبقاً. جرّب تسجيل الدخول بدل إنشاء حساب جديد.';
+  }
+  if (status === 404 || lowerMessage.includes('no account found')) {
+    return 'لا يوجد حساب بهذا البريد الإلكتروني. أنشئ حساباً جديداً أولاً.';
+  }
+  if (status === 401 || lowerMessage.includes('incorrect password')) {
+    return 'كلمة المرور غير صحيحة. تأكد منها وحاول مرة أخرى.';
+  }
+  if (status === 403 || lowerMessage.includes('inactive')) {
+    return 'هذا الحساب غير مفعل حالياً. تواصل مع الإدارة لتفعيله.';
+  }
+  if (status === 400) {
+    if (lowerMessage.includes('invalid email')) return 'البريد الإلكتروني غير صحيح.';
+    if (lowerMessage.includes('phone')) return 'رقم الهاتف مطلوب لحساب ولي الأمر.';
+    return message || 'البيانات المدخلة غير مكتملة أو غير صحيحة.';
+  }
+  if (status === 429) {
+    return 'تمت محاولات كثيرة خلال وقت قصير. انتظر قليلاً ثم حاول مرة أخرى.';
+  }
+  if (status >= 500) {
+    if (lowerMessage.includes('encryption') || lowerMessage.includes('encrypt')) {
+      return 'تعذر إنشاء الحساب بسبب إعداد التشفير في الخادم. تأكد من ENCRYPTION_KEY في Render ثم أعد النشر.';
+    }
+    return mode === 'register'
+      ? 'تعذر إنشاء الحساب بسبب خطأ في الخادم. جرّب لاحقاً أو تواصل مع الدعم.'
+      : 'تعذر تسجيل الدخول بسبب خطأ في الخادم. جرّب لاحقاً أو تواصل مع الدعم.';
+  }
+
+  return message || 'حدث خطأ غير متوقع. حاول مرة أخرى.';
+};
+
 const LoginPage = () => {
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [name, setName] = useState('');
@@ -28,12 +68,12 @@ const LoginPage = () => {
 
     if (isRegisterMode) {
       const newErrors = {};
-      if (!name.trim()) newErrors.name = 'Name is required.';
-      if (!phone.trim()) newErrors.phone = 'Phone is required.';
-      if (!email.trim()) newErrors.email = 'Email is required.';
-      if (!password) newErrors.password = 'Password is required.';
-      if (password.length > 0 && password.length < 6) newErrors.password = 'Password must be at least 6 characters.';
-      if (password !== confirmPassword) newErrors.confirmPassword = 'Passwords do not match.';
+      if (!name.trim()) newErrors.name = 'الاسم مطلوب.';
+      if (!phone.trim()) newErrors.phone = 'رقم الهاتف مطلوب.';
+      if (!email.trim()) newErrors.email = 'البريد الإلكتروني مطلوب.';
+      if (!password) newErrors.password = 'كلمة المرور مطلوبة.';
+      if (password.length > 0 && password.length < 6) newErrors.password = 'كلمة المرور يجب أن تكون 6 أحرف على الأقل.';
+      if (password !== confirmPassword) newErrors.confirmPassword = 'تأكيد كلمة المرور غير مطابق.';
       if (Object.keys(newErrors).length) {
         setFieldErrors(newErrors);
         return;
@@ -44,18 +84,16 @@ const LoginPage = () => {
         authLogin(data);
         navigate('/parent');
       } catch (err) {
-        const message = err.response?.data?.message || 'حدث خطأ، الرجاء المحاولة لاحقاً.';
-        if (message.toLowerCase().includes('invalid encryption key')) {
-          setGeneralError('حدث خطأ داخلي في الخادم. حاول التسجيل لاحقاً أو تواصل مع الدعم.');
-        } else {
-          setGeneralError(message);
-        }
+        setGeneralError(getAuthErrorMessage(err, 'register'));
       }
       return;
     }
 
     if (!email.trim() || !password) {
-      setFieldErrors({ email: !email.trim() ? 'Email is required.' : '', password: !password ? 'Password is required.' : '' });
+      setFieldErrors({
+        email: !email.trim() ? 'البريد الإلكتروني مطلوب.' : '',
+        password: !password ? 'كلمة المرور مطلوبة.' : ''
+      });
       return;
     }
 
@@ -64,7 +102,7 @@ const LoginPage = () => {
       authLogin(data);
       navigate(data.user.role === 'parent' ? '/parent' : '/admin');
     } catch (err) {
-      setGeneralError(err.response?.data?.message || 'Login failed.');
+      setGeneralError(getAuthErrorMessage(err, 'login'));
     }
   };
 
