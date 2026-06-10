@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchCoaches, createCoach, updateCoach, deleteCoach } from '../services/coaches.js';
+import { useLanguage } from '../context/LanguageContext.jsx';
 
 const CoachesPage = () => {
   const [coaches, setCoaches] = useState([]);
   const [selectedCoach, setSelectedCoach] = useState(null);
   const [form, setForm] = useState({ name: '', email: '', phone: '', specialization: '' });
   const [message, setMessage] = useState('');
+  const { t } = useLanguage();
 
   const loadCoaches = async () => {
     try {
@@ -63,28 +65,28 @@ const CoachesPage = () => {
     <div className="dashboard-layout">
       <Sidebar />
       <main className="page-content">
-        <div className="page-header"><h1>Coaches</h1></div>
+        <div className="page-header"><h1>{t('coaches')}</h1></div>
         <div className="grid-two">
           <div className="form-card">
-            <h2>{selectedCoach ? 'Edit Coach' : 'Add Coach'}</h2>
+            <h2>{selectedCoach ? t('editCoach') : t('addCoach')}</h2>
             {message && <p className="alert-info">{message}</p>}
             <form onSubmit={handleSubmit}>
-              <label>Name</label>
+              <label>{t('name')}</label>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-              <label>Email (optional)</label>
+              <label>{t('emailOptional')}</label>
               <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-              <label>Phone</label>
+              <label>{t('phone')}</label>
               <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-              <label>Specialization</label>
+              <label>{t('specialization')}</label>
               <input value={form.specialization} onChange={(e) => setForm({ ...form, specialization: e.target.value })} />
-              <button className="btn-primary" type="submit">{selectedCoach ? 'Update' : 'Add'}</button>
-              {selectedCoach && <button type="button" className="btn-secondary" onClick={resetForm}>Cancel</button>}
+              <button className="btn-primary" type="submit">{selectedCoach ? t('update') : t('add')}</button>
+              {selectedCoach && <button type="button" className="btn-secondary" onClick={resetForm}>{t('cancel')}</button>}
             </form>
           </div>
           <div className="table-card">
-            <h2>Coach List</h2>
+            <h2>{t('coachList')}</h2>
             <table className="data-table">
-              <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Specialization</th><th>Actions</th></tr></thead>
+              <thead><tr><th>{t('name')}</th><th>{t('email')}</th><th>{t('phone')}</th><th>{t('specialization')}</th><th>{t('actions')}</th></tr></thead>
               <tbody>
                 {coaches.length ? coaches.map((coach) => (
                   <tr key={coach._id}>
@@ -93,11 +95,11 @@ const CoachesPage = () => {
                     <td>{coach.phone || '—'}</td>
                     <td>{coach.specialization || '—'}</td>
                     <td>
-                      <button type="button" onClick={() => handleEdit(coach)}>Edit</button>
-                      <button type="button" onClick={() => handleDelete(coach._id)}>Delete</button>
+                      <button type="button" onClick={() => handleEdit(coach)}>{t('edit')}</button>
+                      <button type="button" onClick={() => handleDelete(coach._id)}>{t('delete')}</button>
                     </td>
                   </tr>
-                )) : <tr><td colSpan="5">No coaches available.</td></tr>}
+                )) : <tr><td colSpan="5">{t('noCoachesAvailable')}</td></tr>}
               </tbody>
             </table>
           </div>

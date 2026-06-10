@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchPrograms, createProgram, updateProgram, deleteProgram } from '../services/programs.js';
 import { confirmAction } from '../utils/confirmAction.js';
+import { useLanguage } from '../context/LanguageContext.jsx';
 
 const ProgramsPage = () => {
   const [programs, setPrograms] = useState([]);
   const [selectedProgram, setSelectedProgram] = useState(null);
   const [form, setForm] = useState({ name: '', description: '', level: '', price: '' });
   const [message, setMessage] = useState('');
+  const { t } = useLanguage();
 
   const loadPrograms = async () => {
     try {
@@ -76,19 +78,19 @@ const ProgramsPage = () => {
     <div className="dashboard-layout">
       <Sidebar />
       <main className="page-content">
-        <div className="page-header"><h1>Programs</h1></div>
+        <div className="page-header"><h1>{t('programs')}</h1></div>
         <div className="grid-two">
           <div className="form-card">
-            <h2>{selectedProgram ? 'Edit Program' : 'Add Program'}</h2>
+            <h2>{selectedProgram ? t('editProgram') : t('addProgram')}</h2>
             {message && <p className="alert-info">{message}</p>}
             <form onSubmit={handleSubmit}>
-              <label>Name</label>
+              <label>{t('name')}</label>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-              <label>Description</label>
+              <label>{t('description')}</label>
               <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-              <label>Level</label>
+              <label>{t('level')}</label>
               <input value={form.level} onChange={(e) => setForm({ ...form, level: e.target.value })} />
-              <label>Price</label>
+              <label>{t('price')}</label>
               <input
                 type="number"
                 min="0"
@@ -97,26 +99,26 @@ const ProgramsPage = () => {
                 onChange={(e) => setForm({ ...form, price: Number(e.target.value) })}
                 required
               />
-              <button className="btn-primary" type="submit">{selectedProgram ? 'Update' : 'Create'}</button>
-              {selectedProgram && <button type="button" className="btn-secondary" onClick={resetForm}>Cancel</button>}
+              <button className="btn-primary" type="submit">{selectedProgram ? t('update') : t('create')}</button>
+              {selectedProgram && <button type="button" className="btn-secondary" onClick={resetForm}>{t('cancel')}</button>}
             </form>
           </div>
           <div className="table-card">
-            <h2>Program List</h2>
+            <h2>{t('programList')}</h2>
             <table className="data-table">
-              <thead><tr><th>Name</th><th>Level</th><th>Description</th><th>Actions</th></tr></thead>
+              <thead><tr><th>{t('name')}</th><th>{t('level')}</th><th>{t('description')}</th><th>{t('actions')}</th></tr></thead>
               <tbody>
                 {programs.length ? programs.map((program) => (
                   <tr key={program._id}>
                     <td>{program.name}</td>
-                    <td>{program.level || 'N/A'}</td>
-                    <td>{program.description || 'No description'}</td>
+                    <td>{program.level || t('notAvailable')}</td>
+                    <td>{program.description || t('noDescription')}</td>
                     <td>
-                      <button type="button" onClick={() => handleEdit(program)}>Edit</button>
-                      <button type="button" onClick={() => handleDelete(program._id)}>Delete</button>
+                      <button type="button" onClick={() => handleEdit(program)}>{t('edit')}</button>
+                      <button type="button" onClick={() => handleDelete(program._id)}>{t('delete')}</button>
                     </td>
                   </tr>
-                )) : <tr><td colSpan="4">No programs found.</td></tr>}
+                )) : <tr><td colSpan="4">{t('noProgramsFound')}</td></tr>}
               </tbody>
             </table>
           </div>

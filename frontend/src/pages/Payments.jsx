@@ -3,6 +3,7 @@ import Sidebar from '../components/Sidebar.jsx';
 import { fetchPayments, createPayment } from '../services/payments.js';
 import { fetchPlayers } from '../services/players.js';
 import { fetchSubscriptions } from '../services/subscriptions.js';
+import { useLanguage } from '../context/LanguageContext.jsx';
 
 const PaymentsPage = () => {
   const [payments, setPayments] = useState([]);
@@ -12,6 +13,7 @@ const PaymentsPage = () => {
   const [paymentSummary, setPaymentSummary] = useState({ totalPaid: 0, remaining: 0 });
   const [form, setForm] = useState({ playerId: '', subscriptionId: '', totalAmount: 0, paidAmount: 0, paymentMethod: 'Cash', receiptImage: '', notes: '' });
   const [error, setError] = useState('');
+  const { t } = useLanguage();
 
   const loadPayments = async () => {
     try {
@@ -86,19 +88,19 @@ const PaymentsPage = () => {
     <div className="dashboard-layout">
       <Sidebar />
       <main className="page-content">
-        <div className="page-header"><h1>Payments</h1></div>
+        <div className="page-header"><h1>{t('payments')}</h1></div>
         <div className="grid-two">
           <div className="form-card">
-            <h2>Add Payment</h2>
+            <h2>{t('addPayment')}</h2>
             {error && <p className="alert-error">{error}</p>}
             <form onSubmit={handleSubmit}>
-              <label>Player</label>
+              <label>{t('player')}</label>
               <select value={form.playerId} onChange={(e) => setForm({ ...form, playerId: e.target.value })} required>
-                <option value="">Select Player</option>
+                <option value="">{t('selectPlayer')}</option>
                 {players.map((player) => <option key={player._id} value={player._id}>{player.fullName}</option>)}
               </select>
 
-              <label>Subscription</label>
+              <label>{t('subscription')}</label>
               <select value={form.subscriptionId} onChange={(e) => {
                 const subscriptionId = e.target.value;
                 const selected = subscriptions.find((sub) => sub._id === subscriptionId);
@@ -111,46 +113,46 @@ const PaymentsPage = () => {
                 }));
                 calculateSubscriptionSummary(subscriptionId, selected?.price || 0);
               }}>
-                <option value="">Pick Subscription</option>
+                <option value="">{t('pickSubscription')}</option>
                 {subscriptions.map((sub) => (
-                  <option key={sub._id} value={sub._id}>{`${sub.packageName || 'Subscription'} (${sub.type})`}</option>
+                  <option key={sub._id} value={sub._id}>{`${sub.packageName || t('subscription')} (${sub.type})`}</option>
                 ))}
               </select>
 
               <div className="info-row">
                 <div>
-                  <label>Subscription Price</label>
+                  <label>{t('subscriptionPrice')}</label>
                   <input type="number" value={selectedSubscription?.price ?? 0} readOnly />
                 </div>
                 <div>
-                  <label>Total Paid</label>
+                  <label>{t('totalPaid')}</label>
                   <input type="number" value={paymentSummary.totalPaid} readOnly />
                 </div>
                 <div>
-                  <label>Remaining</label>
+                  <label>{t('remaining')}</label>
                   <input type="number" value={paymentSummary.remaining} readOnly />
                 </div>
               </div>
 
-              <label>Paid Amount</label>
+              <label>{t('paidAmount')}</label>
               <input type="number" min="0" value={form.paidAmount} onChange={(e) => setForm({ ...form, paidAmount: Number(e.target.value) })} required />
-              <label>Payment Method</label>
+              <label>{t('paymentMethod')}</label>
               <select value={form.paymentMethod} onChange={(e) => setForm({ ...form, paymentMethod: e.target.value })}>
                 <option>Cash</option>
                 <option>Click</option>
                 <option>Bank Transfer</option>
               </select>
-              <label>Receipt Image URL</label>
+              <label>{t('receiptImageUrl')}</label>
               <input value={form.receiptImage} onChange={(e) => setForm({ ...form, receiptImage: e.target.value })} />
-              <label>Notes</label>
+              <label>{t('notes')}</label>
               <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-              <button className="btn-primary" type="submit">Record Payment</button>
+              <button className="btn-primary" type="submit">{t('recordPayment')}</button>
             </form>
           </div>
           <div className="table-card">
-            <h2>Payment History</h2>
+            <h2>{t('paymentHistory')}</h2>
             <table className="data-table">
-              <thead><tr><th>Player</th><th>Paid</th><th>Remaining</th><th>Method</th></tr></thead>
+              <thead><tr><th>{t('player')}</th><th>{t('paid')}</th><th>{t('remaining')}</th><th>{t('method')}</th></tr></thead>
               <tbody>
                 {payments.length ? payments.map((payment) => (
                   <tr key={payment._id}>
@@ -159,7 +161,7 @@ const PaymentsPage = () => {
                     <td>{payment.remainingAmount}</td>
                     <td>{payment.paymentMethod}</td>
                   </tr>
-                )) : <tr><td colSpan="4">No payments recorded.</td></tr>}
+                )) : <tr><td colSpan="4">{t('noPaymentsRecorded')}</td></tr>}
               </tbody>
             </table>
           </div>

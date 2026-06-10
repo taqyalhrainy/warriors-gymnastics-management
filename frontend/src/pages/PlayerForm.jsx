@@ -6,6 +6,7 @@ import { fetchGroups } from '../services/groups.js';
 import { fetchParents } from '../services/parents.js';
 import { fetchPrograms } from '../services/programs.js';
 import { fetchCoaches } from '../services/coaches.js';
+import { useLanguage } from '../context/LanguageContext.jsx';
 
 const PlayerFormPage = () => {
   const { id } = useParams();
@@ -16,6 +17,7 @@ const PlayerFormPage = () => {
   const [groups, setGroups] = useState([]);
   const [coaches, setCoaches] = useState([]);
   const [message, setMessage] = useState('');
+  const { t } = useLanguage();
 
   useEffect(() => {
     Promise.all([fetchParents(), fetchPrograms(), fetchGroups(), fetchCoaches()])
@@ -71,59 +73,59 @@ const PlayerFormPage = () => {
     <div className="dashboard-layout">
       <Sidebar />
       <main className="page-content">
-        <div className="page-header"><h1>{id ? 'Edit Player' : 'Add Player'}</h1></div>
+        <div className="page-header"><h1>{id ? t('editPlayer') : t('addPlayer')}</h1></div>
         <div className="form-card">
           {message && <p className="alert-error">{message}</p>}
           <form onSubmit={handleSubmit}>
-            <label>Name</label>
+            <label>{t('name')}</label>
             <input name="fullName" value={player.fullName} onChange={handleChange} required />
 
-            <label>Date of Birth</label>
+            <label>{t('dateOfBirth')}</label>
             <input name="dateOfBirth" type="date" value={player.dateOfBirth} onChange={handleChange} required />
 
-            <label>Parent</label>
+            <label>{t('parent')}</label>
             <select name="parentId" value={player.parentId} onChange={handleChange} required>
-              <option value="">Select Parent</option>
+              <option value="">{t('selectParent')}</option>
               {parents.map((parent) => (
                 <option key={parent._id} value={parent._id}>{`${parent.name} (${parent.email})`}</option>
               ))}
             </select>
 
-            <label>Parent Phone</label>
+            <label>{t('parentPhone')}</label>
             <input name="parentPhone" value={player.parentPhone} onChange={handleChange} required />
 
-            <label>Program</label>
+            <label>{t('program')}</label>
             <select name="programId" value={player.programId} onChange={handleChange}>
-              <option value="">Select Program</option>
+              <option value="">{t('selectProgram')}</option>
               {programs.map((program) => (
                 <option key={program._id} value={program._id}>{program.name}</option>
               ))}
             </select>
 
-            <label>Group</label>
+            <label>{t('group')}</label>
             <select name="groupId" value={player.groupId} onChange={handleChange}>
-              <option value="">Choose Group</option>
+              <option value="">{t('chooseGroup')}</option>
               {groups.map((group) => <option key={group._id} value={group._id}>{group.name}</option>)}
             </select>
 
-            <label>Coach</label>
+            <label>{t('coach')}</label>
             <select name="coachId" value={player.coachId} onChange={handleChange}>
-              <option value="">Select Coach</option>
+              <option value="">{t('selectCoach')}</option>
               {coaches.map((coach) => <option key={coach._id} value={coach._id}>{coach.name}</option>)}
             </select>
 
-            <label>Status</label>
+            <label>{t('status')}</label>
             <select name="status" value={player.status} onChange={handleChange}>
-              <option value="active">Active</option>
-              <option value="expired">Expired</option>
-              <option value="frozen">Frozen</option>
-              <option value="left">Left</option>
+              <option value="active">{t('activeStatus')}</option>
+              <option value="expired">{t('expiredStatus')}</option>
+              <option value="frozen">{t('frozenStatus')}</option>
+              <option value="left">{t('leftStatus')}</option>
             </select>
 
-            <label>Level</label>
+            <label>{t('level')}</label>
             <input name="level" value={player.level} onChange={handleChange} />
 
-            <button type="submit" className="btn-primary">Save Player</button>
+            <button type="submit" className="btn-primary">{t('savePlayer')}</button>
           </form>
         </div>
       </main>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchNotificationById } from '../services/notifications.js';
+import { useLanguage } from '../context/LanguageContext.jsx';
 
 const NotificationDetailPage = () => {
   const { id } = useParams();
@@ -9,6 +10,7 @@ const NotificationDetailPage = () => {
   const location = useLocation();
   const [notification, setNotification] = useState(null);
   const [error, setError] = useState('');
+  const { t } = useLanguage();
 
   const backPath = location.pathname.startsWith('/parent') ? '/parent/notifications' : '/notifications';
 
@@ -31,8 +33,8 @@ const NotificationDetailPage = () => {
       <Sidebar />
       <main className="page-content">
         <div className="page-header">
-          <h1>Notification</h1>
-          <button className="btn-secondary" type="button" onClick={() => navigate(backPath)}>Back</button>
+          <h1>{t('notification')}</h1>
+          <button className="btn-secondary" type="button" onClick={() => navigate(backPath)}>{t('back')}</button>
         </div>
         {error && <p className="alert-error">{error}</p>}
         {notification ? (
@@ -40,13 +42,13 @@ const NotificationDetailPage = () => {
             <h2>{notification.title}</h2>
             <p>{notification.message}</p>
             <div style={{ marginTop: '16px', color: '#6b7280' }}>
-              <p>Type: {notification.type || 'General'}</p>
-              <p>Received: {new Date(notification.createdAt).toLocaleString()}</p>
-              {notification.viewedAt && <p>User saw the message at {new Date(notification.viewedAt).toLocaleString()}</p>}
+              <p>{t('type')}: {notification.type || t('general')}</p>
+              <p>{t('received')}: {new Date(notification.createdAt).toLocaleString()}</p>
+              {notification.viewedAt && <p>{t('userSawMessageAt')} {new Date(notification.viewedAt).toLocaleString()}</p>}
             </div>
           </div>
         ) : !error ? (
-          <p>Loading notification...</p>
+          <p>{t('loadingNotification')}</p>
         ) : null}
       </main>
     </div>

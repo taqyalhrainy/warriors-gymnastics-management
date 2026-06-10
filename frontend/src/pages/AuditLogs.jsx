@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
 import api from '../services/api.js';
+import { useLanguage } from '../context/LanguageContext.jsx';
 
 const AuditLogsPage = () => {
   const [logs, setLogs] = useState([]);
+  const { t } = useLanguage();
 
   const formatEntity = (log) => {
     if (log.entity === 'User' && log.userId?.role) {
@@ -21,23 +23,23 @@ const AuditLogsPage = () => {
     <div className="dashboard-layout">
       <Sidebar />
       <main className="page-content">
-        <div className="page-header"><h1>Audit Logs</h1></div>
+        <div className="page-header"><h1>{t('auditLogs')}</h1></div>
         <div className="table-card">
           <table className="data-table">
-            <thead><tr><th>Actor</th><th>Action</th><th>Entity</th><th>Date</th></tr></thead>
+            <thead><tr><th>{t('actor')}</th><th>{t('action')}</th><th>{t('entity')}</th><th>{t('date')}</th></tr></thead>
             <tbody>
               {logs.length ? logs.map((log) => (
                 <tr key={log._id}>
                   <td>
                     {log.userId ? (
                       `${log.userId.name || log.userId.email || log.userId}${log.userId.role ? ` (${log.userId.role})` : ''}`
-                    ) : 'System'}
+                    ) : t('system')}
                   </td>
                   <td>{log.action}</td>
                   <td>{formatEntity(log)}</td>
                   <td>{new Date(log.createdAt).toLocaleString()}</td>
                 </tr>
-              )) : <tr><td colSpan="4">No audit logs found</td></tr>}
+              )) : <tr><td colSpan="4">{t('noAuditLogsFound')}</td></tr>}
             </tbody>
           </table>
         </div>

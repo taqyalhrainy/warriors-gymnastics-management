@@ -3,12 +3,14 @@ import { Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchNotifications, sendNotification, announceAllParents } from '../services/notifications.js';
 import { fetchParents } from '../services/parents.js';
+import { useLanguage } from '../context/LanguageContext.jsx';
 
 const NotificationsPage = () => {
   const [notifications, setNotifications] = useState([]);
   const [parents, setParents] = useState([]);
   const [message, setMessage] = useState('');
   const [form, setForm] = useState({ recipientUserId: '', title: '', message: '', type: 'announcement' });
+  const { t } = useLanguage();
 
   useEffect(() => {
     fetchNotifications().then(setNotifications).catch(console.error);
@@ -36,42 +38,42 @@ const NotificationsPage = () => {
     <div className="dashboard-layout">
       <Sidebar />
       <main className="page-content">
-        <div className="page-header"><h1>Notifications</h1></div>
+        <div className="page-header"><h1>{t('notifications')}</h1></div>
         <div className="grid-two">
           <div className="form-card">
-            <h2>Send Announcement</h2>
+            <h2>{t('sendAnnouncement')}</h2>
             {message && <p className="alert-info">{message}</p>}
             <form onSubmit={handleSend}>
-              <label>Parent</label>
+              <label>{t('parent')}</label>
               <select value={form.recipientUserId} onChange={(e) => setForm({ ...form, recipientUserId: e.target.value })} required>
-                <option value="">Select Parent</option>
-                <option value="all">All Parents</option>
+                <option value="">{t('selectParent')}</option>
+                <option value="all">{t('allParents')}</option>
                 {parents.map((parent) => (
                   <option key={parent._id} value={parent.userId?._id || ''}>{parent.name}</option>
                 ))}
               </select>
-              <label>Title</label>
+              <label>{t('title')}</label>
               <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
-              <label>Message</label>
+              <label>{t('message')}</label>
               <textarea value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} required />
-              <button className="btn-primary" type="submit">Send</button>
+              <button className="btn-primary" type="submit">{t('send')}</button>
             </form>
           </div>
           <div className="table-card">
-            <h2>Messages</h2>
+            <h2>{t('messages')}</h2>
             <table className="data-table">
-              <thead><tr><th>Title</th><th>Recipient</th><th>Type</th><th>Read</th><th>Viewed At</th><th>Action</th></tr></thead>
+              <thead><tr><th>{t('title')}</th><th>{t('recipient')}</th><th>{t('type')}</th><th>{t('read')}</th><th>{t('viewedAt')}</th><th>{t('action')}</th></tr></thead>
               <tbody>
                 {notifications.length ? notifications.map((note) => (
                   <tr key={note._id}>
                     <td>{note.title}</td>
-                    <td>{note.recipientUserId?.name || note.recipientUserId?.email || 'Parent'}</td>
+                    <td>{note.recipientUserId?.name || note.recipientUserId?.email || t('parent')}</td>
                     <td>{note.type}</td>
-                    <td>{note.isRead ? 'Yes' : 'No'}</td>
+                    <td>{note.isRead ? t('yes') : t('no')}</td>
                     <td>{note.viewedAt ? new Date(note.viewedAt).toLocaleString() : '-'}</td>
-                    <td><Link to={`/notifications/${note._id}`}>View</Link></td>
+                    <td><Link to={`/notifications/${note._id}`}>{t('view')}</Link></td>
                   </tr>
-                )) : <tr><td colSpan="6">No notifications.</td></tr>}
+                )) : <tr><td colSpan="6">{t('noNotifications')}</td></tr>}
               </tbody>
             </table>
           </div>

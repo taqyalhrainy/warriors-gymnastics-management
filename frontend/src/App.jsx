@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { useAuth } from './context/AuthContext.jsx';
 import { useLanguage } from './context/LanguageContext.jsx';
 import LoginPage from './pages/Login.jsx';
@@ -25,10 +26,25 @@ import ProtectedRoute from './components/ProtectedRoute.jsx';
 
 function App() {
   const { user } = useAuth();
-  const { language, toggleLanguage } = useLanguage();
+  const { language, toggleLanguage, t } = useLanguage();
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
+
+  useEffect(() => {
+    localStorage.setItem('theme', theme);
+    document.documentElement.dataset.theme = theme;
+    document.body.classList.toggle('dark-mode', theme === 'dark');
+    document.body.classList.toggle('light-mode', theme === 'light');
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((current) => (current === 'light' ? 'dark' : 'light'));
+  };
 
   return (
     <div className="app-shell">
+      <button className={`theme-toggle-btn ${language === 'ar' ? 'left' : 'right'}`} type="button" onClick={toggleTheme}>
+        <span>{theme === 'light' ? t('darkMode') : t('lightMode')}</span>
+      </button>
       <button className={`language-toggle-btn ${language === 'ar' ? 'left' : 'right'}`} type="button" onClick={toggleLanguage}>
         <span>{language === 'en' ? 'عربي' : 'English'}</span>
       </button>
@@ -38,6 +54,7 @@ function App() {
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/players" element={<PlayersPage />} />
           <Route path="/players/new" element={<PlayerFormPage />} />
+          <Route path="/players/:id/edit" element={<PlayerFormPage />} />
           <Route path="/players/:id" element={<PlayerProfilePage />} />
           <Route path="/groups" element={<GroupsPage />} />
           <Route path="/attendance" element={<AttendancePage />} />

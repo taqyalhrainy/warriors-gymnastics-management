@@ -5,6 +5,7 @@ import { fetchPlayers } from '../services/players.js';
 import { fetchPrograms } from '../services/programs.js';
 import { confirmAction } from '../utils/confirmAction.js';
 import { formatCurrency } from '../utils/format.js';
+import { useLanguage } from '../context/LanguageContext.jsx';
 
 const SubscriptionsPage = () => {
   const [subscriptions, setSubscriptions] = useState([]);
@@ -13,6 +14,7 @@ const SubscriptionsPage = () => {
   const [selectedSubscription, setSelectedSubscription] = useState(null);
   const [form, setForm] = useState({ playerId: '', type: 'sessions', packageName: '', totalSessions: 0, startDate: '', endDate: '', price: 0 });
   const [error, setError] = useState('');
+  const { t } = useLanguage();
 
   const loadData = async () => {
     try {
@@ -86,25 +88,25 @@ const SubscriptionsPage = () => {
     <div className="dashboard-layout">
       <Sidebar />
       <main className="page-content">
-        <div className="page-header"><h1>Subscriptions</h1></div>
+        <div className="page-header"><h1>{t('subscriptions')}</h1></div>
         <div className="grid-two">
           <div className="form-card">
-            <h2>Create Subscription</h2>
+            <h2>{t('createSubscription')}</h2>
             {error && <p className="alert-error">{error}</p>}
             <form onSubmit={handleSubmit}>
-              <label>Player</label>
+              <label>{t('player')}</label>
               <select value={form.playerId} onChange={(e) => setForm({ ...form, playerId: e.target.value })} required>
-                <option value="">Select Player</option>
+                <option value="">{t('selectPlayer')}</option>
                 {players.map((player) => (
                   <option key={player._id} value={player._id}>{player.fullName}</option>
                 ))}
               </select>
-              <label>Subscription Type</label>
+              <label>{t('subscriptionType')}</label>
               <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-                <option value="sessions">Sessions</option>
-                <option value="time">Time</option>
+                <option value="sessions">{t('sessions')}</option>
+                <option value="time">{t('timeSubscription')}</option>
               </select>
-              <label>Package Name</label>
+              <label>{t('packageName')}</label>
               <select
                 value={form.packageName}
                 onChange={(e) => {
@@ -118,46 +120,46 @@ const SubscriptionsPage = () => {
                 }}
                 required
               >
-                <option value="">Select Package</option>
+                <option value="">{t('selectPackage')}</option>
                 {packages.map((pkg) => (
                   <option key={pkg._id} value={pkg.name}>{pkg.name}</option>
                 ))}
               </select>
               {form.type === 'sessions' && (
                 <>
-                  <label>Total Sessions</label>
+                  <label>{t('totalSessions')}</label>
                   <input type="number" min="0" value={form.totalSessions} onChange={(e) => setForm({ ...form, totalSessions: Number(e.target.value) })} />
                 </>
               )}
-              <label>Start Date</label>
+              <label>{t('startDate')}</label>
               <input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} required />
-              <label>End Date</label>
+              <label>{t('endDate')}</label>
               <input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} required />
-              <label>Price (د.أ)</label>
+              <label>{t('price')}</label>
               <input type="number" min="0" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} required />
-              <button className="btn-primary" type="submit">{selectedSubscription ? 'Update Subscription' : 'Create Subscription'}</button>
-              {selectedSubscription && <button type="button" className="btn-secondary" onClick={resetForm}>Cancel</button>}
+              <button className="btn-primary" type="submit">{selectedSubscription ? t('updateSubscription') : t('createSubscription')}</button>
+              {selectedSubscription && <button type="button" className="btn-secondary" onClick={resetForm}>{t('cancel')}</button>}
             </form>
           </div>
           <div className="table-card">
-            <h2>Subscriptions</h2>
+            <h2>{t('subscriptions')}</h2>
             <table className="data-table">
-              <thead><tr><th>Player</th><th>Package</th><th>Type</th><th>Status</th><th>Remaining</th><th>Days Remaining</th><th>Actions</th></tr></thead>
+              <thead><tr><th>{t('player')}</th><th>{t('package')}</th><th>{t('subscriptionType')}</th><th>{t('status')}</th><th>{t('remaining')}</th><th>{t('daysRemaining')}</th><th>{t('actions')}</th></tr></thead>
               <tbody>
                 {subscriptions.length ? subscriptions.map((sub) => (
                   <tr key={sub._id}>
-                    <td>{sub.playerId?.fullName || 'Unknown'}</td>
+                    <td>{sub.playerId?.fullName || t('unknown')}</td>
                     <td>{sub.packageName || '—'}</td>
                     <td>{sub.type}</td>
                     <td>{sub.status}</td>
                     <td>{sub.type === 'sessions' ? sub.remainingSessions : formatCurrency(sub.price)}</td>
-                    <td>{sub.type === 'time' ? `${sub.daysRemaining ?? 0} days` : '—'}</td>
+                    <td>{sub.type === 'time' ? sub.daysRemaining ?? 0 : '—'}</td>
                     <td>
-                      <button type="button" onClick={() => handleEdit(sub)}>Edit</button>
-                      <button type="button" onClick={() => handleDelete(sub._id)}>Delete</button>
+                      <button type="button" onClick={() => handleEdit(sub)}>{t('edit')}</button>
+                      <button type="button" onClick={() => handleDelete(sub._id)}>{t('delete')}</button>
                     </td>
                   </tr>
-                )) : <tr><td colSpan="7">No subscriptions yet.</td></tr>}
+                )) : <tr><td colSpan="7">{t('noSubscriptionsYet')}</td></tr>}
               </tbody>
             </table>
           </div>

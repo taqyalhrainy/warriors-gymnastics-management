@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchGroups, createGroup, updateGroup, deleteGroup } from '../services/groups.js';
 import { confirmAction } from '../utils/confirmAction.js';
+import { useLanguage } from '../context/LanguageContext.jsx';
 
 const initialForm = { name: '', days: '', startTime: '', endTime: '', maxCapacity: 20 };
 
@@ -10,6 +11,7 @@ const GroupsPage = () => {
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [form, setForm] = useState(initialForm);
   const [message, setMessage] = useState('');
+  const { t } = useLanguage();
 
   const loadGroups = async () => {
     try {
@@ -80,30 +82,30 @@ const GroupsPage = () => {
     <div className="dashboard-layout">
       <Sidebar />
       <main className="page-content">
-        <div className="page-header"><h1>Training Groups</h1></div>
+        <div className="page-header"><h1>{t('trainingGroups')}</h1></div>
         <div className="grid-two">
           <div className="form-card">
-            <h2>{selectedGroup ? 'Edit Group' : 'New Group'}</h2>
+            <h2>{selectedGroup ? t('editGroup') : t('newGroup')}</h2>
             {message && <p className="alert-info">{message}</p>}
             <form onSubmit={handleSubmit}>
-              <label>Name</label>
+              <label>{t('name')}</label>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-              <label>Days (comma separated)</label>
+              <label>{t('daysCommaSeparated')}</label>
               <input value={form.days} onChange={(e) => setForm({ ...form, days: e.target.value })} required />
-              <label>Start Time</label>
+              <label>{t('startTime')}</label>
               <input value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} required />
-              <label>End Time</label>
+              <label>{t('endTime')}</label>
               <input value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} required />
-              <label>Max Capacity</label>
+              <label>{t('maxCapacity')}</label>
               <input type="number" value={form.maxCapacity} onChange={(e) => setForm({ ...form, maxCapacity: Number(e.target.value) })} required />
-              <button className="btn-primary" type="submit">{selectedGroup ? 'Update Group' : 'Add Group'}</button>
-              {selectedGroup && <button type="button" className="btn-secondary" onClick={resetForm}>Cancel</button>}
+              <button className="btn-primary" type="submit">{selectedGroup ? t('updateGroup') : t('addGroup')}</button>
+              {selectedGroup && <button type="button" className="btn-secondary" onClick={resetForm}>{t('cancel')}</button>}
             </form>
           </div>
           <div className="table-card">
-            <h2>Group List</h2>
+            <h2>{t('groupList')}</h2>
             <table className="data-table">
-              <thead><tr><th>Name</th><th>Days</th><th>Time</th><th>Capacity</th><th>Actions</th></tr></thead>
+              <thead><tr><th>{t('name')}</th><th>{t('days')}</th><th>{t('time')}</th><th>{t('capacity')}</th><th>{t('actions')}</th></tr></thead>
               <tbody>
                 {groups.map((group) => (
                   <tr key={group._id}>
@@ -112,12 +114,12 @@ const GroupsPage = () => {
                     <td>{group.startTime} - {group.endTime}</td>
                     <td>{group.currentCount}/{group.maxCapacity}</td>
                     <td>
-                      <button type="button" onClick={() => handleEdit(group)}>Edit</button>
-                      <button type="button" onClick={() => handleDelete(group._id)}>Delete</button>
+                      <button type="button" onClick={() => handleEdit(group)}>{t('edit')}</button>
+                      <button type="button" onClick={() => handleDelete(group._id)}>{t('delete')}</button>
                     </td>
                   </tr>
                 ))}
-                {groups.length === 0 && <tr><td colSpan="5">No groups found</td></tr>}
+                {groups.length === 0 && <tr><td colSpan="5">{t('noGroupsFound')}</td></tr>}
               </tbody>
             </table>
           </div>

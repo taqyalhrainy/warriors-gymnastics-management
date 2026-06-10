@@ -10,6 +10,11 @@ export const markAbsent = async (data) => {
   return response.data;
 };
 
+export const updateTodayAttendance = async (data) => {
+  const response = await api.put('/attendance/today', data);
+  return response.data;
+};
+
 export const fetchAttendanceByPlayer = async (playerId) => {
   const response = await api.get(`/attendance/player/${playerId}`);
   return response.data;

@@ -87,6 +87,80 @@ const markAbsent = async (req, res, next) => {
   }
 };
 
+const updateTodayAttendance = async (req, res, next) => {
+  try {
+    const { playerId, groupId, status } = sanitizeObject(req.body);
+    if (!validateObjectId(playerId) || !validateObjectId(groupId) || !['present', 'absent'].includes(status)) {
+      return res.status(400).json({ message: 'Valid player, group, and attendance status are required.' });
+    }
+
+    const today = new Date();
+    const dateOnly = new Date(today.toISOString().split('T')[0]);
+    const player = await Player.findById(playerId).populate({ path: 'parentId', populate: { path: 'userId', select: '_id' } });
+    if (!player) {
+      return res.status(404).json({ message: 'Player not found.' });
+    }
+
+    let attendance = await Attendance.findOne({ playerId, date: dateOnly });
+    const previousStatus = attendance?.status;
+
+    if (!attendance) {
+      attendance = await Attendance.create({
+        playerId,
+        groupId,
+        date: dateOnly,
+        checkInTime: status === 'present' ? today : undefined,
+        status,
+        markedBy: req.user._id
+      });
+    } else {
+      attendance.groupId = groupId;
+      attendance.status = status;
+      attendance.markedBy = req.user._id;
+      attendance.checkInTime = status === 'present' ? (attendance.checkInTime || today) : undefined;
+      await attendance.save();
+    }
+
+    const subscription = await Subscription.findOne({ playerId });
+    if (subscription && subscription.type === 'sessions' && previousStatus !== status) {
+      if (status === 'present' && previousStatus !== 'present' && subscription.remainingSessions > 0) {
+        subscription.usedSessions += 1;
+        subscription.remainingSessions = Math.max(0, subscription.remainingSessions - 1);
+      }
+      if (status === 'absent' && previousStatus === 'present') {
+        subscription.usedSessions = Math.max(0, subscription.usedSessions - 1);
+        subscription.remainingSessions += 1;
+      }
+      subscription.lastAttendanceDate = status === 'present' ? today : subscription.lastAttendanceDate;
+      if (subscription.endDate <= today || subscription.remainingSessions === 0) {
+        subscription.status = 'expired';
+      } else if (subscription.remainingSessions <= 2) {
+        subscription.status = 'almost_expired';
+      } else {
+        subscription.status = 'active';
+      }
+      await subscription.save();
+    }
+
+    if (status === 'present' && previousStatus !== 'present' && player.parentId?.userId) {
+      const attendanceTime = today.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      await Notification.create({
+        recipientUserId: player.parentId.userId._id,
+        playerId: player._id,
+        title: 'Attendance Registered',
+        message: `تم تسجيل حضور ابنكم ${player.fullName} في نادي Warriors Gymnastics الساعة ${attendanceTime}.`,
+        type: 'attendance',
+        isRead: false
+      });
+    }
+
+    await createAuditLog({ userId: req.user._id, action: `attendance ${status}`, entity: 'Attendance', entityId: attendance._id, req });
+    res.json(attendance);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getAttendanceByPlayer = async (req, res, next) => {
   try {
     const { playerId } = req.params;
@@ -113,4 +187,4 @@ const getAttendanceByGroup = async (req, res, next) => {
   }
 };
 
-module.exports = { markPresent, markAbsent, getAttendanceByPlayer, getAttendanceByGroup };
+module.exports = { markPresent, markAbsent, updateTodayAttendance, getAttendanceByPlayer, getAttendanceByGroup };

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchParents, createParent, deleteParent } from '../services/parents';
 import { confirmAction } from '../utils/confirmAction.js';
+import { useLanguage } from '../context/LanguageContext.jsx';
 
 const initialForm = { name: '', email: '', phone: '', password: '', isActive: true };
 
@@ -10,6 +11,7 @@ const Parents = () => {
   const [form, setForm] = useState(initialForm);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const { t } = useLanguage();
 
   const loadParents = async () => {
     try {
@@ -57,54 +59,54 @@ const Parents = () => {
       <Sidebar />
       <main className="page-content">
         <div className="page-header">
-          <h1>Parents</h1>
+          <h1>{t('parents')}</h1>
         </div>
         <div className="grid-two">
           <div className="form-card">
-            <h2>Add New Parent</h2>
+            <h2>{t('addNewParent')}</h2>
             {message && <p className="alert-success">{message}</p>}
             {error && <p className="alert-error">{error}</p>}
             <form onSubmit={handleSubmit} className="form-grid">
               <label>
-                Name
+                {t('name')}
                 <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
               </label>
               <label>
-                Email
+                {t('email')}
                 <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
               </label>
               <label>
-                Phone
+                {t('phone')}
                 <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} required />
               </label>
               <label>
-                Password
+                {t('password')}
                 <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
               </label>
               <label>
-                Active
+                {t('active')}
                 <select value={form.isActive ? 'true' : 'false'} onChange={(e) => setForm({ ...form, isActive: e.target.value === 'true' })}>
-                  <option value="true">Yes</option>
-                  <option value="false">No</option>
+                  <option value="true">{t('yes')}</option>
+                  <option value="false">{t('no')}</option>
                 </select>
               </label>
-              <button type="submit" className="btn-primary">Save Parent</button>
+              <button type="submit" className="btn-primary">{t('saveParent')}</button>
             </form>
           </div>
           <div className="table-card">
-            <h2>Parent List</h2>
+            <h2>{t('parentList')}</h2>
             {parents.length === 0 ? (
-              <p>No parents available.</p>
+              <p>{t('noParentsAvailable')}</p>
             ) : (
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Phone</th>
-                    <th>Active</th>
-                    <th>Children</th>
-                    <th>Actions</th>
+                    <th>{t('name')}</th>
+                    <th>{t('email')}</th>
+                    <th>{t('phone')}</th>
+                    <th>{t('active')}</th>
+                    <th>{t('children')}</th>
+                    <th>{t('actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -113,10 +115,10 @@ const Parents = () => {
                       <td>{parent.name}</td>
                       <td>{parent.email}</td>
                       <td>{parent.phone || '—'}</td>
-                      <td>{parent.userId?.isActive ? 'Yes' : 'No'}</td>
+                      <td>{parent.userId?.isActive ? t('yes') : t('no')}</td>
                       <td>{parent.children?.length || 0}</td>
                       <td>
-                        <button type="button" onClick={() => handleDelete(parent._id)}>Delete</button>
+                        <button type="button" onClick={() => handleDelete(parent._id)}>{t('delete')}</button>
                       </td>
                     </tr>
                   ))}

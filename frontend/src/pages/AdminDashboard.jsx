@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
 import StatsCard from '../components/StatsCard.jsx';
 import { fetchDashboard } from '../services/reports.js';
+import { useLanguage } from '../context/LanguageContext.jsx';
 
 const AdminDashboard = () => {
   const [stats, setStats] = useState(null);
+  const { t } = useLanguage();
 
   useEffect(() => {
     fetchDashboard().then(setStats).catch(console.error);
@@ -14,15 +16,15 @@ const AdminDashboard = () => {
     <div className="dashboard-layout">
       <Sidebar />
       <main className="page-content">
-        <div className="page-header"><h1>Admin Dashboard</h1></div>
+        <div className="page-header"><h1>{t('adminDashboard')}</h1></div>
         <div className="stats-grid">
-          <StatsCard title="Active Players" value={stats?.activePlayers ?? '...'} description="Current active gymnastics players." />
-          <StatsCard title="Expired Subscriptions" value={stats?.expiredSubscriptions ?? '...'} description="Subscriptions that need renewal." />
-          <StatsCard title="Ending Soon" value={stats?.soonSubscriptions ?? '...'} description="Subscriptions close to expiry." />
-          <StatsCard title="Monthly Revenue" value={stats?.monthlyRevenue ?? '...'} description="Payments received this month." />
-          <StatsCard title="Pending Amounts" value={stats?.pendingAmounts ?? '...'} description="Remaining balances for active subscriptions." />
-          <StatsCard title="Present Today" value={stats?.presentCount ?? '...'} description="Players present today." />
-          <StatsCard title="Absent Today" value={stats?.absentCount ?? '...'} description="Players absent today." />
+          <StatsCard title={t('activePlayers')} value={stats?.activePlayers ?? '...'} description={t('activePlayersDesc')} />
+          <StatsCard title={t('expiredSubscriptions')} value={stats?.expiredSubscriptions ?? '...'} description={t('expiredSubscriptionsDesc')} />
+          <StatsCard title={t('endingSoon')} value={stats?.soonSubscriptions ?? '...'} description={t('endingSoonDesc')} />
+          <StatsCard title={t('monthlyRevenue')} value={stats?.monthlyRevenue ?? '...'} description={t('monthlyRevenueDesc')} />
+          <StatsCard title={t('pendingAmounts')} value={stats?.pendingAmounts ?? '...'} description={t('pendingAmountsDesc')} />
+          <StatsCard title={t('presentToday')} value={stats?.presentCount ?? '...'} description={t('presentTodayDesc')} />
+          <StatsCard title={t('absentToday')} value={stats?.absentCount ?? '...'} description={t('absentTodayDesc')} />
         </div>
       </main>
     </div>
