@@ -3,6 +3,7 @@ import Sidebar from '../components/Sidebar.jsx';
 import { fetchPayments, createPayment } from '../services/payments.js';
 import { fetchPlayers } from '../services/players.js';
 import { fetchSubscriptions } from '../services/subscriptions.js';
+import { fetchPrograms } from '../services/programs.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
 const formatDate = (date) => {
@@ -50,6 +51,7 @@ const PaymentsPage = () => {
   const [payments, setPayments] = useState([]);
   const [players, setPlayers] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
+  const [programs, setPrograms] = useState([]);
   const [selectedSubscription, setSelectedSubscription] = useState(null);
   const [paymentSummary, setPaymentSummary] = useState({ totalPaid: 0, remaining: 0 });
   const [form, setForm] = useState({ playerId: '', subscriptionId: '', totalAmount: 0, paidAmount: 0, paymentMethod: 'Cash', receiptImage: '', notes: '' });
@@ -72,6 +74,7 @@ const PaymentsPage = () => {
 
   useEffect(() => {
     fetchPlayers().then(setPlayers).catch(console.error);
+    fetchPrograms().then(setPrograms).catch(console.error);
     loadPayments();
   }, []);
 
@@ -138,6 +141,18 @@ const PaymentsPage = () => {
       subscription.remainingSessions
     ].join(' ').toLowerCase().includes(query));
   }, [subscriptions, subscriptionSearch]);
+
+  const filteredPrograms = useMemo(() => {
+    const query = subscriptionSearch.trim().toLowerCase();
+    if (!query) return programs;
+    return programs.filter((program) => [
+      program.name,
+      program.description,
+      program.level,
+      program.price,
+      program.duration
+    ].join(' ').toLowerCase().includes(query));
+  }, [programs, subscriptionSearch]);
 
   const visiblePayments = useMemo(() => {
     if (activeView === 'thisMonth') {
@@ -344,9 +359,22 @@ const PaymentsPage = () => {
                   calculateSubscriptionSummary(subscriptionId, selected?.price || 0);
                 }}>
                   <option value="">{t('pickSubscription')}</option>
-                  {filteredSubscriptions.map((sub) => (
-                    <option key={sub._id} value={sub._id}>{`${sub.packageName || t('subscription')} (${sub.type})`}</option>
-                  ))}
+                  {filteredSubscriptions.length > 0 && (
+                    <optgroup label="Player subscriptions">
+                      {filteredSubscriptions.map((sub) => (
+                        <option key={sub._id} value={sub._id}>{`${sub.packageName || t('subscription')} (${sub.type})`}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {filteredPrograms.length > 0 && (
+                    <optgroup label={filteredSubscriptions.length > 0 ? 'Academy programs' : 'Academy programs - create a subscription first'}>
+                      {filteredPrograms.map((program) => (
+                        <option key={program._id} value="" disabled>
+                          {`${program.name}${program.level ? ` - ${program.level}` : ''}`}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
               </label>
 

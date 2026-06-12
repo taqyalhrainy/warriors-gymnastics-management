@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { login, register } from '../services/auth.js';
+import api from '../services/api.js';
 import warriorsLogo from '../assets/warriors-logo.png';
 
 const SERVER_WAKE_RETRY_MS = 3000;
 const SERVER_WAKE_MAX_MS = 180000;
+let hasRequestedServerWake = false;
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -88,6 +90,15 @@ const LoginPage = () => {
   const [isWaitingForServer, setIsWaitingForServer] = useState(false);
   const { login: authLogin } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (hasRequestedServerWake) return;
+    hasRequestedServerWake = true;
+
+    api.get('/health', { timeout: 15000 }).catch(() => {
+      hasRequestedServerWake = false;
+    });
+  }, []);
 
   const clearErrors = () => {
     setFieldErrors({});
