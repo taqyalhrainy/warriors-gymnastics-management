@@ -191,7 +191,7 @@ const SubscriptionsPage = () => {
               </label>
             </div>
             <table className="data-table">
-              <thead><tr><th>{t('player')}</th><th>{t('package')}</th><th>{t('subscriptionType')}</th><th>{t('status')}</th><th>{t('remaining')}</th><th>{t('daysRemaining')}</th><th>{t('actions')}</th></tr></thead>
+              <thead><tr><th>{t('player')}</th><th>{t('package')}</th><th>{t('subscriptionType')}</th><th>{t('status')}</th><th>{t('price')}</th><th>{t('daysRemaining')}</th><th>{t('actions')}</th></tr></thead>
               <tbody>
                 {filteredSubscriptions.length ? filteredSubscriptions.map((sub) => (
                   <tr key={sub._id}>
@@ -199,7 +199,7 @@ const SubscriptionsPage = () => {
                     <td>{sub.packageName || '—'}</td>
                     <td>{sub.type}</td>
                     <td>{sub.status}</td>
-                    <td>{sub.type === 'sessions' ? sub.remainingSessions : formatCurrency(sub.price)}</td>
+                    <td>{formatCurrency(sub.price)}</td>
                     <td>{sub.type === 'time' ? sub.daysRemaining ?? 0 : '—'}</td>
                     <td>
                       <button type="button" onClick={() => handleEdit(sub)}>{t('edit')}</button>
