@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchPayments, createPayment } from '../services/payments.js';
 import { fetchPlayers } from '../services/players.js';
-import { fetchSubscriptions } from '../services/subscriptions.js';
+import { fetchSubscriptions, createSubscription } from '../services/subscriptions.js';
 import { fetchPrograms } from '../services/programs.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
@@ -46,6 +46,17 @@ const getPaymentMonthKey = (date) => {
 const getMemberName = (payment) => payment.playerId?.fullName || payment.playerId || '-';
 const getParentName = (payment) => payment.playerId?.parentId?.name || '-';
 const getPackageName = (payment) => payment.subscriptionId?.packageName || payment.subscriptionId?.type || '-';
+const getProgramOptionValue = (programId) => `program:${programId}`;
+
+const getDefaultSubscriptionDates = () => {
+  const start = new Date();
+  const end = new Date(start);
+  end.setMonth(end.getMonth() + 1);
+  return {
+    startDate: start.toISOString().split('T')[0],
+    endDate: end.toISOString().split('T')[0]
+  };
+};
 
 const PaymentsPage = () => {
   const [payments, setPayments] = useState([]);
@@ -53,6 +64,7 @@ const PaymentsPage = () => {
   const [subscriptions, setSubscriptions] = useState([]);
   const [programs, setPrograms] = useState([]);
   const [selectedSubscription, setSelectedSubscription] = useState(null);
+  const [selectedProgram, setSelectedProgram] = useState(null);
   const [paymentSummary, setPaymentSummary] = useState({ totalPaid: 0, remaining: 0 });
   const [form, setForm] = useState({ playerId: '', subscriptionId: '', totalAmount: 0, paidAmount: 0, paymentMethod: 'Cash', receiptImage: '', notes: '' });
   const [error, setError] = useState('');
@@ -84,6 +96,7 @@ const PaymentsPage = () => {
       setForm((prev) => ({ ...prev, subscriptionId: '', totalAmount: 0 }));
       setPaymentSummary({ totalPaid: 0, remaining: 0 });
       setSelectedSubscription(null);
+      setSelectedProgram(null);
       return;
     }
     fetchSubscriptions({ playerId: form.playerId })
@@ -100,6 +113,7 @@ const PaymentsPage = () => {
           calculateSubscriptionSummary(current._id, current.price || 0);
         } else {
           setSelectedSubscription(null);
+          setSelectedProgram(null);
           setPaymentSummary({ totalPaid: 0, remaining: 0 });
         }
       })
@@ -231,7 +245,7 @@ const PaymentsPage = () => {
   }, [searchedPayments]);
 
   const calculateSubscriptionSummary = async (subscriptionId, price) => {
-    if (!subscriptionId) {
+    if (!subscriptionId || String(subscriptionId).startsWith('program:')) {
       setPaymentSummary({ totalPaid: 0, remaining: 0 });
       return;
     }
@@ -251,8 +265,38 @@ const PaymentsPage = () => {
     setError('');
     setIsSubmitting(true);
     try {
-      await createPayment(form);
+      let paymentPayload = { ...form };
+
+      if (String(form.subscriptionId).startsWith('program:')) {
+        if (!form.playerId || !selectedProgram) {
+          setError('Please select a player and program.');
+          return;
+        }
+
+        const { startDate, endDate } = getDefaultSubscriptionDates();
+        const subscriptionPrice = Math.max(Number(selectedProgram.price || 0), Number(form.paidAmount || 0));
+        const subscription = await createSubscription({
+          playerId: form.playerId,
+          type: 'time',
+          packageName: selectedProgram.name,
+          totalSessions: 0,
+          startDate,
+          endDate,
+          price: subscriptionPrice
+        });
+
+        paymentPayload = {
+          ...paymentPayload,
+          subscriptionId: subscription._id,
+          totalAmount: subscription.price || subscriptionPrice
+        };
+      }
+
+      await createPayment(paymentPayload);
       setForm({ playerId: '', subscriptionId: '', totalAmount: 0, paidAmount: 0, paymentMethod: 'Cash', receiptImage: '', notes: '' });
+      setSelectedProgram(null);
+      setSelectedSubscription(null);
+      setPaymentSummary({ totalPaid: 0, remaining: 0 });
       await loadPayments();
     } catch (err) {
       setError(err.response?.data?.message || 'Unable to record payment.');
@@ -348,7 +392,24 @@ const PaymentsPage = () => {
                 />
                 <select value={form.subscriptionId} onChange={(e) => {
                   const subscriptionId = e.target.value;
+
+                  if (subscriptionId.startsWith('program:')) {
+                    const programId = subscriptionId.replace('program:', '');
+                    const program = programs.find((item) => item._id === programId);
+                    setSelectedProgram(program || null);
+                    setSelectedSubscription(null);
+                    setPaymentSummary({ totalPaid: 0, remaining: 0 });
+                    setForm((prev) => ({
+                      ...prev,
+                      subscriptionId,
+                      totalAmount: Number(program?.price || 0),
+                      paidAmount: 0
+                    }));
+                    return;
+                  }
+
                   const selected = subscriptions.find((sub) => sub._id === subscriptionId);
+                  setSelectedProgram(null);
                   setSelectedSubscription(selected || null);
                   setForm((prev) => ({
                     ...prev,
@@ -367,9 +428,9 @@ const PaymentsPage = () => {
                     </optgroup>
                   )}
                   {filteredPrograms.length > 0 && (
-                    <optgroup label={filteredSubscriptions.length > 0 ? 'Academy programs' : 'Academy programs - create a subscription first'}>
+                    <optgroup label={filteredSubscriptions.length > 0 ? 'Academy programs' : 'Academy programs'}>
                       {filteredPrograms.map((program) => (
-                        <option key={program._id} value="" disabled>
+                        <option key={program._id} value={getProgramOptionValue(program._id)}>
                           {`${program.name}${program.level ? ` - ${program.level}` : ''}`}
                         </option>
                       ))}
