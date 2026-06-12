@@ -17,8 +17,14 @@ const getPayments = async (req, res, next) => {
       filter.subscriptionId = req.query.subscriptionId;
     }
     const payments = await Payment.find(filter)
-      .populate('playerId', 'fullName')
-      .populate('subscriptionId', 'type status price');
+      .sort({ paymentDate: -1 })
+      .populate({
+        path: 'playerId',
+        select: 'fullName parentId',
+        populate: { path: 'parentId', select: 'name email' }
+      })
+      .populate('subscriptionId', 'type status price packageName totalSessions remainingSessions')
+      .populate('createdBy', 'name email');
     res.json(payments);
   } catch (error) {
     next(error);

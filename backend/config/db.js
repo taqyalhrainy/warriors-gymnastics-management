@@ -1,9 +1,13 @@
 const mongoose = require('mongoose');
 const { MongoMemoryServer } = require('mongodb-memory-server');
+const dns = require('dns');
 
 const connectDB = async () => {
   try {
     let uri = process.env.MONGO_URI || process.env.MONGODB_URI;
+    if (uri?.startsWith('mongodb+srv://')) {
+      dns.setServers((process.env.MONGO_DNS_SERVERS || '1.1.1.1,8.8.8.8').split(',').map((server) => server.trim()).filter(Boolean));
+    }
     if (!uri) {
       const mongod = await MongoMemoryServer.create();
       uri = mongod.getUri();

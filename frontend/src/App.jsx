@@ -1,80 +1,68 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
 import { useAuth } from './context/AuthContext.jsx';
 import { useLanguage } from './context/LanguageContext.jsx';
-import LoginPage from './pages/Login.jsx';
-import AdminDashboard from './pages/AdminDashboard.jsx';
-import PlayersPage from './pages/Players.jsx';
-import PlayerFormPage from './pages/PlayerForm.jsx';
-import PlayerProfilePage from './pages/PlayerProfile.jsx';
-import GroupsPage from './pages/Groups.jsx';
-import AttendancePage from './pages/Attendance.jsx';
-import SubscriptionsPage from './pages/Subscriptions.jsx';
-import PaymentsPage from './pages/Payments.jsx';
-import NotificationsPage from './pages/Notifications.jsx';
-import ReportsPage from './pages/Reports.jsx';
-import AuditLogsPage from './pages/AuditLogs.jsx';
-import ParentsPage from './pages/Parents.jsx';
-import ProgramsPage from './pages/Programs.jsx';
-import CoachesPage from './pages/Coaches.jsx';
-import ParentDashboard from './pages/ParentDashboard.jsx';
-import ParentAttendancePage from './pages/ParentAttendance.jsx';
-import ParentPaymentsPage from './pages/ParentPayments.jsx';
-import ParentNotificationsPage from './pages/ParentNotifications.jsx';
-import NotificationDetailPage from './pages/NotificationDetail.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
+
+const LoginPage = lazy(() => import('./pages/Login.jsx'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard.jsx'));
+const PlayersPage = lazy(() => import('./pages/Players.jsx'));
+const PlayerFormPage = lazy(() => import('./pages/PlayerForm.jsx'));
+const PlayerProfilePage = lazy(() => import('./pages/PlayerProfile.jsx'));
+const GroupsPage = lazy(() => import('./pages/Groups.jsx'));
+const AttendancePage = lazy(() => import('./pages/Attendance.jsx'));
+const SubscriptionsPage = lazy(() => import('./pages/Subscriptions.jsx'));
+const PaymentsPage = lazy(() => import('./pages/Payments.jsx'));
+const NotificationsPage = lazy(() => import('./pages/Notifications.jsx'));
+const ReportsPage = lazy(() => import('./pages/Reports.jsx'));
+const AuditLogsPage = lazy(() => import('./pages/AuditLogs.jsx'));
+const ParentsPage = lazy(() => import('./pages/Parents.jsx'));
+const ProgramsPage = lazy(() => import('./pages/Programs.jsx'));
+const CoachesPage = lazy(() => import('./pages/Coaches.jsx'));
+const ParentDashboard = lazy(() => import('./pages/ParentDashboard.jsx'));
+const ParentAttendancePage = lazy(() => import('./pages/ParentAttendance.jsx'));
+const ParentPaymentsPage = lazy(() => import('./pages/ParentPayments.jsx'));
+const ParentNotificationsPage = lazy(() => import('./pages/ParentNotifications.jsx'));
+const NotificationDetailPage = lazy(() => import('./pages/NotificationDetail.jsx'));
 
 function App() {
   const { user } = useAuth();
-  const { language, toggleLanguage, t } = useLanguage();
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
-
-  useEffect(() => {
-    localStorage.setItem('theme', theme);
-    document.documentElement.dataset.theme = theme;
-    document.body.classList.toggle('dark-mode', theme === 'dark');
-    document.body.classList.toggle('light-mode', theme === 'light');
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme((current) => (current === 'light' ? 'dark' : 'light'));
-  };
+  const { language, toggleLanguage } = useLanguage();
 
   return (
     <div className="app-shell">
-      <button className={`theme-toggle-btn ${language === 'ar' ? 'left' : 'right'}`} type="button" onClick={toggleTheme}>
-        <span>{theme === 'light' ? t('darkMode') : t('lightMode')}</span>
-      </button>
       <button className={`language-toggle-btn ${language === 'ar' ? 'left' : 'right'}`} type="button" onClick={toggleLanguage}>
-        <span>{language === 'en' ? 'عربي' : 'English'}</span>
+        <span>{language === 'en' ? 'AR' : 'EN'}</span>
       </button>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route element={<ProtectedRoute />}> 
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/players" element={<PlayersPage />} />
-          <Route path="/players/new" element={<PlayerFormPage />} />
-          <Route path="/players/:id/edit" element={<PlayerFormPage />} />
-          <Route path="/players/:id" element={<PlayerProfilePage />} />
-          <Route path="/groups" element={<GroupsPage />} />
-          <Route path="/attendance" element={<AttendancePage />} />
-          <Route path="/subscriptions" element={<SubscriptionsPage />} />
-          <Route path="/payments" element={<PaymentsPage />} />
-          <Route path="/notifications" element={<NotificationsPage />} />
-          <Route path="/notifications/:id" element={<NotificationDetailPage />} />
-          <Route path="/programs" element={<ProgramsPage />} />
-          <Route path="/coaches" element={<CoachesPage />} />
-          <Route path="/parents" element={<ParentsPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
-          <Route path="/audit-logs" element={<AuditLogsPage />} />
-          <Route path="/parent" element={<ParentDashboard />} />
-          <Route path="/parent/attendance" element={<ParentAttendancePage />} />
-          <Route path="/parent/payments" element={<ParentPaymentsPage />} />
-          <Route path="/parent/notifications" element={<ParentNotificationsPage />} />
-          <Route path="/parent/notifications/:id" element={<NotificationDetailPage />} />
-        </Route>
-        <Route path="/" element={user ? <Navigate to={user.role === 'parent' ? '/parent' : '/admin'} /> : <Navigate to="/login" />} />
-      </Routes>
+      <Suspense fallback={<div className="route-loading"><span className="loading-spinner" />Loading...</div>}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route element={<ProtectedRoute />}>
+            <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/players" element={<PlayersPage />} />
+            <Route path="/players/new" element={<PlayerFormPage />} />
+            <Route path="/players/:id/edit" element={<PlayerFormPage />} />
+            <Route path="/players/:id" element={<PlayerProfilePage />} />
+            <Route path="/groups" element={<GroupsPage />} />
+            <Route path="/attendance" element={<AttendancePage />} />
+            <Route path="/subscriptions" element={<SubscriptionsPage />} />
+            <Route path="/payments" element={<PaymentsPage />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
+            <Route path="/notifications/:id" element={<NotificationDetailPage />} />
+            <Route path="/programs" element={<ProgramsPage />} />
+            <Route path="/coaches" element={<CoachesPage />} />
+            <Route path="/parents" element={<ParentsPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/audit-logs" element={<AuditLogsPage />} />
+            <Route path="/parent" element={<ParentDashboard />} />
+            <Route path="/parent/attendance" element={<ParentAttendancePage />} />
+            <Route path="/parent/payments" element={<ParentPaymentsPage />} />
+            <Route path="/parent/notifications" element={<ParentNotificationsPage />} />
+            <Route path="/parent/notifications/:id" element={<NotificationDetailPage />} />
+          </Route>
+          <Route path="/" element={user ? <Navigate to={user.role === 'parent' ? '/parent' : '/admin'} /> : <Navigate to="/login" />} />
+        </Routes>
+      </Suspense>
     </div>
   );
 }

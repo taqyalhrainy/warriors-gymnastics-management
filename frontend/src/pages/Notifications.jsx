@@ -10,6 +10,8 @@ const NotificationsPage = () => {
   const [parents, setParents] = useState([]);
   const [message, setMessage] = useState('');
   const [form, setForm] = useState({ recipientUserId: '', title: '', message: '', type: 'announcement' });
+  const [search, setSearch] = useState('');
+  const [parentSearch, setParentSearch] = useState('');
   const { t } = useLanguage();
 
   useEffect(() => {
@@ -34,6 +36,22 @@ const NotificationsPage = () => {
     }
   };
 
+  const filteredParents = parents.filter((parent) => [
+    parent.name,
+    parent.email,
+    parent.phone
+  ].join(' ').toLowerCase().includes(parentSearch.trim().toLowerCase()));
+
+  const filteredNotifications = notifications.filter((note) => [
+    note.title,
+    note.message,
+    note.recipientUserId?.name,
+    note.recipientUserId?.email,
+    note.type,
+    note.isRead ? 'read yes' : 'unread no',
+    note.viewedAt
+  ].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
+
   return (
     <div className="dashboard-layout">
       <Sidebar />
@@ -45,10 +63,17 @@ const NotificationsPage = () => {
             {message && <p className="alert-info">{message}</p>}
             <form onSubmit={handleSend}>
               <label>{t('parent')}</label>
+              <input
+                className="select-search-input"
+                type="search"
+                value={parentSearch}
+                onChange={(event) => setParentSearch(event.target.value)}
+                placeholder="Search parent..."
+              />
               <select value={form.recipientUserId} onChange={(e) => setForm({ ...form, recipientUserId: e.target.value })} required>
                 <option value="">{t('selectParent')}</option>
                 <option value="all">{t('allParents')}</option>
-                {parents.map((parent) => (
+                {filteredParents.map((parent) => (
                   <option key={parent._id} value={parent.userId?._id || ''}>{parent.name}</option>
                 ))}
               </select>
@@ -60,11 +85,17 @@ const NotificationsPage = () => {
             </form>
           </div>
           <div className="table-card">
-            <h2>{t('messages')}</h2>
+            <div className="table-toolbar">
+              <h2>{t('messages')}</h2>
+              <label className="table-search">
+                <span>Search</span>
+                <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search messages..." />
+              </label>
+            </div>
             <table className="data-table">
               <thead><tr><th>{t('title')}</th><th>{t('recipient')}</th><th>{t('type')}</th><th>{t('read')}</th><th>{t('viewedAt')}</th><th>{t('action')}</th></tr></thead>
               <tbody>
-                {notifications.length ? notifications.map((note) => (
+                {filteredNotifications.length ? filteredNotifications.map((note) => (
                   <tr key={note._id}>
                     <td>{note.title}</td>
                     <td>{note.recipientUserId?.name || note.recipientUserId?.email || t('parent')}</td>

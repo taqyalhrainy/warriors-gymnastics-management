@@ -11,6 +11,7 @@ const GroupsPage = () => {
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [form, setForm] = useState(initialForm);
   const [message, setMessage] = useState('');
+  const [search, setSearch] = useState('');
   const { t } = useLanguage();
 
   const loadGroups = async () => {
@@ -78,6 +79,15 @@ const GroupsPage = () => {
     }
   };
 
+  const filteredGroups = groups.filter((group) => [
+    group.name,
+    group.days?.join(' '),
+    group.startTime,
+    group.endTime,
+    group.currentCount,
+    group.maxCapacity
+  ].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
+
   return (
     <div className="dashboard-layout">
       <Sidebar />
@@ -103,11 +113,17 @@ const GroupsPage = () => {
             </form>
           </div>
           <div className="table-card">
-            <h2>{t('groupList')}</h2>
+            <div className="table-toolbar">
+              <h2>{t('groupList')}</h2>
+              <label className="table-search">
+                <span>Search</span>
+                <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search groups..." />
+              </label>
+            </div>
             <table className="data-table">
               <thead><tr><th>{t('name')}</th><th>{t('days')}</th><th>{t('time')}</th><th>{t('capacity')}</th><th>{t('actions')}</th></tr></thead>
               <tbody>
-                {groups.map((group) => (
+                {filteredGroups.map((group) => (
                   <tr key={group._id}>
                     <td>{group.name}</td>
                     <td>{group.days.join(', ')}</td>
@@ -119,7 +135,7 @@ const GroupsPage = () => {
                     </td>
                   </tr>
                 ))}
-                {groups.length === 0 && <tr><td colSpan="5">{t('noGroupsFound')}</td></tr>}
+                {filteredGroups.length === 0 && <tr><td colSpan="5">{t('noGroupsFound')}</td></tr>}
               </tbody>
             </table>
           </div>

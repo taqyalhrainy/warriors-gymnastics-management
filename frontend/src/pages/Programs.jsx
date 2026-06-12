@@ -9,6 +9,7 @@ const ProgramsPage = () => {
   const [selectedProgram, setSelectedProgram] = useState(null);
   const [form, setForm] = useState({ name: '', description: '', level: '', price: '' });
   const [message, setMessage] = useState('');
+  const [search, setSearch] = useState('');
   const { t } = useLanguage();
 
   const loadPrograms = async () => {
@@ -74,6 +75,13 @@ const ProgramsPage = () => {
     }
   };
 
+  const filteredPrograms = programs.filter((program) => [
+    program.name,
+    program.level,
+    program.description,
+    program.price
+  ].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
+
   return (
     <div className="dashboard-layout">
       <Sidebar />
@@ -104,11 +112,17 @@ const ProgramsPage = () => {
             </form>
           </div>
           <div className="table-card">
-            <h2>{t('programList')}</h2>
+            <div className="table-toolbar">
+              <h2>{t('programList')}</h2>
+              <label className="table-search">
+                <span>Search</span>
+                <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search programs..." />
+              </label>
+            </div>
             <table className="data-table">
               <thead><tr><th>{t('name')}</th><th>{t('level')}</th><th>{t('description')}</th><th>{t('actions')}</th></tr></thead>
               <tbody>
-                {programs.length ? programs.map((program) => (
+                {filteredPrograms.length ? filteredPrograms.map((program) => (
                   <tr key={program._id}>
                     <td>{program.name}</td>
                     <td>{program.level || t('notAvailable')}</td>

@@ -14,6 +14,9 @@ const SubscriptionsPage = () => {
   const [selectedSubscription, setSelectedSubscription] = useState(null);
   const [form, setForm] = useState({ playerId: '', type: 'sessions', packageName: '', totalSessions: 0, startDate: '', endDate: '', price: 0 });
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [playerSearch, setPlayerSearch] = useState('');
+  const [packageSearch, setPackageSearch] = useState('');
   const { t } = useLanguage();
 
   const loadData = async () => {
@@ -84,6 +87,30 @@ const SubscriptionsPage = () => {
     }
   };
 
+  const filteredPlayers = players.filter((player) => [
+    player.fullName,
+    player.parentId?.name,
+    player.groupId?.name,
+    player.status
+  ].join(' ').toLowerCase().includes(playerSearch.trim().toLowerCase()));
+
+  const filteredSubscriptions = subscriptions.filter((sub) => [
+    sub.playerId?.fullName,
+    sub.packageName,
+    sub.type,
+    sub.status,
+    sub.remainingSessions,
+    sub.daysRemaining,
+    sub.price
+  ].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
+
+  const filteredPackages = packages.filter((pkg) => [
+    pkg.name,
+    pkg.level,
+    pkg.description,
+    pkg.price
+  ].join(' ').toLowerCase().includes(packageSearch.trim().toLowerCase()));
+
   return (
     <div className="dashboard-layout">
       <Sidebar />
@@ -95,9 +122,16 @@ const SubscriptionsPage = () => {
             {error && <p className="alert-error">{error}</p>}
             <form onSubmit={handleSubmit}>
               <label>{t('player')}</label>
+              <input
+                className="select-search-input"
+                type="search"
+                value={playerSearch}
+                onChange={(event) => setPlayerSearch(event.target.value)}
+                placeholder="Search player..."
+              />
               <select value={form.playerId} onChange={(e) => setForm({ ...form, playerId: e.target.value })} required>
                 <option value="">{t('selectPlayer')}</option>
-                {players.map((player) => (
+                {filteredPlayers.map((player) => (
                   <option key={player._id} value={player._id}>{player.fullName}</option>
                 ))}
               </select>
@@ -107,6 +141,13 @@ const SubscriptionsPage = () => {
                 <option value="time">{t('timeSubscription')}</option>
               </select>
               <label>{t('packageName')}</label>
+              <input
+                className="select-search-input"
+                type="search"
+                value={packageSearch}
+                onChange={(event) => setPackageSearch(event.target.value)}
+                placeholder="Search package..."
+              />
               <select
                 value={form.packageName}
                 onChange={(e) => {
@@ -121,7 +162,7 @@ const SubscriptionsPage = () => {
                 required
               >
                 <option value="">{t('selectPackage')}</option>
-                {packages.map((pkg) => (
+                {filteredPackages.map((pkg) => (
                   <option key={pkg._id} value={pkg.name}>{pkg.name}</option>
                 ))}
               </select>
@@ -142,11 +183,17 @@ const SubscriptionsPage = () => {
             </form>
           </div>
           <div className="table-card">
-            <h2>{t('subscriptions')}</h2>
+            <div className="table-toolbar">
+              <h2>{t('subscriptions')}</h2>
+              <label className="table-search">
+                <span>Search</span>
+                <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search subscriptions..." />
+              </label>
+            </div>
             <table className="data-table">
               <thead><tr><th>{t('player')}</th><th>{t('package')}</th><th>{t('subscriptionType')}</th><th>{t('status')}</th><th>{t('remaining')}</th><th>{t('daysRemaining')}</th><th>{t('actions')}</th></tr></thead>
               <tbody>
-                {subscriptions.length ? subscriptions.map((sub) => (
+                {filteredSubscriptions.length ? filteredSubscriptions.map((sub) => (
                   <tr key={sub._id}>
                     <td>{sub.playerId?.fullName || t('unknown')}</td>
                     <td>{sub.packageName || '—'}</td>

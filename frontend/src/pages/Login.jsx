@@ -4,6 +4,33 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { login, register } from '../services/auth.js';
 import warriorsLogo from '../assets/warriors-logo.png';
 
+const SERVER_WAKE_RETRY_MS = 3000;
+const SERVER_WAKE_MAX_MS = 180000;
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const isServerWakeError = (err) => {
+  const status = err.response?.status;
+  return !err.response || err.code === 'ECONNABORTED' || [502, 503, 504].includes(status);
+};
+
+const sendAuthWithWakeRetry = async (requestFn, onWaiting) => {
+  const startedAt = Date.now();
+
+  while (true) {
+    try {
+      return await requestFn();
+    } catch (err) {
+      if (!isServerWakeError(err) || Date.now() - startedAt > SERVER_WAKE_MAX_MS) {
+        throw err;
+      }
+
+      onWaiting(true);
+      await wait(SERVER_WAKE_RETRY_MS);
+    }
+  }
+};
+
 const getAuthErrorMessage = (err, mode) => {
   const status = err.response?.status;
   const message = err.response?.data?.message || '';
@@ -58,6 +85,7 @@ const LoginPage = () => {
   const [fieldErrors, setFieldErrors] = useState({});
   const [generalError, setGeneralError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isWaitingForServer, setIsWaitingForServer] = useState(false);
   const { login: authLogin } = useAuth();
   const navigate = useNavigate();
 
@@ -71,6 +99,7 @@ const LoginPage = () => {
     if (isSubmitting) return;
     clearErrors();
     setIsSubmitting(true);
+    setIsWaitingForServer(false);
 
     try {
       if (isRegisterMode) {
@@ -87,7 +116,10 @@ const LoginPage = () => {
         }
 
         try {
-          const data = await register({ name, email, password, phone, role: 'parent' });
+          const data = await sendAuthWithWakeRetry(
+            () => register({ name, email, password, phone, role: 'parent' }),
+            setIsWaitingForServer
+          );
           authLogin(data);
           navigate('/parent');
         } catch (err) {
@@ -105,7 +137,10 @@ const LoginPage = () => {
       }
 
       try {
-        const data = await login({ email, password });
+        const data = await sendAuthWithWakeRetry(
+          () => login({ email, password }),
+          setIsWaitingForServer
+        );
         authLogin(data);
         navigate(data.user.role === 'parent' ? '/parent' : '/admin');
       } catch (err) {
@@ -113,6 +148,7 @@ const LoginPage = () => {
       }
     } finally {
       setIsSubmitting(false);
+      setIsWaitingForServer(false);
     }
   };
 
@@ -127,8 +163,21 @@ const LoginPage = () => {
     clearErrors();
   };
 
+  const loadingTitle = isWaitingForServer ? 'Waking up the server' : (isRegisterMode ? 'Creating your account' : 'Signing you in');
+  const loadingMessage = isWaitingForServer
+    ? 'Please wait. Render may need a few moments to start the backend.'
+    : 'Checking your details securely...';
+
   return (
     <div className="page login-page">
+      {isSubmitting && (
+        <div className="auth-loading-overlay" role="status" aria-live="polite">
+          <img src={warriorsLogo} alt="" />
+          <span className="loading-spinner" />
+          <strong>{loadingTitle}</strong>
+          <p>{loadingMessage}</p>
+        </div>
+      )}
       <div className="login-card">
         <img className="login-logo" src={warriorsLogo} alt="Warriors Gymnastics Academy" />
         <h2>{isRegisterMode ? 'Create a Warriors Gym Account' : 'Warriors Gym Login'}</h2>

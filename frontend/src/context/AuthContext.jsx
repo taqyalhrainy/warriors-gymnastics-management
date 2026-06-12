@@ -21,6 +21,9 @@ export const AuthProvider = ({ children }) => {
   }, [token, user]);
 
   const login = (data) => {
+    api.defaults.headers.common.Authorization = `Bearer ${data.token}`;
+    localStorage.setItem('warriors-token', data.token);
+    localStorage.setItem('warriors-user', JSON.stringify(data.user));
     setToken(data.token);
     setUser(data.user);
   };

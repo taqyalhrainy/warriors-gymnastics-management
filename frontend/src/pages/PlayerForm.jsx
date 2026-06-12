@@ -17,6 +17,10 @@ const PlayerFormPage = () => {
   const [groups, setGroups] = useState([]);
   const [coaches, setCoaches] = useState([]);
   const [message, setMessage] = useState('');
+  const [parentSearch, setParentSearch] = useState('');
+  const [programSearch, setProgramSearch] = useState('');
+  const [groupSearch, setGroupSearch] = useState('');
+  const [coachSearch, setCoachSearch] = useState('');
   const { t } = useLanguage();
 
   useEffect(() => {
@@ -69,6 +73,31 @@ const PlayerFormPage = () => {
     }
   };
 
+  const filteredParents = parents.filter((parent) => [
+    parent.name,
+    parent.email,
+    parent.phone
+  ].join(' ').toLowerCase().includes(parentSearch.trim().toLowerCase()));
+
+  const filteredPrograms = programs.filter((program) => [
+    program.name,
+    program.level,
+    program.price
+  ].join(' ').toLowerCase().includes(programSearch.trim().toLowerCase()));
+
+  const filteredGroups = groups.filter((group) => [
+    group.name,
+    group.days?.join(' '),
+    group.startTime,
+    group.endTime
+  ].join(' ').toLowerCase().includes(groupSearch.trim().toLowerCase()));
+
+  const filteredCoaches = coaches.filter((coach) => [
+    coach.name,
+    coach.specialization,
+    coach.phone
+  ].join(' ').toLowerCase().includes(coachSearch.trim().toLowerCase()));
+
   return (
     <div className="dashboard-layout">
       <Sidebar />
@@ -84,9 +113,10 @@ const PlayerFormPage = () => {
             <input name="dateOfBirth" type="date" value={player.dateOfBirth} onChange={handleChange} required />
 
             <label>{t('parent')}</label>
+            <input className="select-search-input" type="search" value={parentSearch} onChange={(event) => setParentSearch(event.target.value)} placeholder="Search parent..." />
             <select name="parentId" value={player.parentId} onChange={handleChange} required>
               <option value="">{t('selectParent')}</option>
-              {parents.map((parent) => (
+              {filteredParents.map((parent) => (
                 <option key={parent._id} value={parent._id}>{`${parent.name} (${parent.email})`}</option>
               ))}
             </select>
@@ -95,23 +125,26 @@ const PlayerFormPage = () => {
             <input name="parentPhone" value={player.parentPhone} onChange={handleChange} required />
 
             <label>{t('program')}</label>
+            <input className="select-search-input" type="search" value={programSearch} onChange={(event) => setProgramSearch(event.target.value)} placeholder="Search program..." />
             <select name="programId" value={player.programId} onChange={handleChange}>
               <option value="">{t('selectProgram')}</option>
-              {programs.map((program) => (
+              {filteredPrograms.map((program) => (
                 <option key={program._id} value={program._id}>{program.name}</option>
               ))}
             </select>
 
             <label>{t('group')}</label>
+            <input className="select-search-input" type="search" value={groupSearch} onChange={(event) => setGroupSearch(event.target.value)} placeholder="Search group..." />
             <select name="groupId" value={player.groupId} onChange={handleChange}>
               <option value="">{t('chooseGroup')}</option>
-              {groups.map((group) => <option key={group._id} value={group._id}>{group.name}</option>)}
+              {filteredGroups.map((group) => <option key={group._id} value={group._id}>{group.name}</option>)}
             </select>
 
             <label>{t('coach')}</label>
+            <input className="select-search-input" type="search" value={coachSearch} onChange={(event) => setCoachSearch(event.target.value)} placeholder="Search coach..." />
             <select name="coachId" value={player.coachId} onChange={handleChange}>
               <option value="">{t('selectCoach')}</option>
-              {coaches.map((coach) => <option key={coach._id} value={coach._id}>{coach.name}</option>)}
+              {filteredCoaches.map((coach) => <option key={coach._id} value={coach._id}>{coach.name}</option>)}
             </select>
 
             <label>{t('status')}</label>

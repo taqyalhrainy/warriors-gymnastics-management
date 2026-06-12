@@ -8,6 +8,7 @@ const CoachesPage = () => {
   const [selectedCoach, setSelectedCoach] = useState(null);
   const [form, setForm] = useState({ name: '', email: '', phone: '', specialization: '' });
   const [message, setMessage] = useState('');
+  const [search, setSearch] = useState('');
   const { t } = useLanguage();
 
   const loadCoaches = async () => {
@@ -61,6 +62,13 @@ const CoachesPage = () => {
     }
   };
 
+  const filteredCoaches = coaches.filter((coach) => [
+    coach.name,
+    coach.userId?.email,
+    coach.phone,
+    coach.specialization
+  ].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
+
   return (
     <div className="dashboard-layout">
       <Sidebar />
@@ -84,11 +92,17 @@ const CoachesPage = () => {
             </form>
           </div>
           <div className="table-card">
-            <h2>{t('coachList')}</h2>
+            <div className="table-toolbar">
+              <h2>{t('coachList')}</h2>
+              <label className="table-search">
+                <span>Search</span>
+                <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search coaches..." />
+              </label>
+            </div>
             <table className="data-table">
               <thead><tr><th>{t('name')}</th><th>{t('email')}</th><th>{t('phone')}</th><th>{t('specialization')}</th><th>{t('actions')}</th></tr></thead>
               <tbody>
-                {coaches.length ? coaches.map((coach) => (
+                {filteredCoaches.length ? filteredCoaches.map((coach) => (
                   <tr key={coach._id}>
                     <td>{coach.name}</td>
                     <td>{coach.userId?.email || '—'}</td>

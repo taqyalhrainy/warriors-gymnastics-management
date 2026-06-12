@@ -3,20 +3,41 @@ import Sidebar from '../components/Sidebar.jsx';
 import StatsCard from '../components/StatsCard.jsx';
 import { fetchDashboard } from '../services/reports.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 
 const AdminDashboard = () => {
   const [stats, setStats] = useState(null);
+  const [error, setError] = useState('');
   const { t } = useLanguage();
+  const { token } = useAuth();
 
   useEffect(() => {
-    fetchDashboard().then(setStats).catch(console.error);
-  }, []);
+    if (!token) return;
+
+    let isMounted = true;
+    setError('');
+    setStats(null);
+
+    fetchDashboard()
+      .then((data) => {
+        if (isMounted) setStats(data);
+      })
+      .catch((err) => {
+        console.error(err);
+        if (isMounted) setError(err.response?.data?.message || 'Unable to load dashboard data. Please refresh or try again.');
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [token]);
 
   return (
     <div className="dashboard-layout">
       <Sidebar />
       <main className="page-content">
         <div className="page-header"><h1>{t('adminDashboard')}</h1></div>
+        {error && <p className="alert-error">{error}</p>}
         <div className="stats-grid">
           <StatsCard title={t('activePlayers')} value={stats?.activePlayers ?? '...'} description={t('activePlayersDesc')} />
           <StatsCard title={t('expiredSubscriptions')} value={stats?.expiredSubscriptions ?? '...'} description={t('expiredSubscriptionsDesc')} />

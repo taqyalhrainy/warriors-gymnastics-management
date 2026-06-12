@@ -8,6 +8,7 @@ const ReportsPage = () => {
   const [dashboard, setDashboard] = useState(null);
   const [revenue, setRevenue] = useState(null);
   const [attendance, setAttendance] = useState([]);
+  const [search, setSearch] = useState('');
   const { t } = useLanguage();
 
   useEffect(() => {
@@ -15,6 +16,11 @@ const ReportsPage = () => {
     fetchRevenue().then(setRevenue).catch(console.error);
     fetchAttendanceReport().then(setAttendance).catch(console.error);
   }, []);
+
+  const filteredAttendance = attendance.filter((item) => [
+    item._id,
+    item.count
+  ].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
 
   return (
     <div className="dashboard-layout">
@@ -28,11 +34,17 @@ const ReportsPage = () => {
           <StatsCard title={t('totalRemaining')} value={revenue?.totalRemaining ?? '...'} description={t('totalRemainingDesc')} />
         </div>
         <div className="table-card">
-          <h2>{t('attendanceSummary')}</h2>
+          <div className="table-toolbar">
+            <h2>{t('attendanceSummary')}</h2>
+            <label className="table-search">
+              <span>Search</span>
+              <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search report..." />
+            </label>
+          </div>
           <table className="data-table">
             <thead><tr><th>{t('status')}</th><th>{t('count')}</th></tr></thead>
             <tbody>
-              {attendance.length ? attendance.map((item) => (
+              {filteredAttendance.length ? filteredAttendance.map((item) => (
                 <tr key={item._id}><td>{item._id}</td><td>{item.count}</td></tr>
               )) : <tr><td colSpan="2">{t('noAttendanceData')}</td></tr>}
             </tbody>

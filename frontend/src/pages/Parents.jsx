@@ -11,6 +11,7 @@ const Parents = () => {
   const [form, setForm] = useState(initialForm);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
   const { t } = useLanguage();
 
   const loadParents = async () => {
@@ -54,6 +55,14 @@ const Parents = () => {
     }
   };
 
+  const filteredParents = parents.filter((parent) => [
+    parent.name,
+    parent.email,
+    parent.phone,
+    parent.userId?.isActive ? 'active yes' : 'inactive no',
+    parent.children?.length
+  ].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
+
   return (
     <div className="dashboard-layout">
       <Sidebar />
@@ -94,8 +103,14 @@ const Parents = () => {
             </form>
           </div>
           <div className="table-card">
-            <h2>{t('parentList')}</h2>
-            {parents.length === 0 ? (
+            <div className="table-toolbar">
+              <h2>{t('parentList')}</h2>
+              <label className="table-search">
+                <span>Search</span>
+                <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search parents..." />
+              </label>
+            </div>
+            {filteredParents.length === 0 ? (
               <p>{t('noParentsAvailable')}</p>
             ) : (
               <table className="data-table">
@@ -110,7 +125,7 @@ const Parents = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {parents.map((parent) => (
+                  {filteredParents.map((parent) => (
                     <tr key={parent._id}>
                       <td>{parent.name}</td>
                       <td>{parent.email}</td>

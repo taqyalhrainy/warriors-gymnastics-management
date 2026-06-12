@@ -12,6 +12,7 @@ const AttendancePage = () => {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [hoveredSummaryGroup, setHoveredSummaryGroup] = useState(null);
+  const [search, setSearch] = useState('');
   const { t } = useLanguage();
   const groupColors = ['#2563eb', '#f2c94c', '#16a34a', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16', '#ec4899'];
 
@@ -95,6 +96,30 @@ const AttendancePage = () => {
 
   const formatDate = (date) => date ? new Date(date).toLocaleDateString() : t('notSet');
   const formatGroupTime = (group) => [group.startTime, group.endTime].filter(Boolean).join(' - ');
+  const filteredGroupColumns = groupColumns
+    .map((group) => {
+      const query = search.trim().toLowerCase();
+      if (!query) return group;
+      const groupMatches = [
+        group.name,
+        group.days?.join(' '),
+        group.startTime,
+        group.endTime
+      ].join(' ').toLowerCase().includes(query);
+      const players = group.players.filter((player) => [
+        player.fullName,
+        player.parentId?.name,
+        player.status,
+        player.todayAttendance?.status
+      ].join(' ').toLowerCase().includes(query));
+      return groupMatches ? group : { ...group, players };
+    })
+    .filter((group) => !search.trim() || group.players.length || [
+      group.name,
+      group.days?.join(' '),
+      group.startTime,
+      group.endTime
+    ].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
   const attendedGroups = groupColumns.filter((group) => group.markedCount > 0);
   const presentGroups = attendedGroups.filter((group) => group.presentCount > 0);
   const totalPresent = presentGroups.reduce((sum, group) => sum + group.presentCount, 0);
@@ -188,6 +213,10 @@ const AttendancePage = () => {
 
         <div className="attendance-toolbar">
           {message && <p className="alert-info">{message}</p>}
+          <label className="table-search attendance-search">
+            <span>Search</span>
+            <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search students or groups..." />
+          </label>
           <button type="button" className="btn-secondary" onClick={loadAttendanceBoard}>{t('refresh')}</button>
         </div>
 
@@ -195,7 +224,7 @@ const AttendancePage = () => {
           <div className="form-card">{t('loadingAttendanceBoard')}</div>
         ) : (
           <div className="attendance-board">
-            {groupColumns.map((group) => (
+            {filteredGroupColumns.map((group) => (
               <section
                 className="attendance-group attendance-group-marked"
                 key={group._id}

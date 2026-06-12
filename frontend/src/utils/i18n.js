@@ -207,9 +207,7 @@ export const translations = {
     total: 'Total',
     clickForDetails: 'Click for more details',
     groupDetails: 'Group Details',
-    schedule: 'Schedule',
-    darkMode: 'Dark',
-    lightMode: 'Light'
+    schedule: 'Schedule'
   },
   ar: {
     appName: 'نادي ووريورز',
@@ -417,8 +415,6 @@ export const translations = {
     total: 'الإجمالي',
     clickForDetails: 'انقر لمزيد من التفاصيل',
     groupDetails: 'تفاصيل المجموعة',
-    schedule: 'الموعد',
-    darkMode: 'داكن',
-    lightMode: 'فاتح'
+    schedule: 'الموعد'
   }
 };

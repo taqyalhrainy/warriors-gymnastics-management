@@ -7,6 +7,7 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 
 const PlayersPage = () => {
   const [players, setPlayers] = useState([]);
+  const [search, setSearch] = useState('');
   const { t } = useLanguage();
 
   useEffect(() => {
@@ -25,6 +26,13 @@ const PlayersPage = () => {
     }
   };
 
+  const filteredPlayers = players.filter((player) => [
+    player.fullName,
+    player.groupId?.name,
+    player.status,
+    player.parentId?.name
+  ].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
+
   return (
     <div className="dashboard-layout">
       <Sidebar />
@@ -34,6 +42,13 @@ const PlayersPage = () => {
           <Link className="btn-primary" to="/players/new">{t('addPlayer')}</Link>
         </div>
         <div className="table-card">
+          <div className="table-toolbar">
+            <h2>{t('players')}</h2>
+            <label className="table-search">
+              <span>Search</span>
+              <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search players..." />
+            </label>
+          </div>
           <table className="data-table">
             <thead>
               <tr>
@@ -45,8 +60,8 @@ const PlayersPage = () => {
               </tr>
             </thead>
             <tbody>
-              {players.length === 0 && <tr><td colSpan="5">{t('noPlayersYet')}</td></tr>}
-              {players.map((player) => (
+              {filteredPlayers.length === 0 && <tr><td colSpan="5">{t('noPlayersYet')}</td></tr>}
+              {filteredPlayers.map((player) => (
                 <tr key={player._id}>
                   <td>{player.fullName}</td>
                   <td>{player.groupId?.name || t('unassigned')}</td>
