@@ -114,7 +114,10 @@ const announceGroupParents = async (req, res, next) => {
       return res.status(400).json({ message: 'Group, title, and message are required.' });
     }
 
-    const players = await Player.find({ groupId, isDeleted: { $ne: true } })
+    const players = await Player.find({
+      isDeleted: { $ne: true },
+      $or: [{ groupId }, { groupIds: groupId }]
+    })
       .populate({
         path: 'parentId',
         populate: { path: 'userId', select: 'isActive' }

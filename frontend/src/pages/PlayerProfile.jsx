@@ -14,6 +14,11 @@ const PlayerProfilePage = () => {
     getPlayer(id).then(setPlayer).catch(console.error);
   }, [id]);
 
+  const getPlayerGroups = (value) => {
+    const groups = value?.groupIds?.length ? value.groupIds : [value?.groupId].filter(Boolean);
+    return groups.map((group) => group?.name).filter(Boolean).join(', ');
+  };
+
   return (
     <div className="dashboard-layout">
       <Sidebar />
@@ -26,7 +31,7 @@ const PlayerProfilePage = () => {
           <div className="card details-card">
             <div><strong>{t('name')}:</strong> {player.fullName}</div>
             <div><strong>{t('status')}:</strong> {player.status}</div>
-            <div><strong>{t('group')}:</strong> {player.groupId?.name || t('unassigned')}</div>
+            <div><strong>{t('group')}:</strong> {getPlayerGroups(player) || t('unassigned')}</div>
             <div><strong>{t('parent')}:</strong> {player.parentId?.name || t('unknown')}</div>
             <div><strong>{t('startDate')}:</strong> {player.startDate?.split('T')[0] || t('notSet')}</div>
             <div><strong>{t('endDate')}:</strong> {player.endDate?.split('T')[0] || t('notSet')}</div>

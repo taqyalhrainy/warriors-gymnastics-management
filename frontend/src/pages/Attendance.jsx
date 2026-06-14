@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
-import { updateTodayAttendance, fetchAttendanceByPlayer } from '../services/attendance.js';
+import { updateTodayAttendance, cancelTodayAttendance, fetchAttendanceByPlayer } from '../services/attendance.js';
 import { fetchGroups, fetchGroupPlayers } from '../services/groups.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
@@ -83,6 +83,21 @@ const AttendancePage = () => {
     }
   };
 
+  const handleCancelAttendance = async (player) => {
+    try {
+      setMessage('');
+      await cancelTodayAttendance({ playerId: player._id });
+      setMessage('Attendance cancelled');
+      await loadAttendanceBoard();
+      if (selectedPlayer?._id === player._id) {
+        const history = await fetchAttendanceByPlayer(player._id);
+        setAttendanceHistory(history);
+      }
+    } catch (err) {
+      setMessage(err.response?.data?.message || 'Unable to cancel attendance');
+    }
+  };
+
   const handleSelectPlayer = async (player) => {
     try {
       setMessage('');
@@ -96,6 +111,10 @@ const AttendancePage = () => {
 
   const formatDate = (date) => date ? new Date(date).toLocaleDateString() : t('notSet');
   const formatGroupTime = (group) => [group.startTime, group.endTime].filter(Boolean).join(' - ');
+  const getPlayerGroups = (player) => {
+    const groups = player?.groupIds?.length ? player.groupIds : [player?.groupId].filter(Boolean);
+    return groups.map((group) => group?.name).filter(Boolean).join(', ');
+  };
   const filteredGroupColumns = groupColumns
     .map((group) => {
       const query = search.trim().toLowerCase();
@@ -264,6 +283,15 @@ const AttendancePage = () => {
                         >
                           {t('absent')}
                         </button>
+                        {player.todayAttendance && (
+                          <button
+                            type="button"
+                            className="btn-cancel-attendance"
+                            onClick={() => handleCancelAttendance(player)}
+                          >
+                            Cancel
+                          </button>
+                        )}
                       </div>
                     </article>
                   )) : <p className="empty-state">{t('noStudentsInGroup')}</p>}
@@ -279,7 +307,7 @@ const AttendancePage = () => {
               <div className="student-modal-header">
                 <div>
                   <h2>{selectedPlayer.fullName}</h2>
-                  <p>{selectedPlayer.groupId?.name || t('noGroupAssigned')}</p>
+                  <p>{getPlayerGroups(selectedPlayer) || t('noGroupAssigned')}</p>
                 </div>
                 <button type="button" className="btn-secondary" onClick={() => setSelectedPlayer(null)}>{t('close')}</button>
               </div>

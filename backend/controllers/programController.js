@@ -4,7 +4,7 @@ const { createAuditLog } = require('../utils/audit');
 
 const getPrograms = async (req, res, next) => {
   try {
-    const programs = await Program.find();
+    const programs = await Program.find().sort({ _id: -1 });
     res.json(programs);
   } catch (error) {
     next(error);

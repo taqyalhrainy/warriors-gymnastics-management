@@ -15,7 +15,9 @@ const paymentSchema = new mongoose.Schema({
   receiptImage: { type: String, trim: true },
   paymentDate: { type: Date, default: Date.now },
   notesEncrypted: { type: String },
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  updatedAt: { type: Date }
 });
 
 module.exports = mongoose.model('Payment', paymentSchema);

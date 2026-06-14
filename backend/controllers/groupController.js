@@ -19,7 +19,7 @@ const formatPlayerResponse = (player) => {
 
 const getGroups = async (req, res, next) => {
   try {
-    const groups = await TrainingGroup.find().populate('coachId', 'name');
+    const groups = await TrainingGroup.find().sort({ _id: -1 }).populate('coachId', 'name');
     res.json(groups);
   } catch (error) {
     next(error);
@@ -65,7 +65,10 @@ const deleteGroup = async (req, res, next) => {
     if (!group) {
       return res.status(404).json({ message: 'Group not found.' });
     }
-    const playerCount = await Player.countDocuments({ groupId: group._id, isDeleted: { $ne: true } });
+    const playerCount = await Player.countDocuments({
+      isDeleted: { $ne: true },
+      $or: [{ groupId: group._id }, { groupIds: group._id }]
+    });
     if (playerCount > 0) {
       return res.status(400).json({ message: 'Cannot delete group with assigned players.' });
     }
@@ -83,9 +86,15 @@ const getGroupPlayers = async (req, res, next) => {
     if (!validateObjectId(id)) {
       return res.status(400).json({ message: 'Invalid group ID.' });
     }
-    const players = await Player.find({ groupId: id, isDeleted: { $ne: true } })
+    const players = await Player.find({
+      isDeleted: { $ne: true },
+      $or: [{ groupId: id }, { groupIds: id }]
+    })
+      .sort({ createdAt: -1, _id: -1 })
       .populate('parentId', 'name email')
       .populate('programId', 'name')
+      .populate('groupId', 'name days startTime endTime')
+      .populate('groupIds', 'name days startTime endTime')
       .populate('coachId', 'name')
       .populate('subscriptionId', 'type status remainingSessions usedSessions startDate endDate price');
     res.json(players.map(formatPlayerResponse));

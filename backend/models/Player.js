@@ -7,6 +7,7 @@ const playerSchema = new mongoose.Schema({
   parentPhoneEncrypted: { type: String, required: true },
   programId: { type: mongoose.Schema.Types.ObjectId, ref: 'Program' },
   groupId: { type: mongoose.Schema.Types.ObjectId, ref: 'TrainingGroup' },
+  groupIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'TrainingGroup' }],
   coachId: { type: mongoose.Schema.Types.ObjectId, ref: 'Coach' },
   subscriptionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Subscription' },
   level: { type: String, trim: true },

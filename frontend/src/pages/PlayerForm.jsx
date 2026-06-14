@@ -5,6 +5,7 @@ import { createPlayer, updatePlayer, getPlayer } from '../services/players.js';
 import { fetchGroups } from '../services/groups.js';
 import { fetchParents } from '../services/parents.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
+import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
 
 const packageOptions = [
   { label: '8 classes (1 hour)', classes: 8, hours: 1 },
@@ -24,6 +25,7 @@ const PlayerFormPage = () => {
     parentId: '',
     parentPhone: '',
     groupId: '',
+    groupIds: [],
     startDate: '',
     endDate: '',
     packageName: '',
@@ -54,6 +56,7 @@ const PlayerFormPage = () => {
         parentId: data.parentId?._id || '',
         parentPhone: data.parentPhone || '',
         groupId: data.groupId?._id || '',
+        groupIds: data.groupIds?.length ? data.groupIds.map((group) => group._id || group) : (data.groupId?._id ? [data.groupId._id] : []),
         startDate: data.startDate?.split('T')[0] || '',
         endDate: data.endDate?.split('T')[0] || '',
         packageName: data.packageName || '',
@@ -83,7 +86,20 @@ const PlayerFormPage = () => {
       });
       return;
     }
+    if (name === 'payment') {
+      setPlayer({ ...player, payment: normalizeDigits(value) });
+      return;
+    }
     setPlayer({ ...player, [name]: value });
+  };
+
+  const handleGroupToggle = (groupId) => {
+    setPlayer((current) => {
+      const nextGroupIds = current.groupIds.includes(groupId)
+        ? current.groupIds.filter((id) => id !== groupId)
+        : [...current.groupIds, groupId];
+      return { ...current, groupIds: nextGroupIds, groupId: nextGroupIds[0] || '' };
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -91,9 +107,9 @@ const PlayerFormPage = () => {
     setMessage('');
     try {
       if (id) {
-        await updatePlayer(id, player);
+        await updatePlayer(id, { ...player, groupId: player.groupIds[0] || '', groupIds: player.groupIds, payment: parseLocalizedNumber(player.payment) });
       } else {
-        await createPlayer(player);
+        await createPlayer({ ...player, groupId: player.groupIds[0] || '', groupIds: player.groupIds, payment: parseLocalizedNumber(player.payment) });
       }
       navigate('/players');
     } catch (err) {
@@ -139,10 +155,21 @@ const PlayerFormPage = () => {
 
             <label>{t('group')}</label>
             <input className="select-search-input" type="search" value={groupSearch} onChange={(event) => setGroupSearch(event.target.value)} placeholder="Search group..." />
-            <select name="groupId" value={player.groupId} onChange={handleChange}>
-              <option value="">{t('chooseGroup')}</option>
-              {filteredGroups.map((group) => <option key={group._id} value={group._id}>{group.name}</option>)}
-            </select>
+            <div className="multi-select-list">
+              {filteredGroups.length ? filteredGroups.map((group) => (
+                <label className="multi-select-option" key={group._id}>
+                  <input
+                    checked={player.groupIds.includes(group._id)}
+                    onChange={() => handleGroupToggle(group._id)}
+                    type="checkbox"
+                  />
+                  <span>
+                    <strong>{group.name}</strong>
+                    <small>{[group.days?.join(', '), [group.startTime, group.endTime].filter(Boolean).join(' - ')].filter(Boolean).join(' | ')}</small>
+                  </span>
+                </label>
+              )) : <p className="empty-state">{t('noGroupsFound')}</p>}
+            </div>
 
             <label>{t('startDate')}</label>
             <input name="startDate" type="date" value={player.startDate} onChange={handleChange} />
@@ -181,7 +208,7 @@ const PlayerFormPage = () => {
             </select>
 
             <label>{t('payment')}</label>
-            <input name="payment" type="number" min="0" step="0.01" value={player.payment} onChange={handleChange} />
+            <input name="payment" type="text" inputMode="decimal" value={player.payment} onChange={handleChange} />
 
             <label>{t('note')}</label>
             <textarea name="note" value={player.note} onChange={handleChange} placeholder={t('discountNotePlaceholder')} />

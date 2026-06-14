@@ -4,7 +4,47 @@ const Notification = require('../models/Notification');
 const Player = require('../models/Player');
 const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
-const { encrypt } = require('../utils/encryption');
+const { encrypt, decrypt } = require('../utils/encryption');
+
+const populatePaymentQuery = (query) => query
+  .populate({
+    path: 'playerId',
+    select: 'fullName parentId isDeleted deletedAt packageName packageClasses packageHours payment',
+    populate: { path: 'parentId', select: 'name email' }
+  })
+  .populate('createdBy', 'name email')
+  .populate('updatedBy', 'name email');
+
+const formatPaymentResponse = (payment) => {
+  const obj = payment.toObject();
+  if (obj.notesEncrypted) {
+    try {
+      obj.notes = decrypt(obj.notesEncrypted);
+    } catch (err) {
+      obj.notes = '';
+    }
+  } else {
+    obj.notes = '';
+  }
+  delete obj.notesEncrypted;
+  return obj;
+};
+
+const recalculatePlayerPayments = async (playerId) => {
+  const player = await Player.findById(playerId);
+  if (!player) return;
+
+  const payments = await Payment.find({ playerId }).sort({ paymentDate: 1, _id: 1 });
+  const totalAmount = Number(player.payment || 0);
+  let runningPaid = 0;
+
+  for (const payment of payments) {
+    runningPaid += Number(payment.paidAmount || 0);
+    payment.totalAmount = totalAmount;
+    payment.remainingAmount = totalAmount ? Math.max(0, totalAmount - runningPaid) : 0;
+    await payment.save();
+  }
+};
 
 const getPayments = async (req, res, next) => {
   try {
@@ -12,15 +52,8 @@ const getPayments = async (req, res, next) => {
     if (req.query.playerId && validateObjectId(req.query.playerId)) {
       filter.playerId = req.query.playerId;
     }
-    const payments = await Payment.find(filter)
-      .sort({ paymentDate: -1 })
-      .populate({
-        path: 'playerId',
-        select: 'fullName parentId isDeleted deletedAt packageName packageClasses packageHours payment',
-        populate: { path: 'parentId', select: 'name email' }
-      })
-      .populate('createdBy', 'name email');
-    res.json(payments);
+    const payments = await populatePaymentQuery(Payment.find(filter).sort({ paymentDate: -1 }));
+    res.json(payments.map(formatPaymentResponse));
   } catch (error) {
     next(error);
   }
@@ -70,7 +103,66 @@ const createPayment = async (req, res, next) => {
       });
     }
     await createAuditLog({ userId: req.user._id, action: 'create payment', entity: 'Payment', entityId: payment._id, req });
-    res.status(201).json(payment);
+    await recalculatePlayerPayments(player._id);
+    const createdPayment = await populatePaymentQuery(Payment.findById(payment._id));
+    res.status(201).json(formatPaymentResponse(createdPayment));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updatePayment = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!validateObjectId(id)) {
+      return res.status(400).json({ message: 'Invalid payment ID.' });
+    }
+    const payload = sanitizeObject(req.body);
+    const payment = await Payment.findById(id);
+    if (!payment) {
+      return res.status(404).json({ message: 'Payment not found.' });
+    }
+
+    if (payload.paidAmount != null) {
+      payment.paidAmount = Number(payload.paidAmount || 0);
+    }
+    if (payload.paymentMethod) {
+      payment.paymentMethod = payload.paymentMethod;
+    }
+    if (typeof payload.receiptImage !== 'undefined') {
+      payment.receiptImage = payload.receiptImage || '';
+    }
+    if (typeof payload.notes !== 'undefined') {
+      payment.notesEncrypted = encrypt(payload.notes || '');
+    }
+    payment.updatedBy = req.user._id;
+    payment.updatedAt = new Date();
+    await payment.save();
+    await recalculatePlayerPayments(payment.playerId);
+    await createAuditLog({ userId: req.user._id, action: 'update payment', entity: 'Payment', entityId: payment._id, req });
+
+    const updatedPayment = await populatePaymentQuery(Payment.findById(payment._id));
+    res.json(formatPaymentResponse(updatedPayment));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deletePayment = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!validateObjectId(id)) {
+      return res.status(400).json({ message: 'Invalid payment ID.' });
+    }
+    const payment = await Payment.findById(id);
+    if (!payment) {
+      return res.status(404).json({ message: 'Payment not found.' });
+    }
+    const { playerId } = payment;
+    await payment.deleteOne();
+    await recalculatePlayerPayments(playerId);
+    await createAuditLog({ userId: req.user._id, action: 'delete payment', entity: 'Payment', entityId: id, req });
+    res.json({ message: 'Payment deleted successfully.' });
   } catch (error) {
     next(error);
   }
@@ -82,11 +174,11 @@ const getPaymentsByPlayer = async (req, res, next) => {
     if (!validateObjectId(playerId)) {
       return res.status(400).json({ message: 'Invalid player ID.' });
     }
-    const payments = await Payment.find({ playerId }).sort({ paymentDate: -1 });
-    res.json(payments);
+    const payments = await populatePaymentQuery(Payment.find({ playerId }).sort({ paymentDate: -1 }));
+    res.json(payments.map(formatPaymentResponse));
   } catch (error) {
     next(error);
   }
 };
 
-module.exports = { getPayments, createPayment, getPaymentsByPlayer };
+module.exports = { getPayments, createPayment, updatePayment, deletePayment, getPaymentsByPlayer };

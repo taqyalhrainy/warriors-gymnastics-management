@@ -472,6 +472,17 @@ body.theme-light .payment-table-tools {
   border-color: #d8d8d8;
 }
 
+body.theme-light .payment-row-actions button {
+  border-color: #d8d8d8;
+  background: #ffffff;
+  color: #161616;
+}
+
+body.theme-light .payment-row-actions button:last-child {
+  border-color: rgba(237, 28, 36, 0.42);
+  background: #fff0f1;
+}
+
 body.theme-light .auth-loading-overlay {
   background:
     radial-gradient(circle at 50% 18%, rgba(237, 28, 36, 0.12), transparent 32%),
@@ -701,6 +712,51 @@ button[type="submit"],
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.multi-select-list {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-alt);
+}
+
+.multi-select-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
+}
+
+.multi-select-option:has(input:checked) {
+  border-color: var(--primary);
+  background:
+    linear-gradient(135deg, rgba(237, 28, 36, 0.12), transparent),
+    var(--surface);
+}
+
+.multi-select-option input {
+  width: 18px;
+  min-height: 18px;
+}
+
+.multi-select-option span {
+  display: grid;
+  gap: 3px;
+}
+
+.multi-select-option small {
+  color: var(--muted);
 }
 
 .alert-error {
@@ -1005,6 +1061,18 @@ button[type="submit"],
   background: var(--danger);
 }
 
+.btn-cancel-attendance {
+  grid-column: 1 / -1;
+  min-height: 32px;
+  border: 1px solid color-mix(in srgb, var(--group-color) 36%, var(--border));
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 800;
+  box-shadow: none;
+}
+
 .btn-present.active,
 .btn-absent.active {
   outline: 3px solid rgba(17, 17, 17, 0.18);
@@ -1303,7 +1371,21 @@ button[type="submit"],
   align-items: center;
 }
 
+.payment-entry-actions,
+.payment-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .payment-entry-footer .btn-primary {
+  min-height: 38px;
+  padding: 9px 14px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.payment-entry-actions .btn-secondary {
   min-height: 38px;
   padding: 9px 14px;
   border-radius: 8px;
@@ -1471,6 +1553,23 @@ button[type="submit"],
 
 .payment-database-table a {
   color: #8bd3ff;
+}
+
+.payment-row-actions button {
+  min-height: 28px;
+  padding: 5px 8px;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  background: #242424;
+  color: #ffffff;
+  box-shadow: none;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.payment-row-actions button:last-child {
+  border-color: rgba(237, 28, 36, 0.48);
+  background: rgba(237, 28, 36, 0.18);
 }
 
 .payment-amount-cell,
@@ -2308,6 +2407,7 @@ body.rtl .payment-table-wrap {
   .payments-topbar,
   .payment-entry-heading,
   .payment-entry-footer,
+  .payment-entry-actions,
   .payment-table-tools,
   .payment-tool-icons,
   .payment-search {

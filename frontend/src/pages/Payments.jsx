@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
-import { fetchPayments, createPayment } from '../services/payments.js';
+import { fetchPayments, createPayment, updatePayment, deletePayment } from '../services/payments.js';
 import { fetchPlayers } from '../services/players.js';
+import { confirmAction } from '../utils/confirmAction.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
+import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
 
 const formatDate = (date) => {
   if (!date) return '-';
@@ -53,10 +55,16 @@ const getPackageName = (payment) => {
   return name && name !== 'custom' ? name : '-';
 };
 
+const getPlayerGroups = (player) => {
+  const groups = player?.groupIds?.length ? player.groupIds : [player?.groupId].filter(Boolean);
+  return groups.map((group) => group?.name).filter(Boolean).join(', ');
+};
+
 const PaymentsPage = () => {
   const [payments, setPayments] = useState([]);
   const [players, setPlayers] = useState([]);
   const [form, setForm] = useState({ playerId: '', paidAmount: 0, paymentMethod: 'Cash', receiptImage: '', notes: '' });
+  const [editingPaymentId, setEditingPaymentId] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeView, setActiveView] = useState('all');
@@ -98,7 +106,7 @@ const PaymentsPage = () => {
       player.fullName,
       player.parentId?.name,
       player.status,
-      player.groupId?.name
+      getPlayerGroups(player)
     ].join(' ').toLowerCase().includes(query));
   }, [players, playerSearch]);
 
@@ -183,13 +191,54 @@ const PaymentsPage = () => {
     setError('');
     setIsSubmitting(true);
     try {
-      await createPayment(form);
+      const payload = { ...form, paidAmount: parseLocalizedNumber(form.paidAmount) };
+      if (editingPaymentId) {
+        await updatePayment(editingPaymentId, payload);
+      } else {
+        await createPayment(payload);
+      }
       setForm({ playerId: '', paidAmount: 0, paymentMethod: 'Cash', receiptImage: '', notes: '' });
+      setEditingPaymentId('');
       await loadPayments();
     } catch (err) {
-      setError(err.response?.data?.message || 'Unable to record payment.');
+      setError(err.response?.data?.message || 'Unable to save payment.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleEditPayment = (payment) => {
+    setEditingPaymentId(payment._id);
+    setForm({
+      playerId: payment.playerId?._id || payment.playerId || '',
+      paidAmount: String(payment.paidAmount ?? 0),
+      paymentMethod: payment.paymentMethod || 'Cash',
+      receiptImage: payment.receiptImage || '',
+      notes: payment.notes || ''
+    });
+    setPlayerSearch(payment.playerId?.fullName || '');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingPaymentId('');
+    setForm({ playerId: '', paidAmount: 0, paymentMethod: 'Cash', receiptImage: '', notes: '' });
+    setPlayerSearch('');
+  };
+
+  const handleDeletePayment = async (payment) => {
+    const confirmed = confirmAction('Delete payment');
+    if (!confirmed) return;
+
+    setError('');
+    try {
+      await deletePayment(payment._id);
+      if (editingPaymentId === payment._id) {
+        handleCancelEdit();
+      }
+      await loadPayments();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Unable to delete payment.');
     }
   };
 
@@ -249,8 +298,8 @@ const PaymentsPage = () => {
 
           <form className="payment-entry-panel" onSubmit={handleSubmit}>
             <div className="payment-entry-heading">
-              <h2>{t('addPayment')}</h2>
-              <p>Record a payment without leaving the table.</p>
+              <h2>{editingPaymentId ? 'Edit Payment' : t('addPayment')}</h2>
+              <p>{editingPaymentId ? 'Update the selected payment record.' : 'Record a payment without leaving the table.'}</p>
             </div>
             {error && <p className="alert-error">{error}</p>}
             <div className="payment-entry-grid">
@@ -263,7 +312,7 @@ const PaymentsPage = () => {
                   placeholder="Search player..."
                   type="search"
                 />
-                <select value={form.playerId} onChange={(e) => setForm({ ...form, playerId: e.target.value })} required>
+                <select value={form.playerId} onChange={(e) => setForm({ ...form, playerId: e.target.value })} required disabled={Boolean(editingPaymentId)}>
                   <option value="">{t('selectPlayer')}</option>
                   {filteredPlayers.map((player) => <option key={player._id} value={player._id}>{player.fullName}</option>)}
                 </select>
@@ -271,7 +320,13 @@ const PaymentsPage = () => {
 
               <label>
                 <span>{t('paidAmount')}</span>
-                <input type="number" min="0" value={form.paidAmount} onChange={(e) => setForm({ ...form, paidAmount: Number(e.target.value) })} required />
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={form.paidAmount}
+                  onChange={(e) => setForm({ ...form, paidAmount: normalizeDigits(e.target.value) })}
+                  required
+                />
               </label>
 
               <label>
@@ -296,7 +351,10 @@ const PaymentsPage = () => {
 
             <div className="payment-entry-footer">
               <span>{form.playerId ? `Package: ${getPackageName({ playerId: players.find((player) => player._id === form.playerId) })}` : 'Select a player to see the package.'}</span>
-              <button className="btn-primary" type="submit" disabled={isSubmitting}>{isSubmitting ? 'Recording...' : t('recordPayment')}</button>
+              <div className="payment-entry-actions">
+                {editingPaymentId && <button className="btn-secondary" type="button" onClick={handleCancelEdit}>Cancel Edit</button>}
+                <button className="btn-primary" type="submit" disabled={isSubmitting}>{isSubmitting ? 'Saving...' : (editingPaymentId ? 'Update Payment' : t('recordPayment'))}</button>
+              </div>
             </div>
           </form>
 
@@ -387,6 +445,7 @@ const PaymentsPage = () => {
                     <th>Last edited by</th>
                     <th>Last edited time</th>
                     <th>Notes</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -407,13 +466,19 @@ const PaymentsPage = () => {
                         <td><span className={`payment-pill method-${methodClass}`}>{payment.paymentMethod || '-'}</span></td>
                         <td className="payment-amount-cell">{formatMoney(payment.paidAmount)}</td>
                         <td>{payment.createdBy?.name || 'Warriors gymnastics'}</td>
-                        <td>{payment.createdBy?.name || 'Warriors gymnastics'}</td>
-                        <td>{formatDate(payment.paymentDate)} {formatTime(payment.paymentDate)}</td>
+                        <td>{payment.updatedBy?.name || payment.createdBy?.name || 'Warriors gymnastics'}</td>
+                        <td>{payment.updatedAt ? `${formatDate(payment.updatedAt)} ${formatTime(payment.updatedAt)}` : `${formatDate(payment.paymentDate)} ${formatTime(payment.paymentDate)}`}</td>
                         <td>{payment.notes ? payment.notes : '-'}</td>
+                        <td>
+                          <div className="payment-row-actions">
+                            <button type="button" onClick={() => handleEditPayment(payment)}>Edit</button>
+                            <button type="button" onClick={() => handleDeletePayment(payment)}>Delete</button>
+                          </div>
+                        </td>
                       </tr>
                     );
                   }) : (
-                    <tr><td colSpan="12" className="payment-empty-row">{t('noPaymentsRecorded')}</td></tr>
+                    <tr><td colSpan="13" className="payment-empty-row">{t('noPaymentsRecorded')}</td></tr>
                   )}
                 </tbody>
               </table>

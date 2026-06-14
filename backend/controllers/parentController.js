@@ -25,8 +25,9 @@ const formatParentResponse = (parent) => {
 const getParents = async (req, res, next) => {
   try {
     const parents = await Parent.find()
+      .sort({ _id: -1 })
       .populate('userId', 'name email role isActive')
-      .populate('children', 'fullName status programId groupId subscriptionId');
+      .populate('children', 'fullName status programId groupId groupIds subscriptionId');
     res.json(parents.map(formatParentResponse));
   } catch (error) {
     next(error);
@@ -41,7 +42,7 @@ const getParentById = async (req, res, next) => {
     }
     const parent = await Parent.findById(id)
       .populate('userId', 'name email role isActive')
-      .populate('children', 'fullName status programId groupId subscriptionId');
+      .populate('children', 'fullName status programId groupId groupIds subscriptionId');
     if (!parent) {
       return res.status(404).json({ message: 'Parent not found.' });
     }
@@ -159,7 +160,7 @@ const deleteParent = async (req, res, next) => {
 const getParentMe = async (req, res, next) => {
   try {
     const parent = await Parent.findOne({ userId: req.user._id })
-      .populate('children', 'fullName status programId groupId subscriptionId');
+      .populate('children', 'fullName status programId groupId groupIds subscriptionId');
     if (!parent) {
       return res.status(404).json({ message: 'Parent record not found.' });
     }
@@ -176,8 +177,10 @@ const getParentChildren = async (req, res, next) => {
       return res.status(404).json({ message: 'Parent record not found.' });
     }
     const children = await Player.find({ parentId: parent._id })
+      .sort({ createdAt: -1, _id: -1 })
       .populate('programId', 'name level')
       .populate('groupId', 'name')
+      .populate('groupIds', 'name')
       .populate('subscriptionId', 'type status remainingSessions startDate endDate price');
     res.json(children);
   } catch (error) {
@@ -191,9 +194,9 @@ const getParentAttendance = async (req, res, next) => {
     if (!parent) {
       return res.status(404).json({ message: 'Parent record not found.' });
     }
-    const children = await Player.find({ parentId: parent._id }).select('_id fullName');
+    const children = await Player.find({ parentId: parent._id }).sort({ createdAt: -1, _id: -1 }).select('_id fullName');
     const childIds = children.map((child) => child._id);
-    const attendance = await Attendance.find({ playerId: { $in: childIds } }).populate('playerId', 'fullName');
+    const attendance = await Attendance.find({ playerId: { $in: childIds } }).sort({ date: -1, _id: -1 }).populate('playerId', 'fullName');
     res.json(attendance);
   } catch (error) {
     next(error);
@@ -206,9 +209,9 @@ const getParentPayments = async (req, res, next) => {
     if (!parent) {
       return res.status(404).json({ message: 'Parent record not found.' });
     }
-    const children = await Player.find({ parentId: parent._id }).select('_id fullName');
+    const children = await Player.find({ parentId: parent._id }).sort({ createdAt: -1, _id: -1 }).select('_id fullName');
     const childIds = children.map((child) => child._id);
-    const payments = await Payment.find({ playerId: { $in: childIds } }).populate('playerId', 'fullName').populate('subscriptionId', 'price');
+    const payments = await Payment.find({ playerId: { $in: childIds } }).sort({ paymentDate: -1, _id: -1 }).populate('playerId', 'fullName').populate('subscriptionId', 'price');
     res.json(payments);
   } catch (error) {
     next(error);
@@ -222,18 +225,20 @@ const getParentDashboard = async (req, res, next) => {
       return res.status(404).json({ message: 'Parent record not found.' });
     }
     const children = await Player.find({ parentId: parent._id })
+      .sort({ createdAt: -1, _id: -1 })
       .populate('programId', 'name')
       .populate('groupId', 'name')
+      .populate('groupIds', 'name')
       .populate('coachId', 'name')
       .populate('subscriptionId', 'type status remainingSessions usedSessions startDate endDate price');
     const childIds = children.map((child) => child._id);
     const attendanceRecords = await Attendance.find({ playerId: { $in: childIds } })
       .populate('playerId', 'fullName')
-      .sort({ date: -1 });
+      .sort({ date: -1, _id: -1 });
     const payments = await Payment.find({ playerId: { $in: childIds } })
       .populate('playerId', 'fullName')
       .populate('subscriptionId', 'price')
-      .sort({ paymentDate: -1 });
+      .sort({ paymentDate: -1, _id: -1 });
     const paymentGroups = payments.reduce((acc, payment) => {
       const key = payment.subscriptionId?._id?.toString() || payment.playerId._id.toString();
       acc[key] = (acc[key] || 0) + payment.paidAmount;

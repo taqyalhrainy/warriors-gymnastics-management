@@ -21,6 +21,8 @@ const ParentAttendancePage = lazy(() => import('./pages/ParentAttendance.jsx'));
 const ParentPaymentsPage = lazy(() => import('./pages/ParentPayments.jsx'));
 const ParentNotificationsPage = lazy(() => import('./pages/ParentNotifications.jsx'));
 const NotificationDetailPage = lazy(() => import('./pages/NotificationDetail.jsx'));
+const adminRoles = ['admin', 'coach', 'receptionist'];
+const parentRoles = ['parent'];
 
 function App() {
   const { user } = useAuth();
@@ -49,24 +51,28 @@ function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route element={<ProtectedRoute />}>
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/players" element={<PlayersPage />} />
-            <Route path="/players/new" element={<PlayerFormPage />} />
-            <Route path="/players/:id/edit" element={<PlayerFormPage />} />
-            <Route path="/players/:id" element={<PlayerProfilePage />} />
-            <Route path="/groups" element={<GroupsPage />} />
-            <Route path="/attendance" element={<AttendancePage />} />
-            <Route path="/payments" element={<PaymentsPage />} />
-            <Route path="/notifications" element={<NotificationsPage />} />
-            <Route path="/notifications/:id" element={<NotificationDetailPage />} />
-            <Route path="/parents" element={<ParentsPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/audit-logs" element={<AuditLogsPage />} />
-            <Route path="/parent" element={<ParentDashboard />} />
-            <Route path="/parent/attendance" element={<ParentAttendancePage />} />
-            <Route path="/parent/payments" element={<ParentPaymentsPage />} />
-            <Route path="/parent/notifications" element={<ParentNotificationsPage />} />
-            <Route path="/parent/notifications/:id" element={<NotificationDetailPage />} />
+            <Route element={<ProtectedRoute roles={adminRoles} />}>
+              <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/players" element={<PlayersPage />} />
+              <Route path="/players/new" element={<PlayerFormPage />} />
+              <Route path="/players/:id/edit" element={<PlayerFormPage />} />
+              <Route path="/players/:id" element={<PlayerProfilePage />} />
+              <Route path="/groups" element={<GroupsPage />} />
+              <Route path="/attendance" element={<AttendancePage />} />
+              <Route path="/payments" element={<PaymentsPage />} />
+              <Route path="/notifications" element={<NotificationsPage />} />
+              <Route path="/notifications/:id" element={<NotificationDetailPage />} />
+              <Route path="/parents" element={<ParentsPage />} />
+              <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/audit-logs" element={<AuditLogsPage />} />
+            </Route>
+            <Route element={<ProtectedRoute roles={parentRoles} />}>
+              <Route path="/parent" element={<ParentDashboard />} />
+              <Route path="/parent/attendance" element={<ParentAttendancePage />} />
+              <Route path="/parent/payments" element={<ParentPaymentsPage />} />
+              <Route path="/parent/notifications" element={<ParentNotificationsPage />} />
+              <Route path="/parent/notifications/:id" element={<NotificationDetailPage />} />
+            </Route>
           </Route>
           <Route path="/" element={user ? <Navigate to={user.role === 'parent' ? '/parent' : '/admin'} /> : <Navigate to="/login" />} />
         </Routes>

@@ -3,6 +3,7 @@ const {
   markPresent,
   markAbsent,
   updateTodayAttendance,
+  cancelTodayAttendance,
   getAttendanceByPlayer,
   getAttendanceByGroup
 } = require('../controllers/attendanceController');
@@ -14,6 +15,7 @@ router.use(protect);
 router.post('/present', authorize('admin', 'coach', 'receptionist'), markPresent);
 router.post('/absent', authorize('admin', 'coach', 'receptionist'), markAbsent);
 router.put('/today', authorize('admin', 'coach', 'receptionist'), updateTodayAttendance);
+router.delete('/today', authorize('admin', 'coach', 'receptionist'), cancelTodayAttendance);
 router.get('/player/:playerId', authorize('admin', 'coach', 'receptionist', 'parent'), getAttendanceByPlayer);
 router.get('/group/:groupId', authorize('admin', 'coach', 'receptionist'), getAttendanceByGroup);
 

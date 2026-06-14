@@ -15,6 +15,11 @@ export const updateTodayAttendance = async (data) => {
   return response.data;
 };
 
+export const cancelTodayAttendance = async (data) => {
+  const response = await api.delete('/attendance/today', { data });
+  return response.data;
+};
+
 export const fetchAttendanceByPlayer = async (playerId) => {
   const response = await api.get(`/attendance/player/${playerId}`);
   return response.data;

@@ -6,7 +6,7 @@ const { createAuditLog } = require('../utils/audit');
 
 const getCoaches = async (req, res, next) => {
   try {
-    const coaches = await Coach.find().populate('userId', 'name email role isActive');
+    const coaches = await Coach.find().sort({ _id: -1 }).populate('userId', 'name email role isActive');
     res.json(coaches);
   } catch (error) {
     next(error);

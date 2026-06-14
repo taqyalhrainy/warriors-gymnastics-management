@@ -26,9 +26,14 @@ const PlayersPage = () => {
     }
   };
 
+  const getPlayerGroups = (player) => {
+    const groups = player.groupIds?.length ? player.groupIds : [player.groupId].filter(Boolean);
+    return groups.map((group) => group?.name).filter(Boolean).join(', ');
+  };
+
   const filteredPlayers = players.filter((player) => [
     player.fullName,
-    player.groupId?.name,
+    getPlayerGroups(player),
     player.status,
     player.parentId?.name
   ].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
@@ -64,7 +69,7 @@ const PlayersPage = () => {
               {filteredPlayers.map((player) => (
                 <tr key={player._id}>
                   <td>{player.fullName}</td>
-                  <td>{player.groupId?.name || t('unassigned')}</td>
+                  <td>{getPlayerGroups(player) || t('unassigned')}</td>
                   <td>{player.status}</td>
                   <td>{player.parentId?.name || t('unknown')}</td>
                   <td className="table-actions">

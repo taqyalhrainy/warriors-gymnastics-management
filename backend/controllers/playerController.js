@@ -15,11 +15,26 @@ const formatPlayerResponse = (player) => {
       obj.parentPhone = '';
     }
   }
+  if ((!obj.groupIds || obj.groupIds.length === 0) && obj.groupId) {
+    obj.groupIds = [obj.groupId];
+  }
   delete obj.parentPhoneEncrypted;
   return obj;
 };
 
 const optionalObjectIdFields = ['programId', 'groupId', 'coachId', 'subscriptionId'];
+
+const normalizeGroupIds = (payload) => {
+  const rawGroupIds = Array.isArray(payload.groupIds)
+    ? payload.groupIds
+    : [payload.groupId].filter(Boolean);
+  return [...new Set(rawGroupIds.filter((groupId) => validateObjectId(groupId)).map(String))];
+};
+
+const getPlayerGroupIds = (player) => normalizeGroupIds({
+  groupIds: player.groupIds?.length ? player.groupIds.map(String) : [],
+  groupId: player.groupId ? String(player.groupId) : ''
+});
 
 const cleanPlayerPayload = (payload) => {
   optionalObjectIdFields.forEach((field) => {
@@ -27,6 +42,10 @@ const cleanPlayerPayload = (payload) => {
       delete payload[field];
     }
   });
+  if (Array.isArray(payload.groupIds)) {
+    payload.groupIds = normalizeGroupIds(payload);
+    payload.groupId = payload.groupIds[0] || undefined;
+  }
   if (payload.dateOfBirth === '') {
     delete payload.dateOfBirth;
   }
@@ -48,6 +67,32 @@ const cleanPlayerPayload = (payload) => {
   return payload;
 };
 
+const validateGroupsHaveCapacity = async (groupIds, notFoundMessage, fullMessageSuffix) => {
+  if (!groupIds.length) return;
+
+  const groups = await TrainingGroup.find({ _id: { $in: groupIds } });
+  if (groups.length !== groupIds.length) {
+    const error = new Error(notFoundMessage);
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const fullGroup = groups.find((group) => group.currentCount >= group.maxCapacity);
+  if (fullGroup) {
+    const error = new Error(`${fullGroup.name} ${fullMessageSuffix}`);
+    error.statusCode = 400;
+    throw error;
+  }
+};
+
+const incrementGroups = async (groupIds, amount) => {
+  if (!groupIds.length) return;
+  await TrainingGroup.updateMany({ _id: { $in: groupIds } }, { $inc: { currentCount: amount } });
+  if (amount < 0) {
+    await TrainingGroup.updateMany({ _id: { $in: groupIds }, currentCount: { $lt: 0 } }, { $set: { currentCount: 0 } });
+  }
+};
+
 const getPlayers = async (req, res, next) => {
   try {
     const filter = { isDeleted: { $ne: true } };
@@ -61,9 +106,11 @@ const getPlayers = async (req, res, next) => {
       filter.parentId = req.query.parentId;
     }
     const players = await Player.find(filter)
+      .sort({ createdAt: -1, _id: -1 })
       .populate('parentId', 'name email')
       .populate('programId', 'name level')
       .populate('groupId', 'name days startTime endTime')
+      .populate('groupIds', 'name days startTime endTime')
       .populate('coachId', 'name');
     res.json(players.map(formatPlayerResponse));
   } catch (error) {
@@ -74,7 +121,8 @@ const getPlayers = async (req, res, next) => {
 const createPlayer = async (req, res, next) => {
   try {
     const data = cleanPlayerPayload(sanitizeObject(req.body));
-    const { fullName, dateOfBirth, parentId, parentPhone, programId, groupId, coachId, level, startDate, endDate, packageName, packageClasses, packageHours, payment, note, profileImage, status = 'active' } = data;
+    const groupIds = normalizeGroupIds(data);
+    const { fullName, dateOfBirth, parentId, parentPhone, programId, coachId, level, startDate, endDate, packageName, packageClasses, packageHours, payment, note, profileImage, status = 'active' } = data;
     if (!fullName || !parentId) {
       return res.status(400).json({ message: 'Required player fields are missing.' });
     }
@@ -82,13 +130,17 @@ const createPlayer = async (req, res, next) => {
     if (!parent) {
       return res.status(404).json({ message: 'Parent not found.' });
     }
+
+    await validateGroupsHaveCapacity(groupIds, 'One or more groups were not found.', 'is already at full capacity.');
+
     const payload = {
       fullName,
       dateOfBirth,
       parentId,
       parentPhoneEncrypted: encrypt(parentPhone),
       programId,
-      groupId,
+      groupId: groupIds[0],
+      groupIds,
       coachId,
       level,
       startDate,
@@ -101,23 +153,17 @@ const createPlayer = async (req, res, next) => {
       status,
       profileImage: profileImage || ''
     };
-    if (groupId) {
-      const group = await TrainingGroup.findById(groupId);
-      if (!group) {
-        return res.status(404).json({ message: 'Group not found.' });
-      }
-      if (group.currentCount >= group.maxCapacity) {
-        return res.status(400).json({ message: 'Group is already at full capacity.' });
-      }
-      group.currentCount += 1;
-      await group.save();
-    }
+
+    await incrementGroups(groupIds, 1);
     const player = await Player.create(payload);
     parent.children.push(player._id);
     await parent.save();
     await createAuditLog({ userId: req.user._id, action: 'add player', entity: 'Player', entityId: player._id, req });
     res.status(201).json(formatPlayerResponse(player));
   } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     next(error);
   }
 };
@@ -132,6 +178,7 @@ const getPlayerById = async (req, res, next) => {
       .populate('parentId', 'name email')
       .populate('programId', 'name level')
       .populate('groupId', 'name days startTime endTime')
+      .populate('groupIds', 'name days startTime endTime')
       .populate('coachId', 'name');
     if (!player) {
       return res.status(404).json({ message: 'Player not found.' });
@@ -154,23 +201,19 @@ const updatePlayer = async (req, res, next) => {
     if (!player) {
       return res.status(404).json({ message: 'Player not found.' });
     }
-    if (updates.groupId && updates.groupId !== String(player.groupId)) {
-      const newGroup = await TrainingGroup.findById(updates.groupId);
-      if (!newGroup) {
-        return res.status(404).json({ message: 'New group not found.' });
-      }
-      if (newGroup.currentCount >= newGroup.maxCapacity) {
-        return res.status(400).json({ message: 'New group is full.' });
-      }
-      if (player.groupId) {
-        const oldGroup = await TrainingGroup.findById(player.groupId);
-        if (oldGroup) {
-          oldGroup.currentCount = Math.max(0, oldGroup.currentCount - 1);
-          await oldGroup.save();
-        }
-      }
-      newGroup.currentCount += 1;
-      await newGroup.save();
+
+    if (Array.isArray(updates.groupIds) || typeof updates.groupId !== 'undefined') {
+      const nextGroupIds = normalizeGroupIds(updates);
+      const currentGroupIds = getPlayerGroupIds(player);
+      const addedGroupIds = nextGroupIds.filter((groupId) => !currentGroupIds.includes(groupId));
+      const removedGroupIds = currentGroupIds.filter((groupId) => !nextGroupIds.includes(groupId));
+
+      await validateGroupsHaveCapacity(addedGroupIds, 'One or more new groups were not found.', 'is full.');
+      await incrementGroups(addedGroupIds, 1);
+      await incrementGroups(removedGroupIds, -1);
+
+      updates.groupIds = nextGroupIds;
+      updates.groupId = nextGroupIds[0] || undefined;
     }
     if (updates.parentPhone) {
       updates.parentPhoneEncrypted = encrypt(updates.parentPhone);
@@ -190,6 +233,9 @@ const updatePlayer = async (req, res, next) => {
     await createAuditLog({ userId: req.user._id, action: 'edit player', entity: 'Player', entityId: player._id, req });
     res.json(formatPlayerResponse(player));
   } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     next(error);
   }
 };
@@ -204,13 +250,7 @@ const deletePlayer = async (req, res, next) => {
     if (!player) {
       return res.status(404).json({ message: 'Player not found.' });
     }
-    if (player.groupId) {
-      const group = await TrainingGroup.findById(player.groupId);
-      if (group) {
-        group.currentCount = Math.max(0, group.currentCount - 1);
-        await group.save();
-      }
-    }
+    await incrementGroups(getPlayerGroupIds(player), -1);
     const parent = await Parent.findById(player.parentId);
     if (parent) {
       parent.children = parent.children.filter((childId) => String(childId) !== String(player._id));

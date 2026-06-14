@@ -12,6 +12,11 @@ const ParentDashboard = () => {
     fetchParentDashboard().then(setDashboard).catch(console.error);
   }, []);
 
+  const getChildGroups = (child) => {
+    const groups = child?.groupIds?.length ? child.groupIds : [child?.groupId].filter(Boolean);
+    return groups.map((group) => group?.name).filter(Boolean).join(', ');
+  };
+
   return (
     <div className="dashboard-layout">
       <Sidebar />
@@ -27,7 +32,7 @@ const ParentDashboard = () => {
                   <tr key={child._id}>
                     <td>{child.fullName}</td>
                     <td>{child.programId?.name || t('notAssigned')}</td>
-                    <td>{child.groupId?.name || t('notAssigned')}</td>
+                    <td>{getChildGroups(child) || t('notAssigned')}</td>
                     <td>{child.coachId?.name || t('unassigned')}</td>
                     <td>{child.status}</td>
                   </tr>

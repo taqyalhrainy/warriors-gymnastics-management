@@ -10,7 +10,7 @@ const getSubscriptions = async (req, res, next) => {
     if (req.query.playerId && validateObjectId(req.query.playerId)) {
       filter.playerId = req.query.playerId;
     }
-    const subscriptions = await Subscription.find(filter).populate('playerId', 'fullName');
+    const subscriptions = await Subscription.find(filter).sort({ startDate: -1, _id: -1 }).populate('playerId', 'fullName');
     const populated = subscriptions.map((subscription) => {
       const sub = subscription.toObject();
       if (sub.type === 'time' && sub.endDate) {

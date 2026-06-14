@@ -165,13 +165,51 @@ const updateTodayAttendance = async (req, res, next) => {
   }
 };
 
+const cancelTodayAttendance = async (req, res, next) => {
+  try {
+    const { playerId } = sanitizeObject(req.body);
+    if (!validateObjectId(playerId)) {
+      return res.status(400).json({ message: 'Valid player ID is required.' });
+    }
+
+    const today = new Date();
+    const dateOnly = new Date(today.toISOString().split('T')[0]);
+    const attendance = await Attendance.findOne({ playerId, date: dateOnly });
+    if (!attendance) {
+      return res.status(404).json({ message: 'No attendance record to cancel today.' });
+    }
+
+    const previousStatus = attendance.status;
+    await attendance.deleteOne();
+
+    const subscription = await Subscription.findOne({ playerId });
+    if (subscription && subscription.type === 'sessions' && previousStatus === 'present') {
+      subscription.usedSessions = Math.max(0, subscription.usedSessions - 1);
+      subscription.remainingSessions += 1;
+      if (subscription.endDate <= today || subscription.remainingSessions === 0) {
+        subscription.status = 'expired';
+      } else if (subscription.remainingSessions <= 2) {
+        subscription.status = 'almost_expired';
+      } else {
+        subscription.status = 'active';
+      }
+      await subscription.save();
+    }
+
+    await createAuditLog({ userId: req.user._id, action: 'attendance cancel', entity: 'Attendance', entityId: attendance._id, req });
+    res.json({ message: 'Attendance cancelled successfully.' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getAttendanceByPlayer = async (req, res, next) => {
   try {
     const { playerId } = req.params;
     if (!validateObjectId(playerId)) {
       return res.status(400).json({ message: 'Invalid player ID.' });
     }
-    const attendance = await Attendance.find({ playerId }).sort({ date: -1 });
+    const attendance = await Attendance.find({ playerId }).sort({ date: -1, _id: -1 });
     res.json(attendance);
   } catch (error) {
     next(error);
@@ -184,11 +222,11 @@ const getAttendanceByGroup = async (req, res, next) => {
     if (!validateObjectId(groupId)) {
       return res.status(400).json({ message: 'Invalid group ID.' });
     }
-    const attendance = await Attendance.find({ groupId }).populate('playerId', 'fullName');
+    const attendance = await Attendance.find({ groupId }).sort({ date: -1, _id: -1 }).populate('playerId', 'fullName');
     res.json(attendance);
   } catch (error) {
     next(error);
   }
 };
 
-module.exports = { markPresent, markAbsent, updateTodayAttendance, getAttendanceByPlayer, getAttendanceByGroup };
+module.exports = { markPresent, markAbsent, updateTodayAttendance, cancelTodayAttendance, getAttendanceByPlayer, getAttendanceByGroup };
