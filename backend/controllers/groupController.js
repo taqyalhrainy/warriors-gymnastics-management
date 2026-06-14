@@ -65,7 +65,7 @@ const deleteGroup = async (req, res, next) => {
     if (!group) {
       return res.status(404).json({ message: 'Group not found.' });
     }
-    const playerCount = await Player.countDocuments({ groupId: group._id });
+    const playerCount = await Player.countDocuments({ groupId: group._id, isDeleted: { $ne: true } });
     if (playerCount > 0) {
       return res.status(400).json({ message: 'Cannot delete group with assigned players.' });
     }
@@ -83,7 +83,7 @@ const getGroupPlayers = async (req, res, next) => {
     if (!validateObjectId(id)) {
       return res.status(400).json({ message: 'Invalid group ID.' });
     }
-    const players = await Player.find({ groupId: id })
+    const players = await Player.find({ groupId: id, isDeleted: { $ne: true } })
       .populate('parentId', 'name email')
       .populate('programId', 'name')
       .populate('coachId', 'name')

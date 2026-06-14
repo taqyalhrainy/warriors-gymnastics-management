@@ -18,7 +18,7 @@ const markPresent = async (req, res, next) => {
       return res.status(400).json({ message: 'Attendance already marked for this player today.' });
     }
     const player = await Player.findById(playerId).populate({ path: 'parentId', populate: { path: 'userId', select: '_id' } });
-    if (!player) {
+    if (!player || player.isDeleted) {
       return res.status(404).json({ message: 'Player not found.' });
     }
     const subscription = await Subscription.findOne({ playerId });
@@ -73,6 +73,10 @@ const markAbsent = async (req, res, next) => {
     if (existing) {
       return res.status(400).json({ message: 'Attendance already marked for this player today.' });
     }
+    const player = await Player.findById(playerId);
+    if (!player || player.isDeleted) {
+      return res.status(404).json({ message: 'Player not found.' });
+    }
     const attendance = await Attendance.create({
       playerId,
       groupId,
@@ -97,7 +101,7 @@ const updateTodayAttendance = async (req, res, next) => {
     const today = new Date();
     const dateOnly = new Date(today.toISOString().split('T')[0]);
     const player = await Player.findById(playerId).populate({ path: 'parentId', populate: { path: 'userId', select: '_id' } });
-    if (!player) {
+    if (!player || player.isDeleted) {
       return res.status(404).json({ message: 'Player not found.' });
     }
 
