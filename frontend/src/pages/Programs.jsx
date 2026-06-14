@@ -3,6 +3,7 @@ import Sidebar from '../components/Sidebar.jsx';
 import { fetchPrograms, createProgram, updateProgram, deleteProgram } from '../services/programs.js';
 import { confirmAction } from '../utils/confirmAction.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
+import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
 
 const ProgramsPage = () => {
   const [programs, setPrograms] = useState([]);
@@ -37,11 +38,12 @@ const ProgramsPage = () => {
     }
 
     try {
+      const payload = { ...form, price: parseLocalizedNumber(form.price) };
       if (selectedProgram) {
-        await updateProgram(selectedProgram._id, form);
+        await updateProgram(selectedProgram._id, payload);
         setMessage('Program updated successfully.');
       } else {
-        await createProgram(form);
+        await createProgram(payload);
         setMessage('Program created successfully.');
       }
       resetForm();
@@ -100,11 +102,10 @@ const ProgramsPage = () => {
               <input value={form.level} onChange={(e) => setForm({ ...form, level: e.target.value })} />
               <label>{t('price')}</label>
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={form.price}
-                onChange={(e) => setForm({ ...form, price: Number(e.target.value) })}
+                onChange={(e) => setForm({ ...form, price: normalizeDigits(e.target.value) })}
                 required
               />
               <button className="btn-primary" type="submit">{selectedProgram ? t('update') : t('create')}</button>

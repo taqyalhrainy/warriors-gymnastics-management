@@ -3,6 +3,12 @@ const Player = require('../models/Player');
 const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { decrypt } = require('../utils/encryption');
+const { parseLocalizedNumber } = require('../utils/numberInput');
+
+const normalizeGroupPayload = (payload) => ({
+  ...payload,
+  maxCapacity: payload.maxCapacity === undefined ? payload.maxCapacity : parseLocalizedNumber(payload.maxCapacity)
+});
 
 const formatPlayerResponse = (player) => {
   const obj = player.toObject({ virtuals: true });
@@ -28,7 +34,7 @@ const getGroups = async (req, res, next) => {
 
 const createGroup = async (req, res, next) => {
   try {
-    const payload = sanitizeObject(req.body);
+    const payload = normalizeGroupPayload(sanitizeObject(req.body));
     const group = await TrainingGroup.create(payload);
     await createAuditLog({ userId: req.user._id, action: 'create group', entity: 'TrainingGroup', entityId: group._id, req });
     res.status(201).json(group);
@@ -43,7 +49,7 @@ const updateGroup = async (req, res, next) => {
     if (!validateObjectId(id)) {
       return res.status(400).json({ message: 'Invalid group ID.' });
     }
-    const payload = sanitizeObject(req.body);
+    const payload = normalizeGroupPayload(sanitizeObject(req.body));
     const group = await TrainingGroup.findByIdAndUpdate(id, payload, { new: true });
     if (!group) {
       return res.status(404).json({ message: 'Group not found.' });

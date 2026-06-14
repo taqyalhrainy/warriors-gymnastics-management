@@ -5,6 +5,7 @@ const Player = require('../models/Player');
 const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { encrypt, decrypt } = require('../utils/encryption');
+const { parseLocalizedNumber } = require('../utils/numberInput');
 
 const populatePaymentQuery = (query) => query
   .populate({
@@ -76,7 +77,7 @@ const createPayment = async (req, res, next) => {
     ]);
     const playerTotalAmount = Number(player.payment || 0);
     const totalPaidBefore = previousPaid[0]?.totalPaid || 0;
-    const totalPaidAfter = totalPaidBefore + Number(paidAmount);
+    const totalPaidAfter = totalPaidBefore + parseLocalizedNumber(paidAmount);
     const remainingAmount = playerTotalAmount ? Math.max(0, playerTotalAmount - totalPaidAfter) : 0;
     const parentRecord = await Parent.findById(player.parentId).populate('userId');
     const payment = await Payment.create({
@@ -84,10 +85,10 @@ const createPayment = async (req, res, next) => {
       playerNameSnapshot: player.fullName || '',
       parentNameSnapshot: parentRecord?.name || '',
       packageNameSnapshot: player.packageName || '',
-      packageClassesSnapshot: Number(player.packageClasses || 0),
-      packageHoursSnapshot: Number(player.packageHours || 0),
+      packageClassesSnapshot: parseLocalizedNumber(player.packageClasses),
+      packageHoursSnapshot: parseLocalizedNumber(player.packageHours),
       totalAmount: playerTotalAmount,
-      paidAmount: Number(paidAmount),
+      paidAmount: parseLocalizedNumber(paidAmount),
       remainingAmount,
       paymentMethod,
       receiptImage: receiptImage || '',
@@ -124,7 +125,7 @@ const updatePayment = async (req, res, next) => {
     }
 
     if (payload.paidAmount != null) {
-      payment.paidAmount = Number(payload.paidAmount || 0);
+      payment.paidAmount = parseLocalizedNumber(payload.paidAmount);
     }
     if (payload.paymentMethod) {
       payment.paymentMethod = payload.paymentMethod;

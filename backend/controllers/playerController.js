@@ -5,6 +5,7 @@ const Payment = require('../models/Payment');
 const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { encrypt, decrypt } = require('../utils/encryption');
+const { parseLocalizedNumber } = require('../utils/numberInput');
 
 const formatPlayerResponse = (player) => {
   const obj = player.toObject({ virtuals: true });
@@ -146,9 +147,9 @@ const createPlayer = async (req, res, next) => {
       startDate,
       endDate,
       packageName: packageName || '',
-      packageClasses: Number(packageClasses || 0),
-      packageHours: Number(packageHours || 0),
-      payment: Number(payment || 0),
+      packageClasses: parseLocalizedNumber(packageClasses),
+      packageHours: parseLocalizedNumber(packageHours),
+      payment: parseLocalizedNumber(payment),
       note: note || '',
       status,
       profileImage: profileImage || ''
@@ -220,13 +221,13 @@ const updatePlayer = async (req, res, next) => {
       delete updates.parentPhone;
     }
     if (typeof updates.payment !== 'undefined') {
-      updates.payment = Number(updates.payment || 0);
+      updates.payment = parseLocalizedNumber(updates.payment);
     }
     if (typeof updates.packageClasses !== 'undefined') {
-      updates.packageClasses = Number(updates.packageClasses || 0);
+      updates.packageClasses = parseLocalizedNumber(updates.packageClasses);
     }
     if (typeof updates.packageHours !== 'undefined') {
-      updates.packageHours = Number(updates.packageHours || 0);
+      updates.packageHours = parseLocalizedNumber(updates.packageHours);
     }
     Object.assign(player, updates);
     await player.save();

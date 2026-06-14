@@ -3,6 +3,7 @@ import Sidebar from '../components/Sidebar.jsx';
 import { fetchGroups, createGroup, updateGroup, deleteGroup } from '../services/groups.js';
 import { confirmAction } from '../utils/confirmAction.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
+import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
 
 const initialForm = { name: '', days: '', startTime: '', endTime: '', maxCapacity: 20 };
 
@@ -38,7 +39,7 @@ const GroupsPage = () => {
     }
 
     try {
-      const payload = { ...form, days: form.days.split(',').map((d) => d.trim()) };
+      const payload = { ...form, maxCapacity: parseLocalizedNumber(form.maxCapacity), days: form.days.split(',').map((d) => d.trim()) };
       if (selectedGroup) {
         await updateGroup(selectedGroup._id, payload);
         setMessage('Group updated successfully.');
@@ -107,7 +108,7 @@ const GroupsPage = () => {
               <label>{t('endTime')}</label>
               <input value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} required />
               <label>{t('maxCapacity')}</label>
-              <input type="number" value={form.maxCapacity} onChange={(e) => setForm({ ...form, maxCapacity: Number(e.target.value) })} required />
+              <input type="text" inputMode="numeric" value={form.maxCapacity} onChange={(e) => setForm({ ...form, maxCapacity: normalizeDigits(e.target.value) })} required />
               <button className="btn-primary" type="submit">{selectedGroup ? t('updateGroup') : t('addGroup')}</button>
               {selectedGroup && <button type="button" className="btn-secondary" onClick={resetForm}>{t('cancel')}</button>}
             </form>

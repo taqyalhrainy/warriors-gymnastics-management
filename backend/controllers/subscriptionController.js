@@ -3,6 +3,7 @@ const Player = require('../models/Player');
 const Program = require('../models/Program');
 const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
+const { parseLocalizedNumber } = require('../utils/numberInput');
 
 const getSubscriptions = async (req, res, next) => {
   try {
@@ -47,17 +48,17 @@ const createSubscription = async (req, res, next) => {
     if (!program) {
       return res.status(400).json({ message: 'Selected package is invalid. Please choose an existing program package.' });
     }
-    const remainingSessions = type === 'sessions' ? Number(totalSessions || 0) : 0;
+    const remainingSessions = type === 'sessions' ? parseLocalizedNumber(totalSessions) : 0;
     const subscription = await Subscription.create({
       playerId,
       type,
       packageName: program.name,
-      totalSessions: Number(totalSessions || 0),
+      totalSessions: parseLocalizedNumber(totalSessions),
       usedSessions: 0,
       remainingSessions,
       startDate,
       endDate,
-      price: Number(program.price || price || 0),
+      price: parseLocalizedNumber(program.price || price),
       status: 'active'
     });
     player.subscriptionId = subscription._id;
@@ -81,6 +82,12 @@ const updateSubscription = async (req, res, next) => {
       return res.status(404).json({ message: 'Subscription not found.' });
     }
     Object.assign(subscription, payload);
+    if (payload.totalSessions !== undefined) {
+      subscription.totalSessions = parseLocalizedNumber(payload.totalSessions);
+    }
+    if (payload.price !== undefined) {
+      subscription.price = parseLocalizedNumber(payload.price);
+    }
     if (subscription.type === 'sessions') {
       subscription.remainingSessions = Math.max(0, subscription.totalSessions - subscription.usedSessions);
     }

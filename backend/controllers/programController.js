@@ -1,6 +1,7 @@
 const Program = require('../models/Program');
 const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
+const { parseLocalizedNumber } = require('../utils/numberInput');
 
 const getPrograms = async (req, res, next) => {
   try {
@@ -15,13 +16,13 @@ const createProgram = async (req, res, next) => {
   try {
     const body = sanitizeObject(req.body);
     const { name, description, price, duration, level, isActive } = body;
-    if (!name || !price) {
+    if (!name || price === undefined || price === '') {
       return res.status(400).json({ message: 'Program name and price are required.' });
     }
     const program = await Program.create({
       name,
       description,
-      price,
+      price: parseLocalizedNumber(price),
       duration,
       level,
       isActive: isActive !== false
@@ -47,7 +48,7 @@ const updateProgram = async (req, res, next) => {
     ['name', 'description', 'duration', 'level'].forEach((field) => {
       if (body[field] !== undefined) program[field] = body[field];
     });
-    if (body.price !== undefined) program.price = body.price;
+    if (body.price !== undefined) program.price = parseLocalizedNumber(body.price);
     if (typeof body.isActive === 'boolean') {
       program.isActive = body.isActive;
     }

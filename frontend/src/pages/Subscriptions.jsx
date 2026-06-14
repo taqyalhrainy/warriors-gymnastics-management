@@ -6,6 +6,7 @@ import { fetchPrograms } from '../services/programs.js';
 import { confirmAction } from '../utils/confirmAction.js';
 import { formatCurrency } from '../utils/format.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
+import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
 
 const SubscriptionsPage = () => {
   const [subscriptions, setSubscriptions] = useState([]);
@@ -44,13 +45,18 @@ const SubscriptionsPage = () => {
     e.preventDefault();
     setError('');
     try {
+      const payload = {
+        ...form,
+        totalSessions: parseLocalizedNumber(form.totalSessions),
+        price: parseLocalizedNumber(form.price)
+      };
       if (selectedSubscription) {
         const confirmed = confirmAction('تحديث الاشتراك');
         if (!confirmed) return;
-        await updateSubscription(selectedSubscription._id, form);
+        await updateSubscription(selectedSubscription._id, payload);
         setError('Subscription updated successfully.');
       } else {
-        await createSubscription(form);
+        await createSubscription(payload);
         setError('Subscription created successfully.');
       }
       resetForm();
@@ -156,7 +162,7 @@ const SubscriptionsPage = () => {
                   setForm({
                     ...form,
                     packageName: selectedName,
-                    price: selectedProgram ? Number(selectedProgram.price || 0) : form.price
+                    price: selectedProgram ? String(selectedProgram.price || 0) : form.price
                   });
                 }}
                 required
@@ -169,7 +175,7 @@ const SubscriptionsPage = () => {
               {form.type === 'sessions' && (
                 <>
                   <label>{t('totalSessions')}</label>
-                  <input type="number" min="0" value={form.totalSessions} onChange={(e) => setForm({ ...form, totalSessions: Number(e.target.value) })} />
+                  <input type="text" inputMode="numeric" value={form.totalSessions} onChange={(e) => setForm({ ...form, totalSessions: normalizeDigits(e.target.value) })} />
                 </>
               )}
               <label>{t('startDate')}</label>
@@ -177,7 +183,7 @@ const SubscriptionsPage = () => {
               <label>{t('endDate')}</label>
               <input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} required />
               <label>{t('price')}</label>
-              <input type="number" min="0" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} required />
+              <input type="text" inputMode="decimal" value={form.price} onChange={(e) => setForm({ ...form, price: normalizeDigits(e.target.value) })} required />
               <button className="btn-primary" type="submit">{selectedSubscription ? t('updateSubscription') : t('createSubscription')}</button>
               {selectedSubscription && <button type="button" className="btn-secondary" onClick={resetForm}>{t('cancel')}</button>}
             </form>

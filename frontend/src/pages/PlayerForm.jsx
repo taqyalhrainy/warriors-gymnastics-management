@@ -90,6 +90,10 @@ const PlayerFormPage = () => {
       setPlayer({ ...player, payment: normalizeDigits(value) });
       return;
     }
+    if (name === 'packageClasses' || name === 'packageHours') {
+      setPlayer({ ...player, [name]: normalizeDigits(value) });
+      return;
+    }
     setPlayer({ ...player, [name]: value });
   };
 
@@ -107,9 +111,23 @@ const PlayerFormPage = () => {
     setMessage('');
     try {
       if (id) {
-        await updatePlayer(id, { ...player, groupId: player.groupIds[0] || '', groupIds: player.groupIds, payment: parseLocalizedNumber(player.payment) });
+        await updatePlayer(id, {
+          ...player,
+          groupId: player.groupIds[0] || '',
+          groupIds: player.groupIds,
+          packageClasses: parseLocalizedNumber(player.packageClasses),
+          packageHours: parseLocalizedNumber(player.packageHours),
+          payment: parseLocalizedNumber(player.payment)
+        });
       } else {
-        await createPlayer({ ...player, groupId: player.groupIds[0] || '', groupIds: player.groupIds, payment: parseLocalizedNumber(player.payment) });
+        await createPlayer({
+          ...player,
+          groupId: player.groupIds[0] || '',
+          groupIds: player.groupIds,
+          packageClasses: parseLocalizedNumber(player.packageClasses),
+          packageHours: parseLocalizedNumber(player.packageHours),
+          payment: parseLocalizedNumber(player.payment)
+        });
       }
       navigate('/players');
     } catch (err) {
@@ -190,11 +208,11 @@ const PlayerFormPage = () => {
               <div className="form-inline-grid">
                 <label>
                   {t('classes')}
-                  <input name="packageClasses" type="number" min="0" step="1" value={player.packageClasses} onChange={handleChange} />
+                  <input name="packageClasses" type="text" inputMode="numeric" value={player.packageClasses} onChange={handleChange} />
                 </label>
                 <label>
                   {t('hours')}
-                  <input name="packageHours" type="number" min="0" step="0.5" value={player.packageHours} onChange={handleChange} />
+                  <input name="packageHours" type="text" inputMode="decimal" value={player.packageHours} onChange={handleChange} />
                 </label>
               </div>
             )}
