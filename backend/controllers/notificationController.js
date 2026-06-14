@@ -1,5 +1,6 @@
 const Notification = require('../models/Notification');
 const Parent = require('../models/Parent');
+const Player = require('../models/Player');
 const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 
@@ -105,4 +106,45 @@ const announceAllParents = async (req, res, next) => {
   }
 };
 
-module.exports = { getNotifications, getNotificationById, getUnreadNotificationCount, createNotification, announceAllParents };
+const announceGroupParents = async (req, res, next) => {
+  try {
+    const payload = sanitizeObject(req.body);
+    const { groupId, title, message, type } = payload;
+    if (!validateObjectId(groupId) || !title || !message) {
+      return res.status(400).json({ message: 'Group, title, and message are required.' });
+    }
+
+    const players = await Player.find({ groupId, isDeleted: { $ne: true } })
+      .populate({
+        path: 'parentId',
+        populate: { path: 'userId', select: 'isActive' }
+      });
+
+    const parentMap = new Map();
+    players.forEach((player) => {
+      const parent = player.parentId;
+      const user = parent?.userId;
+      if (user && user.isActive) {
+        parentMap.set(String(user._id), user._id);
+      }
+    });
+
+    const notifications = [...parentMap.values()].map((recipientUserId) => ({
+      recipientUserId,
+      title,
+      message,
+      type: type || 'announcement',
+      isRead: false
+    }));
+
+    if (notifications.length > 0) {
+      await Notification.insertMany(notifications);
+    }
+    await createAuditLog({ userId: req.user._id, action: 'announce group parents', entity: 'Notification', entityId: null, req });
+    res.json({ count: notifications.length });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { getNotifications, getNotificationById, getUnreadNotificationCount, createNotification, announceAllParents, announceGroupParents };

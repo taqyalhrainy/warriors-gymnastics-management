@@ -20,6 +20,24 @@
     linear-gradient(180deg, #151515 0%, #111111 100%);
 }
 
+body.theme-light {
+  --bg: #f6f6f6;
+  --surface: #ffffff;
+  --surface-alt: #f0f0f0;
+  --text: #161616;
+  --muted: #626262;
+  --ink: #111111;
+  --border: #d8d8d8;
+  --shadow: rgba(17, 17, 17, 0.12);
+  --row-hover: #fff0f1;
+  --hero-bg:
+    linear-gradient(180deg, rgba(237, 28, 36, 0.07) 0%, transparent 260px),
+    var(--bg);
+  --login-bg:
+    linear-gradient(135deg, rgba(237, 28, 36, 0.1) 0%, rgba(246, 246, 246, 0) 48%),
+    linear-gradient(180deg, #ffffff 0%, #f6f6f6 100%);
+}
+
 * { box-sizing: border-box; }
 
 html {
@@ -142,7 +160,7 @@ button:disabled {
   border-color: rgba(237, 28, 36, 0.55);
 }
 
-.btn-primary, .btn-secondary, .language-toggle-btn {
+.btn-primary, .btn-secondary, .language-toggle-btn, .theme-toggle-btn {
   border: none;
   border-radius: 8px;
   padding: 14px 22px;
@@ -163,37 +181,56 @@ button:disabled {
 }
 
 button:hover,
-.language-toggle-btn:hover {
+.language-toggle-btn:hover,
+.theme-toggle-btn:hover {
   transform: translateY(-1px) scale(1.02);
   box-shadow: 0 18px 32px rgba(15, 23, 42, 0.12);
 }
 
 button:active,
-.language-toggle-btn:active {
+.language-toggle-btn:active,
+.theme-toggle-btn:active {
   transform: translateY(0) scale(0.98);
 }
 
-.language-toggle-btn {
+.language-toggle-btn,
+.theme-toggle-btn {
   position: fixed;
-  right: 20px;
   bottom: 20px;
   z-index: 100;
+  color: white;
+  border-radius: 999px;
+  height: 50px;
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.language-toggle-btn {
+  right: 20px;
   background:
     radial-gradient(circle at 28% 20%, rgba(255, 255, 255, 0.42), transparent 24px),
     linear-gradient(145deg, #ff3b43 0%, var(--primary) 42%, #7c070d 100%);
-  color: white;
-  border-radius: 999px;
   width: 68px;
-  height: 50px;
-  padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.32);
   box-shadow:
     0 18px 38px rgba(237, 28, 36, 0.34),
     0 0 0 6px rgba(237, 28, 36, 0.08),
     inset 0 1px 0 rgba(255, 255, 255, 0.42),
     inset 0 -10px 18px rgba(0, 0, 0, 0.22);
-  cursor: pointer;
-  overflow: hidden;
+}
+
+.theme-toggle-btn {
+  right: 98px;
+  width: 82px;
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(135deg, rgba(237, 28, 36, 0.14), transparent),
+    var(--surface);
+  color: var(--text);
+  box-shadow:
+    0 18px 38px var(--shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .language-toggle-btn.right {
@@ -204,6 +241,18 @@ button:active,
 
 .language-toggle-btn.left {
   left: 20px;
+  bottom: 20px;
+  right: auto;
+}
+
+.theme-toggle-btn.right {
+  right: 98px;
+  bottom: 20px;
+  left: auto;
+}
+
+.theme-toggle-btn.left {
+  left: 98px;
   bottom: 20px;
   right: auto;
 }
@@ -303,22 +352,131 @@ body.rtl .payment-database-table td {
   transition: transform 220ms ease, opacity 220ms ease;
 }
 
-.language-toggle-btn span {
+.language-toggle-btn span,
+.theme-toggle-btn span {
   display: grid;
   place-items: center;
   width: 100%;
   height: 100%;
   position: relative;
   z-index: 1;
+}
+
+.language-toggle-btn span {
   font-size: 1rem;
   font-weight: 950;
   letter-spacing: 0.04em;
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
 }
 
+.theme-toggle-btn span {
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
 .language-toggle-btn:hover::after {
   opacity: 0.65;
   transform: translateX(34%);
+}
+
+body.theme-light .sidebar {
+  background: linear-gradient(180deg, #ffffff 0%, #f4f4f4 72%, rgba(237, 28, 36, 0.16) 170%);
+  color: #111111;
+}
+
+body.theme-light .sidebar-links a {
+  color: #111111;
+}
+
+body.theme-light .sidebar-links a.active,
+body.theme-light .sidebar-links a:hover {
+  background: rgba(237, 28, 36, 0.08);
+}
+
+body.theme-light .payments-admin-page {
+  background: #f6f6f6;
+  color: #161616;
+}
+
+body.theme-light .payments-workspace {
+  background:
+    linear-gradient(180deg, rgba(237, 28, 36, 0.08) 0, rgba(246, 246, 246, 0) 120px),
+    #f6f6f6;
+}
+
+body.theme-light .payments-topbar h1,
+body.theme-light .payments-brand,
+body.theme-light .payment-amount-cell,
+body.theme-light .payment-member-cell,
+body.theme-light .payment-summary-tile strong,
+body.theme-light .payment-calendar-day strong,
+body.theme-light .payment-status-card strong,
+body.theme-light .payment-month-banner strong {
+  color: #161616;
+}
+
+body.theme-light .payments-kicker,
+body.theme-light .payments-tabs button,
+body.theme-light .payment-table-tools,
+body.theme-light .payment-tool-icons,
+body.theme-light .payment-search span,
+body.theme-light .payment-database-table th,
+body.theme-light .payment-summary-tile span,
+body.theme-light .payment-calendar-day span,
+body.theme-light .payment-status-card span,
+body.theme-light .payment-month-banner span,
+body.theme-light .payment-summary-tile small,
+body.theme-light .payment-calendar-day small,
+body.theme-light .payment-status-card small,
+body.theme-light .payment-empty-row {
+  color: #626262;
+}
+
+body.theme-light .payment-entry-panel,
+body.theme-light .payment-database-card,
+body.theme-light .payment-view-panel,
+body.theme-light .payment-summary-tile,
+body.theme-light .payment-calendar-day,
+body.theme-light .payment-status-card,
+body.theme-light .payment-month-banner {
+  background: #ffffff;
+  border-color: #d8d8d8;
+  color: #161616;
+}
+
+body.theme-light .payment-entry-grid input,
+body.theme-light .payment-entry-grid select,
+body.theme-light .payment-search input,
+body.theme-light .payment-tool-icons select {
+  border-color: #d8d8d8;
+  background: #f0f0f0;
+  color: #161616;
+}
+
+body.theme-light .payments-tabs button.active,
+body.theme-light .payments-tabs button:hover,
+body.theme-light .payment-database-table th,
+body.theme-light .payment-database-table tr:hover td {
+  background: #fff0f1;
+  color: #161616;
+}
+
+body.theme-light .payment-database-table {
+  color: #161616;
+}
+
+body.theme-light .payment-database-table th,
+body.theme-light .payment-database-table td,
+body.theme-light .payment-table-tools {
+  border-color: #d8d8d8;
+}
+
+body.theme-light .auth-loading-overlay {
+  background:
+    radial-gradient(circle at 50% 18%, rgba(237, 28, 36, 0.12), transparent 32%),
+    #ffffff;
+  color: #111111;
 }
 
 .page-content {
@@ -1672,6 +1830,12 @@ body.rtl .payment-table-wrap {
     height: 46px;
   }
 
+  .theme-toggle-btn {
+    bottom: 10px;
+    width: 76px;
+    height: 46px;
+  }
+
   .language-toggle-btn.right {
     right: 10px;
     bottom: 10px;
@@ -1679,6 +1843,16 @@ body.rtl .payment-table-wrap {
 
   .language-toggle-btn.left {
     left: 10px;
+    bottom: 10px;
+  }
+
+  .theme-toggle-btn.right {
+    right: 82px;
+    bottom: 10px;
+  }
+
+  .theme-toggle-btn.left {
+    left: 82px;
     bottom: 10px;
   }
 
@@ -2258,5 +2432,18 @@ body.rtl .payment-table-wrap {
   .language-toggle-btn {
     width: 56px;
     height: 42px;
+  }
+
+  .theme-toggle-btn {
+    width: 70px;
+    height: 42px;
+  }
+
+  .theme-toggle-btn.right {
+    right: 74px;
+  }
+
+  .theme-toggle-btn.left {
+    left: 74px;
   }
 }

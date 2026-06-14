@@ -24,3 +24,8 @@ export const announceAllParents = async (data) => {
   const response = await api.post('/notifications/announce-all', data);
   return response.data;
 };
+
+export const announceGroupParents = async (data) => {
+  const response = await api.post('/notifications/announce-group', data);
+  return response.data;
+};
