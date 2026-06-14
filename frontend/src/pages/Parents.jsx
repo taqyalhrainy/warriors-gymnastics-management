@@ -12,6 +12,7 @@ const Parents = () => {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const { t } = useLanguage();
 
   const loadParents = async () => {
@@ -39,6 +40,7 @@ const Parents = () => {
       await createParent(form);
       setMessage('Parent saved successfully.');
       setForm(initialForm);
+      setShowPassword(false);
       loadParents();
     } catch (err) {
       setError(err.response?.data?.message || 'Unable to create parent.');
@@ -89,7 +91,18 @@ const Parents = () => {
               </label>
               <label>
                 {t('password')}
-                <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+                <div className="password-input-row">
+                  <input type={showPassword ? 'text' : 'password'} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowPassword((current) => !current)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    title={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? 'Hide' : 'View'}
+                  </button>
+                </div>
               </label>
               <label>
                 {t('active')}
