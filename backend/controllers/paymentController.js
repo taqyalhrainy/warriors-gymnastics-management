@@ -1,5 +1,4 @@
 const Payment = require('../models/Payment');
-const Subscription = require('../models/Subscription');
 const Parent = require('../models/Parent');
 const Notification = require('../models/Notification');
 const Player = require('../models/Player');
@@ -13,17 +12,13 @@ const getPayments = async (req, res, next) => {
     if (req.query.playerId && validateObjectId(req.query.playerId)) {
       filter.playerId = req.query.playerId;
     }
-    if (req.query.subscriptionId && validateObjectId(req.query.subscriptionId)) {
-      filter.subscriptionId = req.query.subscriptionId;
-    }
     const payments = await Payment.find(filter)
       .sort({ paymentDate: -1 })
       .populate({
         path: 'playerId',
-        select: 'fullName parentId',
+        select: 'fullName parentId isDeleted deletedAt packageName packageClasses packageHours payment',
         populate: { path: 'parentId', select: 'name email' }
       })
-      .populate('subscriptionId', 'type status price packageName totalSessions remainingSessions')
       .populate('createdBy', 'name email');
     res.json(payments);
   } catch (error) {
@@ -34,35 +29,31 @@ const getPayments = async (req, res, next) => {
 const createPayment = async (req, res, next) => {
   try {
     const payload = sanitizeObject(req.body);
-    const { playerId, subscriptionId, paidAmount, paymentMethod, receiptImage, notes } = payload;
-    if (!validateObjectId(playerId) || !validateObjectId(subscriptionId) || paidAmount == null) {
-      return res.status(400).json({ message: 'Payment requires player, subscription, and paid amount.' });
+    const { playerId, paidAmount, paymentMethod, receiptImage, notes } = payload;
+    if (!validateObjectId(playerId) || paidAmount == null) {
+      return res.status(400).json({ message: 'Payment requires player and paid amount.' });
     }
     const player = await Player.findById(playerId);
     if (!player) {
       return res.status(404).json({ message: 'Player not found.' });
     }
-    const subscription = await Subscription.findById(subscriptionId);
-    if (!subscription) {
-      return res.status(404).json({ message: 'Subscription not found.' });
-    }
-    if (subscription.price == null) {
-      return res.status(400).json({ message: 'Subscription price is not configured.' });
-    }
     const previousPaid = await Payment.aggregate([
-      { $match: { subscriptionId: subscription._id } },
-      { $group: { _id: '$subscriptionId', totalPaid: { $sum: '$paidAmount' } } }
+      { $match: { playerId: player._id } },
+      { $group: { _id: '$playerId', totalPaid: { $sum: '$paidAmount' } } }
     ]);
+    const playerTotalAmount = Number(player.payment || 0);
     const totalPaidBefore = previousPaid[0]?.totalPaid || 0;
     const totalPaidAfter = totalPaidBefore + Number(paidAmount);
-    const remainingAmount = Math.max(0, subscription.price - totalPaidAfter);
-    if (Number(paidAmount) > subscription.price - totalPaidBefore) {
-      return res.status(400).json({ message: `Payment exceeds remaining balance of ${subscription.price - totalPaidBefore}.` });
-    }
+    const remainingAmount = playerTotalAmount ? Math.max(0, playerTotalAmount - totalPaidAfter) : 0;
+    const parentRecord = await Parent.findById(player.parentId).populate('userId');
     const payment = await Payment.create({
       playerId,
-      subscriptionId,
-      totalAmount: subscription.price,
+      playerNameSnapshot: player.fullName || '',
+      parentNameSnapshot: parentRecord?.name || '',
+      packageNameSnapshot: player.packageName || '',
+      packageClassesSnapshot: Number(player.packageClasses || 0),
+      packageHoursSnapshot: Number(player.packageHours || 0),
+      totalAmount: playerTotalAmount,
       paidAmount: Number(paidAmount),
       remainingAmount,
       paymentMethod,
@@ -70,10 +61,6 @@ const createPayment = async (req, res, next) => {
       notesEncrypted: encrypt(notes || ''),
       createdBy: req.user._id
     });
-    if (subscription) {
-      await subscription.save();
-    }
-    const parentRecord = await Parent.findById(player.parentId).populate('userId');
     if (parentRecord?.userId) {
       await Notification.create({
         recipientUserId: parentRecord.userId._id,

@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLanguage } from '../context/LanguageContext.jsx';
@@ -8,6 +8,7 @@ import warriorsLogo from '../assets/warriors-logo.png';
 const Sidebar = () => {
   const { user, logout } = useAuth();
   const { language, toggleLanguage, t } = useLanguage();
+  const { pathname } = useLocation();
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
@@ -28,7 +29,9 @@ const Sidebar = () => {
     return () => window.removeEventListener('notifications:changed', loadUnreadCount);
   }, [user]);
 
-  const links = user?.role === 'parent'
+  const isParentArea = pathname === '/parent' || pathname.startsWith('/parent/');
+
+  const links = isParentArea
     ? [
       { path: '/parent', key: 'dashboard' },
       { path: '/parent/attendance', key: 'attendance' },
@@ -39,11 +42,8 @@ const Sidebar = () => {
       { path: '/admin', key: 'dashboard' },
       { path: '/players', key: 'players' },
       { path: '/parents', key: 'parents' },
-      { path: '/programs', key: 'programs' },
-      { path: '/coaches', key: 'coaches' },
       { path: '/groups', key: 'groups' },
       { path: '/attendance', key: 'attendance' },
-      { path: '/subscriptions', key: 'subscriptions' },
       { path: '/payments', key: 'payments' },
       { path: '/notifications', key: 'notifications' },
       { path: '/reports', key: 'reports' },

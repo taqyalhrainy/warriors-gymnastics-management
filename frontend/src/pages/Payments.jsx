@@ -2,8 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchPayments, createPayment } from '../services/payments.js';
 import { fetchPlayers } from '../services/players.js';
-import { fetchSubscriptions, createSubscription } from '../services/subscriptions.js';
-import { fetchPrograms } from '../services/programs.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
 const formatDate = (date) => {
@@ -43,37 +41,28 @@ const getPaymentMonthKey = (date) => {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`;
 };
 
-const getMemberName = (payment) => payment.playerId?.fullName || payment.playerId || '-';
-const getParentName = (payment) => payment.playerId?.parentId?.name || '-';
-const getPackageName = (payment) => payment.subscriptionId?.packageName || payment.subscriptionId?.type || '-';
-const getProgramOptionValue = (programId) => `program:${programId}`;
-
-const getDefaultSubscriptionDates = () => {
-  const start = new Date();
-  const end = new Date(start);
-  end.setMonth(end.getMonth() + 1);
-  return {
-    startDate: start.toISOString().split('T')[0],
-    endDate: end.toISOString().split('T')[0]
-  };
+const getMemberName = (payment) => payment.playerId?.fullName || payment.playerNameSnapshot || '-';
+const getParentName = (payment) => payment.playerId?.parentId?.name || payment.parentNameSnapshot || '-';
+const isDeletedPlayerPayment = (payment) => Boolean(payment.playerId?.isDeleted);
+const getPackageName = (payment) => {
+  const classes = payment.playerId?.packageClasses || payment.packageClassesSnapshot;
+  const hours = payment.playerId?.packageHours || payment.packageHoursSnapshot;
+  const name = payment.playerId?.packageName || payment.packageNameSnapshot;
+  if (classes && hours) return `${classes} classes (${hours} hours)`;
+  if (classes) return `${classes} classes`;
+  return name && name !== 'custom' ? name : '-';
 };
 
 const PaymentsPage = () => {
   const [payments, setPayments] = useState([]);
   const [players, setPlayers] = useState([]);
-  const [subscriptions, setSubscriptions] = useState([]);
-  const [programs, setPrograms] = useState([]);
-  const [selectedSubscription, setSelectedSubscription] = useState(null);
-  const [selectedProgram, setSelectedProgram] = useState(null);
-  const [paymentSummary, setPaymentSummary] = useState({ totalPaid: 0, remaining: 0 });
-  const [form, setForm] = useState({ playerId: '', subscriptionId: '', totalAmount: 0, paidAmount: 0, paymentMethod: 'Cash', receiptImage: '', notes: '' });
+  const [form, setForm] = useState({ playerId: '', paidAmount: 0, paymentMethod: 'Cash', receiptImage: '', notes: '' });
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeView, setActiveView] = useState('all');
   const [selectedMonth, setSelectedMonth] = useState(getPaymentMonthKey(new Date()));
   const [searchQuery, setSearchQuery] = useState('');
   const [playerSearch, setPlayerSearch] = useState('');
-  const [subscriptionSearch, setSubscriptionSearch] = useState('');
   const { t } = useLanguage();
 
   const loadPayments = async () => {
@@ -86,39 +75,8 @@ const PaymentsPage = () => {
 
   useEffect(() => {
     fetchPlayers().then(setPlayers).catch(console.error);
-    fetchPrograms().then(setPrograms).catch(console.error);
     loadPayments();
   }, []);
-
-  useEffect(() => {
-    if (!form.playerId) {
-      setSubscriptions([]);
-      setForm((prev) => ({ ...prev, subscriptionId: '', totalAmount: 0 }));
-      setPaymentSummary({ totalPaid: 0, remaining: 0 });
-      setSelectedSubscription(null);
-      setSelectedProgram(null);
-      return;
-    }
-    fetchSubscriptions({ playerId: form.playerId })
-      .then((data) => {
-        setSubscriptions(data);
-        if (data.length > 0) {
-          const current = data[0];
-          setSelectedSubscription(current);
-          setForm((prev) => ({
-            ...prev,
-            subscriptionId: current._id,
-            totalAmount: current.price || 0
-          }));
-          calculateSubscriptionSummary(current._id, current.price || 0);
-        } else {
-          setSelectedSubscription(null);
-          setSelectedProgram(null);
-          setPaymentSummary({ totalPaid: 0, remaining: 0 });
-        }
-      })
-      .catch(console.error);
-  }, [form.playerId]);
 
   const totals = useMemo(() => {
     const paid = payments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
@@ -143,30 +101,6 @@ const PaymentsPage = () => {
       player.groupId?.name
     ].join(' ').toLowerCase().includes(query));
   }, [players, playerSearch]);
-
-  const filteredSubscriptions = useMemo(() => {
-    const query = subscriptionSearch.trim().toLowerCase();
-    if (!query) return subscriptions;
-    return subscriptions.filter((subscription) => [
-      subscription.packageName,
-      subscription.type,
-      subscription.status,
-      subscription.price,
-      subscription.remainingSessions
-    ].join(' ').toLowerCase().includes(query));
-  }, [subscriptions, subscriptionSearch]);
-
-  const filteredPrograms = useMemo(() => {
-    const query = subscriptionSearch.trim().toLowerCase();
-    if (!query) return programs;
-    return programs.filter((program) => [
-      program.name,
-      program.description,
-      program.level,
-      program.price,
-      program.duration
-    ].join(' ').toLowerCase().includes(query));
-  }, [programs, subscriptionSearch]);
 
   const visiblePayments = useMemo(() => {
     if (activeView === 'thisMonth') {
@@ -244,59 +178,13 @@ const PaymentsPage = () => {
     ];
   }, [searchedPayments]);
 
-  const calculateSubscriptionSummary = async (subscriptionId, price) => {
-    if (!subscriptionId || String(subscriptionId).startsWith('program:')) {
-      setPaymentSummary({ totalPaid: 0, remaining: 0 });
-      return;
-    }
-    try {
-      const paymentsBySubscription = await fetchPayments({ subscriptionId });
-      const totalPaid = paymentsBySubscription.reduce((sum, payment) => sum + (Number(payment.paidAmount) || 0), 0);
-      const remaining = Math.max(0, price - totalPaid);
-      setPaymentSummary({ totalPaid, remaining });
-    } catch (err) {
-      console.error(err);
-      setPaymentSummary({ totalPaid: 0, remaining: 0 });
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setIsSubmitting(true);
     try {
-      let paymentPayload = { ...form };
-
-      if (String(form.subscriptionId).startsWith('program:')) {
-        if (!form.playerId || !selectedProgram) {
-          setError('Please select a player and program.');
-          return;
-        }
-
-        const { startDate, endDate } = getDefaultSubscriptionDates();
-        const subscriptionPrice = Math.max(Number(selectedProgram.price || 0), Number(form.paidAmount || 0));
-        const subscription = await createSubscription({
-          playerId: form.playerId,
-          type: 'time',
-          packageName: selectedProgram.name,
-          totalSessions: 0,
-          startDate,
-          endDate,
-          price: subscriptionPrice
-        });
-
-        paymentPayload = {
-          ...paymentPayload,
-          subscriptionId: subscription._id,
-          totalAmount: subscription.price || subscriptionPrice
-        };
-      }
-
-      await createPayment(paymentPayload);
-      setForm({ playerId: '', subscriptionId: '', totalAmount: 0, paidAmount: 0, paymentMethod: 'Cash', receiptImage: '', notes: '' });
-      setSelectedProgram(null);
-      setSelectedSubscription(null);
-      setPaymentSummary({ totalPaid: 0, remaining: 0 });
+      await createPayment(form);
+      setForm({ playerId: '', paidAmount: 0, paymentMethod: 'Cash', receiptImage: '', notes: '' });
       await loadPayments();
     } catch (err) {
       setError(err.response?.data?.message || 'Unable to record payment.');
@@ -382,64 +270,6 @@ const PaymentsPage = () => {
               </label>
 
               <label>
-                <span>{t('subscription')}</span>
-                <input
-                  className="select-search-input"
-                  value={subscriptionSearch}
-                  onChange={(event) => setSubscriptionSearch(event.target.value)}
-                  placeholder="Search subscription..."
-                  type="search"
-                />
-                <select value={form.subscriptionId} onChange={(e) => {
-                  const subscriptionId = e.target.value;
-
-                  if (subscriptionId.startsWith('program:')) {
-                    const programId = subscriptionId.replace('program:', '');
-                    const program = programs.find((item) => item._id === programId);
-                    setSelectedProgram(program || null);
-                    setSelectedSubscription(null);
-                    setPaymentSummary({ totalPaid: 0, remaining: 0 });
-                    setForm((prev) => ({
-                      ...prev,
-                      subscriptionId,
-                      totalAmount: Number(program?.price || 0),
-                      paidAmount: 0
-                    }));
-                    return;
-                  }
-
-                  const selected = subscriptions.find((sub) => sub._id === subscriptionId);
-                  setSelectedProgram(null);
-                  setSelectedSubscription(selected || null);
-                  setForm((prev) => ({
-                    ...prev,
-                    subscriptionId,
-                    totalAmount: selected?.price || 0,
-                    paidAmount: 0
-                  }));
-                  calculateSubscriptionSummary(subscriptionId, selected?.price || 0);
-                }}>
-                  <option value="">{t('pickSubscription')}</option>
-                  {filteredSubscriptions.length > 0 && (
-                    <optgroup label="Player subscriptions">
-                      {filteredSubscriptions.map((sub) => (
-                        <option key={sub._id} value={sub._id}>{`${sub.packageName || t('subscription')} (${sub.type})`}</option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {filteredPrograms.length > 0 && (
-                    <optgroup label={filteredSubscriptions.length > 0 ? 'Academy programs' : 'Academy programs'}>
-                      {filteredPrograms.map((program) => (
-                        <option key={program._id} value={getProgramOptionValue(program._id)}>
-                          {`${program.name}${program.level ? ` - ${program.level}` : ''}`}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                </select>
-              </label>
-
-              <label>
                 <span>{t('paidAmount')}</span>
                 <input type="number" min="0" value={form.paidAmount} onChange={(e) => setForm({ ...form, paidAmount: Number(e.target.value) })} required />
               </label>
@@ -465,7 +295,7 @@ const PaymentsPage = () => {
             </div>
 
             <div className="payment-entry-footer">
-              <span>Price: {formatMoney(selectedSubscription?.price)} / Paid: {formatMoney(paymentSummary.totalPaid)} / Remaining: {formatMoney(paymentSummary.remaining)}</span>
+              <span>{form.playerId ? `Package: ${getPackageName({ playerId: players.find((player) => player._id === form.playerId) })}` : 'Select a player to see the package.'}</span>
               <button className="btn-primary" type="submit" disabled={isSubmitting}>{isSubmitting ? 'Recording...' : t('recordPayment')}</button>
             </div>
           </form>
@@ -553,7 +383,6 @@ const PaymentsPage = () => {
                     <th>Payment Date</th>
                     <th>Payment Method</th>
                     <th>Total Amount</th>
-                    <th>Aa</th>
                     <th>Created by</th>
                     <th>Last edited by</th>
                     <th>Last edited time</th>
@@ -566,17 +395,17 @@ const PaymentsPage = () => {
                     const parentName = getParentName(payment);
                     const packageName = getPackageName(payment);
                     const methodClass = getMethodClass(payment.paymentMethod);
+                    const deletedPlayer = isDeletedPlayerPayment(payment);
                     return (
                       <tr key={payment._id}>
                         <td>{payment.receiptImage ? <a href={payment.receiptImage} target="_blank" rel="noreferrer">1</a> : index + 1}</td>
-                        <td className="payment-member-cell">{memberName}</td>
+                        <td className={`payment-member-cell${deletedPlayer ? ' payment-member-deleted' : ''}`}>{memberName}</td>
                         <td>{parentName || '-'}</td>
                         <td><span className="payment-pill transaction-pill">{getTransactionLabel(payment)}</span></td>
                         <td><span className="payment-pill package-pill">{packageName}</span></td>
                         <td>{formatDate(payment.paymentDate)}</td>
                         <td><span className={`payment-pill method-${methodClass}`}>{payment.paymentMethod || '-'}</span></td>
                         <td className="payment-amount-cell">{formatMoney(payment.paidAmount)}</td>
-                        <td>{payment._id?.slice(-4) || index + 1}</td>
                         <td>{payment.createdBy?.name || 'Warriors gymnastics'}</td>
                         <td>{payment.createdBy?.name || 'Warriors gymnastics'}</td>
                         <td>{formatDate(payment.paymentDate)} {formatTime(payment.paymentDate)}</td>
@@ -584,7 +413,7 @@ const PaymentsPage = () => {
                       </tr>
                     );
                   }) : (
-                    <tr><td colSpan="13" className="payment-empty-row">{t('noPaymentsRecorded')}</td></tr>
+                    <tr><td colSpan="12" className="payment-empty-row">{t('noPaymentsRecorded')}</td></tr>
                   )}
                 </tbody>
               </table>

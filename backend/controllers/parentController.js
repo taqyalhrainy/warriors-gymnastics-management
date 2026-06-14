@@ -54,24 +54,32 @@ const getParentById = async (req, res, next) => {
 const createParent = async (req, res, next) => {
   try {
     const body = sanitizeObject(req.body);
-    const { name, email, password, phone, isActive } = body;
-    if (!name || !email || !password || !phone) {
-      return res.status(400).json({ message: 'Name, email, password, and phone are required.' });
+    const { name, password, phone = '', isActive } = body;
+    const email = body.email?.toLowerCase().trim();
+    if (!name || !password) {
+      return res.status(400).json({ message: 'Name and password are required.' });
     }
-    if (!validateEmail(email)) {
+    if (email && !validateEmail(email)) {
       return res.status(400).json({ message: 'Invalid email address.' });
     }
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
+    if (email && await User.findOne({ email })) {
       return res.status(409).json({ message: 'Email already registered.' });
     }
+    const existingParentName = await User.findOne({
+      role: 'parent',
+      name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+    });
+    if (existingParentName) {
+      return res.status(409).json({ message: 'A parent with this name already exists. Please use a unique login name.' });
+    }
     const passwordHash = await bcrypt.hash(password, 12);
-    const user = await User.create({ name, email, passwordHash, role: 'parent', phone, isActive: isActive !== false });
+    const internalEmail = email || `parent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@warriors.local`;
+    const user = await User.create({ name, email: internalEmail, passwordHash, role: 'parent', phone, isActive: isActive !== false });
     const parent = await Parent.create({
       userId: user._id,
       name,
-      phoneEncrypted: encrypt(phone),
-      email: user.email,
+      phoneEncrypted: phone ? encrypt(phone) : '',
+      email: email || '',
       children: []
     });
     await createAuditLog({ userId: req.user._id, action: 'create parent', entity: 'Parent', entityId: parent._id, req });
@@ -110,9 +118,9 @@ const updateParent = async (req, res, next) => {
     if (typeof body.isActive === 'boolean') {
       user.isActive = body.isActive;
     }
-    if (body.phone) {
+    if (typeof body.phone !== 'undefined') {
       user.phone = body.phone;
-      parent.phoneEncrypted = encrypt(body.phone);
+      parent.phoneEncrypted = body.phone ? encrypt(body.phone) : '';
     }
     await user.save();
     await parent.save();

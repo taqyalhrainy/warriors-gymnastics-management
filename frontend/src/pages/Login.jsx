@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
-import { login, register } from '../services/auth.js';
+import { login } from '../services/auth.js';
 import api from '../services/api.js';
 import warriorsLogo from '../assets/warriors-logo.png';
 
@@ -33,56 +33,43 @@ const sendAuthWithWakeRetry = async (requestFn, onWaiting) => {
   }
 };
 
-const getAuthErrorMessage = (err, mode) => {
+const getAuthErrorMessage = (err) => {
   const status = err.response?.status;
   const message = err.response?.data?.message || '';
   const lowerMessage = message.toLowerCase();
 
   if (err.code === 'ECONNABORTED') {
-    return 'انتهت مهلة الاتصال بالخادم. يبدو أن الباك إند على Render لا يستجيب حالياً، جرّب بعد لحظات أو افحص Logs.';
+    return 'Connection timed out. Please try again in a moment.';
   }
   if (!err.response) {
-    return 'تعذر الاتصال بالخادم. تأكد أن الباك إند يعمل وأن رابط API مضبوط على Render.';
-  }
-  if (status === 409 || lowerMessage.includes('already registered')) {
-    return 'هذا البريد الإلكتروني مسجل مسبقاً. جرّب تسجيل الدخول بدل إنشاء حساب جديد.';
+    return 'Could not connect to the server. Make sure the backend is running.';
   }
   if (status === 404 || lowerMessage.includes('no account found')) {
-    return 'لا يوجد حساب بهذا البريد الإلكتروني. أنشئ حساباً جديداً أولاً.';
+    return 'No account found with these login details.';
   }
   if (status === 401 || lowerMessage.includes('incorrect password')) {
-    return 'كلمة المرور غير صحيحة. تأكد منها وحاول مرة أخرى.';
+    return 'Incorrect password. Please try again.';
   }
   if (status === 403 || lowerMessage.includes('inactive')) {
-    return 'هذا الحساب غير مفعل حالياً. تواصل مع الإدارة لتفعيله.';
+    return 'This account is inactive. Please contact the admin.';
   }
   if (status === 400) {
-    if (lowerMessage.includes('invalid email')) return 'البريد الإلكتروني غير صحيح.';
-    if (lowerMessage.includes('phone')) return 'رقم الهاتف مطلوب لحساب ولي الأمر.';
-    return message || 'البيانات المدخلة غير مكتملة أو غير صحيحة.';
+    return message || 'Username and password are required.';
   }
   if (status === 429) {
-    return 'تمت محاولات كثيرة خلال وقت قصير. انتظر قليلاً ثم حاول مرة أخرى.';
+    return 'Too many attempts. Please wait and try again.';
   }
   if (status >= 500) {
-    if (lowerMessage.includes('encryption') || lowerMessage.includes('encrypt')) {
-      return 'تعذر إنشاء الحساب بسبب إعداد التشفير في الخادم. تأكد من ENCRYPTION_KEY في Render ثم أعد النشر.';
-    }
-    return mode === 'register'
-      ? 'تعذر إنشاء الحساب بسبب خطأ في الخادم. جرّب لاحقاً أو تواصل مع الدعم.'
-      : 'تعذر تسجيل الدخول بسبب خطأ في الخادم. جرّب لاحقاً أو تواصل مع الدعم.';
+    return 'Unable to sign in because of a server error. Please try again later.';
   }
 
-  return message || 'حدث خطأ غير متوقع. حاول مرة أخرى.';
+  return message || 'Something went wrong. Please try again.';
 };
 
 const LoginPage = () => {
-  const [isRegisterMode, setIsRegisterMode] = useState(false);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [loginRole, setLoginRole] = useState('admin');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [phone, setPhone] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [generalError, setGeneralError] = useState('');
@@ -105,76 +92,47 @@ const LoginPage = () => {
     setGeneralError('');
   };
 
+  const switchLoginRole = (role) => {
+    setLoginRole(role);
+    setIdentifier('');
+    setPassword('');
+    setShowPassword(false);
+    clearErrors();
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSubmitting) return;
     clearErrors();
+
+    const trimmedIdentifier = identifier.trim();
+    const newErrors = {};
+    if (!trimmedIdentifier) newErrors.identifier = `${loginRole === 'parent' ? 'Name' : 'Email'} is required.`;
+    if (!password) newErrors.password = 'Password is required.';
+    if (Object.keys(newErrors).length) {
+      setFieldErrors(newErrors);
+      return;
+    }
+
     setIsSubmitting(true);
     setIsWaitingForServer(false);
 
     try {
-      if (isRegisterMode) {
-        const newErrors = {};
-        if (!name.trim()) newErrors.name = 'الاسم مطلوب.';
-        if (!phone.trim()) newErrors.phone = 'رقم الهاتف مطلوب.';
-        if (!email.trim()) newErrors.email = 'البريد الإلكتروني مطلوب.';
-        if (!password) newErrors.password = 'كلمة المرور مطلوبة.';
-        if (password.length > 0 && password.length < 6) newErrors.password = 'كلمة المرور يجب أن تكون 6 أحرف على الأقل.';
-        if (password !== confirmPassword) newErrors.confirmPassword = 'تأكيد كلمة المرور غير مطابق.';
-        if (Object.keys(newErrors).length) {
-          setFieldErrors(newErrors);
-          return;
-        }
-
-        try {
-          const data = await sendAuthWithWakeRetry(
-            () => register({ name, email, password, phone, role: 'parent' }),
-            setIsWaitingForServer
-          );
-          authLogin(data);
-          navigate('/parent');
-        } catch (err) {
-          setGeneralError(getAuthErrorMessage(err, 'register'));
-        }
-        return;
-      }
-
-      if (!email.trim() || !password) {
-        setFieldErrors({
-          email: !email.trim() ? 'البريد الإلكتروني مطلوب.' : '',
-          password: !password ? 'كلمة المرور مطلوبة.' : ''
-        });
-        return;
-      }
-
-      try {
-        const data = await sendAuthWithWakeRetry(
-          () => login({ email, password }),
-          setIsWaitingForServer
-        );
-        authLogin(data);
-        navigate(data.user.role === 'parent' ? '/parent' : '/admin');
-      } catch (err) {
-        setGeneralError(getAuthErrorMessage(err, 'login'));
-      }
+      const payload = loginRole === 'parent'
+        ? { name: trimmedIdentifier, password }
+        : { email: trimmedIdentifier, password };
+      const data = await sendAuthWithWakeRetry(() => login(payload), setIsWaitingForServer);
+      authLogin(data);
+      navigate(data.user.role === 'parent' ? '/parent' : '/admin');
+    } catch (err) {
+      setGeneralError(getAuthErrorMessage(err));
     } finally {
       setIsSubmitting(false);
       setIsWaitingForServer(false);
     }
   };
 
-  const toggleMode = () => {
-    setIsRegisterMode(!isRegisterMode);
-    setName('');
-    setEmail('');
-    setPassword('');
-    setConfirmPassword('');
-    setPhone('');
-    setShowPassword(false);
-    clearErrors();
-  };
-
-  const loadingTitle = isWaitingForServer ? 'Waking up the server' : (isRegisterMode ? 'Creating your account' : 'Signing you in');
+  const loadingTitle = isWaitingForServer ? 'Waking up the server' : 'Signing you in';
   const loadingMessage = isWaitingForServer
     ? 'Please wait. Render may need a few moments to start the backend.'
     : 'Checking your details securely...';
@@ -191,50 +149,31 @@ const LoginPage = () => {
       )}
       <div className="login-card">
         <img className="login-logo" src={warriorsLogo} alt="Warriors Gymnastics Academy" />
-        <h2>{isRegisterMode ? 'Create a Warriors Gym Account' : 'Warriors Gym Login'}</h2>
+        <h2>Warriors Gym Login</h2>
         {generalError && <p className="alert-error">{generalError}</p>}
         <form onSubmit={handleSubmit}>
-          {isRegisterMode && (
-            <>
-              <label>Name</label>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)} />
-              {fieldErrors.name && <p className="field-error">{fieldErrors.name}</p>}
-              <label>Phone</label>
-              <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
-              {fieldErrors.phone && <p className="field-error">{fieldErrors.phone}</p>}
-            </>
-          )}
-          <label>Email</label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          {fieldErrors.email && <p className="field-error">{fieldErrors.email}</p>}
+          <div className="login-role-tabs">
+            <button type="button" className={loginRole === 'admin' ? 'active' : ''} onClick={() => switchLoginRole('admin')}>Admin</button>
+            <button type="button" className={loginRole === 'parent' ? 'active' : ''} onClick={() => switchLoginRole('parent')}>Parent</button>
+          </div>
+
+          <label>{loginRole === 'parent' ? 'Name' : 'Email'}</label>
+          <input
+            type={loginRole === 'parent' ? 'text' : 'email'}
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
+          />
+          {fieldErrors.identifier && <p className="field-error">{fieldErrors.identifier}</p>}
+
           <label>Password</label>
           <div className="password-input-row">
             <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} />
             <button type="button" className="password-toggle" onClick={() => setShowPassword(!showPassword)}>{showPassword ? 'Hide' : 'Show'}</button>
           </div>
           {fieldErrors.password && <p className="field-error">{fieldErrors.password}</p>}
-          {isRegisterMode && (
-            <>
-              <label>Confirm Password</label>
-              <input type={showPassword ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
-              {fieldErrors.confirmPassword && <p className="field-error">{fieldErrors.confirmPassword}</p>}
-            </>
-          )}
-          <button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? (isRegisterMode ? 'Signing Up...' : 'Signing In...') : (isRegisterMode ? 'Sign Up' : 'Sign In')}
-          </button>
+
+          <button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Signing In...' : 'Sign In'}</button>
         </form>
-        <div className="auth-switch">
-          {isRegisterMode ? (
-            <p>
-              Already have an account? <button type="button" onClick={toggleMode}>Sign In</button>
-            </p>
-          ) : (
-            <p>
-              Don't have an account? <button type="button" onClick={toggleMode}>Sign Up</button>
-            </p>
-          )}
-        </div>
       </div>
     </div>
   );

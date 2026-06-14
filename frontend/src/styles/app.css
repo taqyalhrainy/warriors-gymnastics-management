@@ -61,22 +61,23 @@ button:disabled {
 }
 
 .sidebar {
-  flex: 0 0 250px;
-  width: 250px;
+  flex: 0 0 230px;
+  width: 230px;
   background: linear-gradient(180deg, #080808 0%, #1b1b1b 70%, #ed1c24 170%);
-  padding: 22px 18px;
+  padding: 18px 14px;
   color: white;
   border-right: 4px solid var(--primary);
 }
 
 .brand-panel {
-  margin-bottom: 26px;
-  padding: 12px;
+  width: 100%;
+  max-width: 180px;
+  margin: 0 auto 18px;
+  padding: 10px;
   background: var(--surface);
   border: 1px solid rgba(237, 28, 36, 0.22);
   border-radius: 8px;
   box-shadow: 0 16px 32px rgba(0, 0, 0, 0.18);
-  max-width: 214px;
 }
 
 .brand-logo {
@@ -86,15 +87,20 @@ button:disabled {
 }
 
 .brand-name {
-  margin-top: 10px;
-  padding-top: 10px;
+  margin-top: 8px;
+  padding-top: 8px;
   border-top: 1px solid var(--border);
   color: var(--ink);
-  font-size: 0.95rem;
+  font-size: 0.84rem;
   font-weight: 800;
   text-align: center;
   text-transform: uppercase;
   letter-spacing: 0;
+}
+
+.sidebar-links {
+  display: grid;
+  gap: 6px;
 }
 
 .sidebar-links a {
@@ -102,8 +108,9 @@ button:disabled {
   justify-content: space-between;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
-  margin-bottom: 8px;
+  min-height: 42px;
+  padding: 8px 12px;
+  margin: 0;
   border-radius: 8px;
   color: white;
   text-decoration: none;
@@ -111,7 +118,7 @@ button:disabled {
 }
 
 .sidebar-footer {
-  margin-top: 18px;
+  margin-top: 14px;
 }
 
 .notification-badge {
@@ -530,6 +537,12 @@ button[type="submit"],
   display: grid;
   gap: 20px;
   grid-template-columns: 1fr 1fr;
+}
+
+.form-inline-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .alert-error {
@@ -1096,7 +1109,7 @@ button[type="submit"],
 
 .payment-entry-grid {
   display: grid;
-  grid-template-columns: 1.25fr 1.25fr 0.75fr 0.8fr 1fr 1.2fr;
+  grid-template-columns: 1.3fr 0.8fr 0.9fr 1fr 1.2fr;
   gap: 10px;
 }
 
@@ -1308,6 +1321,13 @@ button[type="submit"],
   font-weight: 900;
 }
 
+.payment-member-deleted {
+  color: #ff4d57;
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  text-decoration-color: #ff4d57;
+}
+
 .payment-pill {
   display: inline-flex;
   align-items: center;
@@ -1470,6 +1490,35 @@ body.rtl .payment-table-wrap {
 
 .login-card h2 {
   margin-top: 0;
+}
+
+.login-role-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 14px 0 6px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-alt);
+}
+
+.login-role-tabs button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+  font-weight: 800;
+}
+
+.login-role-tabs button.active,
+.login-role-tabs button:hover {
+  background: var(--primary);
+  color: #ffffff;
+  transform: none;
+  box-shadow: none;
 }
 
 .route-loading,
@@ -1909,7 +1958,8 @@ body.rtl .payment-table-wrap {
   }
 
   .stats-grid,
-  .grid-two {
+  .grid-two,
+  .form-inline-grid {
     grid-template-columns: 1fr;
     gap: 12px;
   }

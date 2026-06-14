@@ -2,6 +2,11 @@ const mongoose = require('mongoose');
 
 const paymentSchema = new mongoose.Schema({
   playerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Player', required: true },
+  playerNameSnapshot: { type: String, trim: true, default: '' },
+  parentNameSnapshot: { type: String, trim: true, default: '' },
+  packageNameSnapshot: { type: String, trim: true, default: '' },
+  packageClassesSnapshot: { type: Number, default: 0 },
+  packageHoursSnapshot: { type: Number, default: 0 },
   subscriptionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Subscription' },
   totalAmount: { type: Number, default: 0 },
   paidAmount: { type: Number, default: 0 },

@@ -64,13 +64,16 @@ const loginUser = async (req, res, next) => {
   try {
     const body = sanitizeObject(req.body);
     const email = body.email?.toLowerCase().trim();
+    const name = body.name?.trim();
     const { password } = body;
-    if (!email || !password) {
-      return res.status(400).json({ message: 'Email and password are required.' });
+    if ((!email && !name) || !password) {
+      return res.status(400).json({ message: 'Username and password are required.' });
     }
-    const user = await User.findOne({ email });
+    const user = email
+      ? await User.findOne({ email })
+      : await User.findOne({ role: 'parent', name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') });
     if (!user) {
-      return res.status(404).json({ message: 'No account found with this email. Please sign up first.' });
+      return res.status(404).json({ message: 'No account found with these login details.' });
     }
     if (!user.isActive) {
       return res.status(403).json({ message: 'This account is inactive. Please contact support.' });

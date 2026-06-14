@@ -25,21 +25,16 @@ const PlayerProfilePage = () => {
         {player ? (
           <div className="card details-card">
             <div><strong>{t('name')}:</strong> {player.fullName}</div>
-            <div><strong>{t('dateOfBirth')}:</strong> {player.dateOfBirth?.split('T')[0]}</div>
             <div><strong>{t('status')}:</strong> {player.status}</div>
             <div><strong>{t('group')}:</strong> {player.groupId?.name || t('unassigned')}</div>
-            <div><strong>{t('program')}:</strong> {player.programId?.name || t('unassigned')}</div>
             <div><strong>{t('parent')}:</strong> {player.parentId?.name || t('unknown')}</div>
-            {player.subscriptionId && (
-              <>
-                <div><strong>{t('subscriptionType')}:</strong> {player.subscriptionId.type}</div>
-                <div><strong>{t('price')}:</strong> {formatCurrency(player.subscriptionId.price)}</div>
-                <div><strong>{t('status')}:</strong> {player.subscriptionId.status}</div>
-                {player.subscriptionId.type === 'time' && (
-                  <div><strong>{t('daysRemaining')}:</strong> {player.subscriptionId.daysRemaining ?? 0}</div>
-                )}
-              </>
-            )}
+            <div><strong>{t('startDate')}:</strong> {player.startDate?.split('T')[0] || t('notSet')}</div>
+            <div><strong>{t('endDate')}:</strong> {player.endDate?.split('T')[0] || t('notSet')}</div>
+            <div><strong>{t('package')}:</strong> {player.packageName ? (player.packageName === 'custom' ? t('customPackage') : player.packageName) : t('notSet')}</div>
+            <div><strong>{t('classes')}:</strong> {player.packageClasses || t('notSet')}</div>
+            <div><strong>{t('hours')}:</strong> {player.packageHours || t('notSet')}</div>
+            <div><strong>{t('payment')}:</strong> {formatCurrency(player.payment || 0)}</div>
+            <div><strong>{t('note')}:</strong> {player.note || t('notSet')}</div>
           </div>
         ) : (
           <p>{t('loadingPlayer')}</p>

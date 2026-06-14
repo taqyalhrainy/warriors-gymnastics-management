@@ -4,45 +4,63 @@ import Sidebar from '../components/Sidebar.jsx';
 import { createPlayer, updatePlayer, getPlayer } from '../services/players.js';
 import { fetchGroups } from '../services/groups.js';
 import { fetchParents } from '../services/parents.js';
-import { fetchPrograms } from '../services/programs.js';
-import { fetchCoaches } from '../services/coaches.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
+
+const packageOptions = [
+  { label: '8 classes (1 hour)', classes: 8, hours: 1 },
+  { label: '8 classes (1.5 hours)', classes: 8, hours: 1.5 },
+  { label: '8 classes (2 hours)', classes: 8, hours: 2 },
+  { label: '12 classes (1.5 hours)', classes: 12, hours: 1.5 },
+  { label: '12 classes (2 hours)', classes: 12, hours: 2 },
+  { label: '16 classes (1.5 hours)', classes: 16, hours: 1.5 },
+  { label: '16 classes (2 hours)', classes: 16, hours: 2 }
+];
 
 const PlayerFormPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [player, setPlayer] = useState({ fullName: '', dateOfBirth: '', parentId: '', parentPhone: '', programId: '', groupId: '', coachId: '', level: '', status: 'active' });
+  const [player, setPlayer] = useState({
+    fullName: '',
+    parentId: '',
+    parentPhone: '',
+    groupId: '',
+    startDate: '',
+    endDate: '',
+    packageName: '',
+    packageClasses: '',
+    packageHours: '',
+    payment: '',
+    note: '',
+    status: 'active'
+  });
   const [parents, setParents] = useState([]);
-  const [programs, setPrograms] = useState([]);
   const [groups, setGroups] = useState([]);
-  const [coaches, setCoaches] = useState([]);
   const [message, setMessage] = useState('');
   const [parentSearch, setParentSearch] = useState('');
-  const [programSearch, setProgramSearch] = useState('');
   const [groupSearch, setGroupSearch] = useState('');
-  const [coachSearch, setCoachSearch] = useState('');
   const { t } = useLanguage();
 
   useEffect(() => {
-    Promise.all([fetchParents(), fetchPrograms(), fetchGroups(), fetchCoaches()])
-      .then(([parentData, programData, groupData, coachData]) => {
+    Promise.all([fetchParents(), fetchGroups()])
+      .then(([parentData, groupData]) => {
         setParents(parentData);
-        setPrograms(programData);
         setGroups(groupData);
-        setCoaches(coachData);
       })
       .catch(console.error);
 
     if (id) {
       getPlayer(id).then((data) => setPlayer({
         fullName: data.fullName,
-        dateOfBirth: data.dateOfBirth?.split('T')[0] || '',
         parentId: data.parentId?._id || '',
         parentPhone: data.parentPhone || '',
-        programId: data.programId?._id || '',
         groupId: data.groupId?._id || '',
-        coachId: data.coachId?._id || '',
-        level: data.level || '',
+        startDate: data.startDate?.split('T')[0] || '',
+        endDate: data.endDate?.split('T')[0] || '',
+        packageName: data.packageName || '',
+        packageClasses: data.packageClasses || '',
+        packageHours: data.packageHours || '',
+        payment: data.payment ?? '',
+        note: data.note || '',
         status: data.status || 'active'
       })).catch(console.error);
     }
@@ -53,6 +71,16 @@ const PlayerFormPage = () => {
     if (name === 'parentId') {
       const selectedParent = parents.find((parent) => parent._id === value);
       setPlayer({ ...player, parentId: value, parentPhone: selectedParent?.phone || '' });
+      return;
+    }
+    if (name === 'packageName') {
+      const selectedPackage = packageOptions.find((option) => option.label === value);
+      setPlayer({
+        ...player,
+        packageName: value,
+        packageClasses: selectedPackage ? selectedPackage.classes : '',
+        packageHours: selectedPackage ? selectedPackage.hours : ''
+      });
       return;
     }
     setPlayer({ ...player, [name]: value });
@@ -79,24 +107,12 @@ const PlayerFormPage = () => {
     parent.phone
   ].join(' ').toLowerCase().includes(parentSearch.trim().toLowerCase()));
 
-  const filteredPrograms = programs.filter((program) => [
-    program.name,
-    program.level,
-    program.price
-  ].join(' ').toLowerCase().includes(programSearch.trim().toLowerCase()));
-
   const filteredGroups = groups.filter((group) => [
     group.name,
     group.days?.join(' '),
     group.startTime,
     group.endTime
   ].join(' ').toLowerCase().includes(groupSearch.trim().toLowerCase()));
-
-  const filteredCoaches = coaches.filter((coach) => [
-    coach.name,
-    coach.specialization,
-    coach.phone
-  ].join(' ').toLowerCase().includes(coachSearch.trim().toLowerCase()));
 
   return (
     <div className="dashboard-layout">
@@ -109,29 +125,17 @@ const PlayerFormPage = () => {
             <label>{t('name')}</label>
             <input name="fullName" value={player.fullName} onChange={handleChange} required />
 
-            <label>{t('dateOfBirth')}</label>
-            <input name="dateOfBirth" type="date" value={player.dateOfBirth} onChange={handleChange} required />
-
             <label>{t('parent')}</label>
             <input className="select-search-input" type="search" value={parentSearch} onChange={(event) => setParentSearch(event.target.value)} placeholder="Search parent..." />
             <select name="parentId" value={player.parentId} onChange={handleChange} required>
               <option value="">{t('selectParent')}</option>
               {filteredParents.map((parent) => (
-                <option key={parent._id} value={parent._id}>{`${parent.name} (${parent.email})`}</option>
+                <option key={parent._id} value={parent._id}>{parent.phone ? `${parent.name} (${parent.phone})` : parent.name}</option>
               ))}
             </select>
 
             <label>{t('parentPhone')}</label>
-            <input name="parentPhone" value={player.parentPhone} onChange={handleChange} required />
-
-            <label>{t('program')}</label>
-            <input className="select-search-input" type="search" value={programSearch} onChange={(event) => setProgramSearch(event.target.value)} placeholder="Search program..." />
-            <select name="programId" value={player.programId} onChange={handleChange}>
-              <option value="">{t('selectProgram')}</option>
-              {filteredPrograms.map((program) => (
-                <option key={program._id} value={program._id}>{program.name}</option>
-              ))}
-            </select>
+            <input name="parentPhone" value={player.parentPhone} onChange={handleChange} />
 
             <label>{t('group')}</label>
             <input className="select-search-input" type="search" value={groupSearch} onChange={(event) => setGroupSearch(event.target.value)} placeholder="Search group..." />
@@ -140,12 +144,33 @@ const PlayerFormPage = () => {
               {filteredGroups.map((group) => <option key={group._id} value={group._id}>{group.name}</option>)}
             </select>
 
-            <label>{t('coach')}</label>
-            <input className="select-search-input" type="search" value={coachSearch} onChange={(event) => setCoachSearch(event.target.value)} placeholder="Search coach..." />
-            <select name="coachId" value={player.coachId} onChange={handleChange}>
-              <option value="">{t('selectCoach')}</option>
-              {filteredCoaches.map((coach) => <option key={coach._id} value={coach._id}>{coach.name}</option>)}
+            <label>{t('startDate')}</label>
+            <input name="startDate" type="date" value={player.startDate} onChange={handleChange} />
+
+            <label>{t('endDate')}</label>
+            <input name="endDate" type="date" value={player.endDate} onChange={handleChange} />
+
+            <label>{t('package')}</label>
+            <select name="packageName" value={player.packageName} onChange={handleChange}>
+              <option value="">{t('selectPackage')}</option>
+              {packageOptions.map((option) => (
+                <option key={option.label} value={option.label}>{option.label}</option>
+              ))}
+              <option value="custom">{t('customPackage')}</option>
             </select>
+
+            {player.packageName === 'custom' && (
+              <div className="form-inline-grid">
+                <label>
+                  {t('classes')}
+                  <input name="packageClasses" type="number" min="0" step="1" value={player.packageClasses} onChange={handleChange} />
+                </label>
+                <label>
+                  {t('hours')}
+                  <input name="packageHours" type="number" min="0" step="0.5" value={player.packageHours} onChange={handleChange} />
+                </label>
+              </div>
+            )}
 
             <label>{t('status')}</label>
             <select name="status" value={player.status} onChange={handleChange}>
@@ -155,8 +180,11 @@ const PlayerFormPage = () => {
               <option value="left">{t('leftStatus')}</option>
             </select>
 
-            <label>{t('level')}</label>
-            <input name="level" value={player.level} onChange={handleChange} />
+            <label>{t('payment')}</label>
+            <input name="payment" type="number" min="0" step="0.01" value={player.payment} onChange={handleChange} />
+
+            <label>{t('note')}</label>
+            <textarea name="note" value={player.note} onChange={handleChange} placeholder={t('discountNotePlaceholder')} />
 
             <button type="submit" className="btn-primary">{t('savePlayer')}</button>
           </form>

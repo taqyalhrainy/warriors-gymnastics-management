@@ -11,14 +11,11 @@ const PlayerFormPage = lazy(() => import('./pages/PlayerForm.jsx'));
 const PlayerProfilePage = lazy(() => import('./pages/PlayerProfile.jsx'));
 const GroupsPage = lazy(() => import('./pages/Groups.jsx'));
 const AttendancePage = lazy(() => import('./pages/Attendance.jsx'));
-const SubscriptionsPage = lazy(() => import('./pages/Subscriptions.jsx'));
 const PaymentsPage = lazy(() => import('./pages/Payments.jsx'));
 const NotificationsPage = lazy(() => import('./pages/Notifications.jsx'));
 const ReportsPage = lazy(() => import('./pages/Reports.jsx'));
 const AuditLogsPage = lazy(() => import('./pages/AuditLogs.jsx'));
 const ParentsPage = lazy(() => import('./pages/Parents.jsx'));
-const ProgramsPage = lazy(() => import('./pages/Programs.jsx'));
-const CoachesPage = lazy(() => import('./pages/Coaches.jsx'));
 const ParentDashboard = lazy(() => import('./pages/ParentDashboard.jsx'));
 const ParentAttendancePage = lazy(() => import('./pages/ParentAttendance.jsx'));
 const ParentPaymentsPage = lazy(() => import('./pages/ParentPayments.jsx'));
@@ -45,12 +42,9 @@ function App() {
             <Route path="/players/:id" element={<PlayerProfilePage />} />
             <Route path="/groups" element={<GroupsPage />} />
             <Route path="/attendance" element={<AttendancePage />} />
-            <Route path="/subscriptions" element={<SubscriptionsPage />} />
             <Route path="/payments" element={<PaymentsPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/notifications/:id" element={<NotificationDetailPage />} />
-            <Route path="/programs" element={<ProgramsPage />} />
-            <Route path="/coaches" element={<CoachesPage />} />
             <Route path="/parents" element={<ParentsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/audit-logs" element={<AuditLogsPage />} />

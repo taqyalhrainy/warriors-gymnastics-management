@@ -1,7 +1,7 @@
 const Player = require('../models/Player');
 const Parent = require('../models/Parent');
 const TrainingGroup = require('../models/TrainingGroup');
-const Subscription = require('../models/Subscription');
+const Payment = require('../models/Payment');
 const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { encrypt, decrypt } = require('../utils/encryption');
@@ -19,9 +19,38 @@ const formatPlayerResponse = (player) => {
   return obj;
 };
 
+const optionalObjectIdFields = ['programId', 'groupId', 'coachId', 'subscriptionId'];
+
+const cleanPlayerPayload = (payload) => {
+  optionalObjectIdFields.forEach((field) => {
+    if (payload[field] === '') {
+      delete payload[field];
+    }
+  });
+  if (payload.dateOfBirth === '') {
+    delete payload.dateOfBirth;
+  }
+  if (payload.startDate === '') {
+    delete payload.startDate;
+  }
+  if (payload.endDate === '') {
+    delete payload.endDate;
+  }
+  if (payload.payment === '') {
+    payload.payment = 0;
+  }
+  if (payload.packageClasses === '') {
+    payload.packageClasses = 0;
+  }
+  if (payload.packageHours === '') {
+    payload.packageHours = 0;
+  }
+  return payload;
+};
+
 const getPlayers = async (req, res, next) => {
   try {
-    const filter = {};
+    const filter = { isDeleted: { $ne: true } };
     if (req.user.role === 'parent') {
       const parent = await Parent.findOne({ userId: req.user._id });
       if (parent) {
@@ -44,9 +73,9 @@ const getPlayers = async (req, res, next) => {
 
 const createPlayer = async (req, res, next) => {
   try {
-    const data = sanitizeObject(req.body);
-    const { fullName, dateOfBirth, parentId, parentPhone, programId, groupId, coachId, level, profileImage, status = 'active' } = data;
-    if (!fullName || !dateOfBirth || !parentId || !parentPhone) {
+    const data = cleanPlayerPayload(sanitizeObject(req.body));
+    const { fullName, dateOfBirth, parentId, parentPhone, programId, groupId, coachId, level, startDate, endDate, packageName, packageClasses, packageHours, payment, note, profileImage, status = 'active' } = data;
+    if (!fullName || !parentId) {
       return res.status(400).json({ message: 'Required player fields are missing.' });
     }
     const parent = await Parent.findById(parentId);
@@ -62,6 +91,13 @@ const createPlayer = async (req, res, next) => {
       groupId,
       coachId,
       level,
+      startDate,
+      endDate,
+      packageName: packageName || '',
+      packageClasses: Number(packageClasses || 0),
+      packageHours: Number(packageHours || 0),
+      payment: Number(payment || 0),
+      note: note || '',
       status,
       profileImage: profileImage || ''
     };
@@ -96,17 +132,11 @@ const getPlayerById = async (req, res, next) => {
       .populate('parentId', 'name email')
       .populate('programId', 'name level')
       .populate('groupId', 'name days startTime endTime')
-      .populate('coachId', 'name')
-      .populate('subscriptionId', 'type status remainingSessions usedSessions startDate endDate price');
+      .populate('coachId', 'name');
     if (!player) {
       return res.status(404).json({ message: 'Player not found.' });
     }
     const playerData = formatPlayerResponse(player);
-    if (playerData.subscriptionId?.type === 'time' && playerData.subscriptionId.endDate) {
-      const today = new Date();
-      const endDate = new Date(playerData.subscriptionId.endDate);
-      playerData.subscriptionId.daysRemaining = Math.max(0, Math.ceil((endDate - today) / (1000 * 60 * 60 * 24)));
-    }
     res.json(playerData);
   } catch (error) {
     next(error);
@@ -119,7 +149,7 @@ const updatePlayer = async (req, res, next) => {
     if (!validateObjectId(id)) {
       return res.status(400).json({ message: 'Invalid player ID.' });
     }
-    const updates = sanitizeObject(req.body);
+    const updates = cleanPlayerPayload(sanitizeObject(req.body));
     const player = await Player.findById(id);
     if (!player) {
       return res.status(404).json({ message: 'Player not found.' });
@@ -145,6 +175,15 @@ const updatePlayer = async (req, res, next) => {
     if (updates.parentPhone) {
       updates.parentPhoneEncrypted = encrypt(updates.parentPhone);
       delete updates.parentPhone;
+    }
+    if (typeof updates.payment !== 'undefined') {
+      updates.payment = Number(updates.payment || 0);
+    }
+    if (typeof updates.packageClasses !== 'undefined') {
+      updates.packageClasses = Number(updates.packageClasses || 0);
+    }
+    if (typeof updates.packageHours !== 'undefined') {
+      updates.packageHours = Number(updates.packageHours || 0);
     }
     Object.assign(player, updates);
     await player.save();
@@ -177,7 +216,14 @@ const deletePlayer = async (req, res, next) => {
       parent.children = parent.children.filter((childId) => String(childId) !== String(player._id));
       await parent.save();
     }
-    await player.deleteOne();
+    await Payment.updateMany(
+      { playerId: player._id, playerNameSnapshot: { $in: ['', null] } },
+      { $set: { playerNameSnapshot: player.fullName } }
+    );
+    player.isDeleted = true;
+    player.deletedAt = new Date();
+    player.status = 'left';
+    await player.save();
     await createAuditLog({ userId: req.user._id, action: 'delete player', entity: 'Player', entityId: player._id, req });
     res.json({ message: 'Player deleted successfully.' });
   } catch (error) {

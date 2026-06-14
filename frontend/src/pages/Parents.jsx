@@ -4,7 +4,7 @@ import { fetchParents, createParent, deleteParent } from '../services/parents';
 import { confirmAction } from '../utils/confirmAction.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
-const initialForm = { name: '', email: '', phone: '', password: '', isActive: true };
+const initialForm = { name: '', phone: '', password: '', isActive: true };
 
 const Parents = () => {
   const [parents, setParents] = useState([]);
@@ -31,6 +31,10 @@ const Parents = () => {
     event.preventDefault();
     setError('');
     setMessage('');
+    if (!form.name.trim() || !form.password) {
+      setError('Name and password are required.');
+      return;
+    }
     try {
       await createParent(form);
       setMessage('Parent saved successfully.');
@@ -57,7 +61,6 @@ const Parents = () => {
 
   const filteredParents = parents.filter((parent) => [
     parent.name,
-    parent.email,
     parent.phone,
     parent.userId?.isActive ? 'active yes' : 'inactive no',
     parent.children?.length
@@ -81,12 +84,8 @@ const Parents = () => {
                 <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
               </label>
               <label>
-                {t('email')}
-                <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
-              </label>
-              <label>
                 {t('phone')}
-                <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} required />
+                <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
               </label>
               <label>
                 {t('password')}
@@ -117,7 +116,6 @@ const Parents = () => {
                 <thead>
                   <tr>
                     <th>{t('name')}</th>
-                    <th>{t('email')}</th>
                     <th>{t('phone')}</th>
                     <th>{t('active')}</th>
                     <th>{t('children')}</th>
@@ -128,7 +126,6 @@ const Parents = () => {
                   {filteredParents.map((parent) => (
                     <tr key={parent._id}>
                       <td>{parent.name}</td>
-                      <td>{parent.email}</td>
                       <td>{parent.phone || '—'}</td>
                       <td>{parent.userId?.isActive ? t('yes') : t('no')}</td>
                       <td>{parent.children?.length || 0}</td>
