@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
-import { fetchParents, createParent, deleteParent } from '../services/parents';
+import { fetchParents, createParent, updateParent, deleteParent } from '../services/parents';
 import { confirmAction } from '../utils/confirmAction.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
@@ -9,6 +9,7 @@ const initialForm = { name: '', phone: '', password: '', isActive: true };
 const Parents = () => {
   const [parents, setParents] = useState([]);
   const [form, setForm] = useState(initialForm);
+  const [selectedParent, setSelectedParent] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -32,19 +33,49 @@ const Parents = () => {
     event.preventDefault();
     setError('');
     setMessage('');
-    if (!form.name.trim() || !form.password) {
-      setError('Name and password are required.');
+    if (!form.name.trim() || (!selectedParent && !form.password)) {
+      setError(selectedParent ? 'Name is required.' : 'Name and password are required.');
       return;
     }
     try {
-      await createParent(form);
-      setMessage('Parent saved successfully.');
+      if (selectedParent) {
+        const payload = { ...form };
+        if (!payload.password) delete payload.password;
+        await updateParent(selectedParent._id, payload);
+        setMessage('Parent updated successfully.');
+      } else {
+        await createParent(form);
+        setMessage('Parent saved successfully.');
+      }
       setForm(initialForm);
+      setSelectedParent(null);
       setShowPassword(false);
       loadParents();
     } catch (err) {
-      setError(err.response?.data?.message || 'Unable to create parent.');
+      setError(err.response?.data?.message || 'Unable to save parent.');
     }
+  };
+
+  const handleEdit = (parent) => {
+    setSelectedParent(parent);
+    setForm({
+      name: parent.name || '',
+      phone: parent.phone || '',
+      password: '',
+      isActive: parent.userId?.isActive !== false
+    });
+    setShowPassword(false);
+    setError('');
+    setMessage('');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const resetForm = () => {
+    setSelectedParent(null);
+    setForm(initialForm);
+    setShowPassword(false);
+    setError('');
+    setMessage('');
   };
 
   const handleDelete = async (id) => {
@@ -55,6 +86,7 @@ const Parents = () => {
     try {
       await deleteParent(id);
       setMessage('Parent removed successfully.');
+      if (selectedParent?._id === id) resetForm();
       loadParents();
     } catch (err) {
       setError(err.response?.data?.message || 'Could not delete parent.');
@@ -77,7 +109,7 @@ const Parents = () => {
         </div>
         <div className="grid-two">
           <div className="form-card">
-            <h2>{t('addNewParent')}</h2>
+            <h2>{selectedParent ? 'Edit Parent' : t('addNewParent')}</h2>
             {message && <p className="alert-success">{message}</p>}
             {error && <p className="alert-error">{error}</p>}
             <form onSubmit={handleSubmit} className="form-grid">
@@ -92,7 +124,13 @@ const Parents = () => {
               <label>
                 {t('password')}
                 <div className="password-input-row">
-                  <input type={showPassword ? 'text' : 'password'} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    placeholder={selectedParent ? 'Leave blank to keep current password' : ''}
+                    required={!selectedParent}
+                  />
                   <button
                     type="button"
                     className="password-toggle"
@@ -111,7 +149,8 @@ const Parents = () => {
                   <option value="false">{t('no')}</option>
                 </select>
               </label>
-              <button type="submit" className="btn-primary">{t('saveParent')}</button>
+              <button type="submit" className="btn-primary">{selectedParent ? 'Update Parent' : t('saveParent')}</button>
+              {selectedParent && <button type="button" className="btn-secondary" onClick={resetForm}>{t('cancel')}</button>}
             </form>
           </div>
           <div className="table-card">
@@ -142,7 +181,8 @@ const Parents = () => {
                       <td>{parent.phone || '—'}</td>
                       <td>{parent.userId?.isActive ? t('yes') : t('no')}</td>
                       <td>{parent.children?.length || 0}</td>
-                      <td>
+                      <td className="table-actions">
+                        <button type="button" onClick={() => handleEdit(parent)}>{t('edit')}</button>
                         <button type="button" onClick={() => handleDelete(parent._id)}>{t('delete')}</button>
                       </td>
                     </tr>

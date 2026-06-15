@@ -123,6 +123,9 @@ const updateParent = async (req, res, next) => {
       user.phone = body.phone;
       parent.phoneEncrypted = body.phone ? encrypt(body.phone) : '';
     }
+    if (body.password) {
+      user.passwordHash = await bcrypt.hash(body.password, 12);
+    }
     await user.save();
     await parent.save();
     await createAuditLog({ userId: req.user._id, action: 'update parent', entity: 'Parent', entityId: parent._id, req });
