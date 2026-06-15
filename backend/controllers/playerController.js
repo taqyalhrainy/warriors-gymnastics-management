@@ -203,6 +203,25 @@ const updatePlayer = async (req, res, next) => {
       return res.status(404).json({ message: 'Player not found.' });
     }
 
+    if (updates.parentId && String(updates.parentId) !== String(player.parentId)) {
+      const newParent = await Parent.findById(updates.parentId);
+      if (!newParent) {
+        return res.status(404).json({ message: 'New parent not found.' });
+      }
+      const oldParent = await Parent.findById(player.parentId);
+      if (oldParent) {
+        oldParent.children = oldParent.children.filter((childId) => String(childId) !== String(player._id));
+        await oldParent.save();
+      }
+      newParent.children = newParent.children.filter((childId, index, children) => (
+        String(childId) !== String(player._id) || children.findIndex((item) => String(item) === String(player._id)) === index
+      ));
+      if (!newParent.children.some((childId) => String(childId) === String(player._id))) {
+        newParent.children.push(player._id);
+      }
+      await newParent.save();
+    }
+
     if (Array.isArray(updates.groupIds) || typeof updates.groupId !== 'undefined') {
       const nextGroupIds = normalizeGroupIds(updates);
       const currentGroupIds = getPlayerGroupIds(player);

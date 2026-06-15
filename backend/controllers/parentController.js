@@ -28,7 +28,15 @@ const getParents = async (req, res, next) => {
       .sort({ _id: -1 })
       .populate('userId', 'name email role isActive')
       .populate('children', 'fullName status programId groupId groupIds subscriptionId');
-    res.json(parents.map(formatParentResponse));
+    const childCounts = await Player.aggregate([
+      { $match: { isDeleted: { $ne: true } } },
+      { $group: { _id: '$parentId', count: { $sum: 1 } } }
+    ]);
+    const countMap = new Map(childCounts.map((item) => [String(item._id), item.count]));
+    res.json(parents.map((parent) => ({
+      ...formatParentResponse(parent),
+      childrenCount: countMap.get(String(parent._id)) || 0
+    })));
   } catch (error) {
     next(error);
   }
@@ -145,7 +153,8 @@ const deleteParent = async (req, res, next) => {
     if (!parent) {
       return res.status(404).json({ message: 'Parent not found.' });
     }
-    if (parent.children && parent.children.length > 0) {
+    const activeChildrenCount = await Player.countDocuments({ parentId: parent._id, isDeleted: { $ne: true } });
+    if (activeChildrenCount > 0) {
       return res.status(400).json({ message: 'Cannot delete a parent with active children.' });
     }
     const user = await User.findById(parent.userId);

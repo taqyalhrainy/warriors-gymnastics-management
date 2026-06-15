@@ -97,7 +97,7 @@ const Parents = () => {
     parent.name,
     parent.phone,
     parent.userId?.isActive ? 'active yes' : 'inactive no',
-    parent.children?.length
+    parent.childrenCount ?? parent.children?.length
   ].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
 
   return (
@@ -180,7 +180,7 @@ const Parents = () => {
                       <td>{parent.name}</td>
                       <td>{parent.phone || '—'}</td>
                       <td>{parent.userId?.isActive ? t('yes') : t('no')}</td>
-                      <td>{parent.children?.length || 0}</td>
+                      <td>{parent.childrenCount ?? parent.children?.length ?? 0}</td>
                       <td className="table-actions">
                         <button type="button" onClick={() => handleEdit(parent)}>{t('edit')}</button>
                         <button type="button" onClick={() => handleDelete(parent._id)}>{t('delete')}</button>
