@@ -615,6 +615,32 @@ body.theme-light .auth-loading-overlay {
   gap: 8px;
 }
 
+.group-color-input {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 8px;
+}
+
+.group-color-input input[type="color"] {
+  min-height: 46px;
+  padding: 4px;
+}
+
+.group-color-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.group-color-preview i {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+
 .empty-state {
   text-align: center;
   color: var(--muted);
@@ -939,6 +965,17 @@ button[type="submit"],
   border-radius: 8px;
   box-shadow: 0 12px 28px var(--shadow);
   overflow: hidden;
+  transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+}
+
+.attendance-group.is-dragging {
+  opacity: 0.45;
+  transform: rotate(1deg) scale(0.98);
+}
+
+.attendance-group.is-drag-target {
+  transform: translateY(-8px);
+  box-shadow: 0 20px 38px color-mix(in srgb, var(--group-color) 28%, rgba(17, 17, 17, 0.18));
 }
 
 .attendance-group-header {
@@ -948,10 +985,15 @@ button[type="submit"],
   padding: 12px;
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-strong) 100%);
   color: #ffffff;
+  cursor: grab;
 }
 
 .attendance-group-marked .attendance-group-header {
   background: var(--group-color);
+}
+
+.attendance-group:active .attendance-group-header {
+  cursor: grabbing;
 }
 
 .attendance-group-header h2 {
@@ -970,6 +1012,20 @@ button[type="submit"],
   color: #ffffff;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.attendance-group-header-meta {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+
+.attendance-group-header-meta small {
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .attendance-player-list {

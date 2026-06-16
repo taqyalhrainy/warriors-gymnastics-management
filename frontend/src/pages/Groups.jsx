@@ -4,8 +4,9 @@ import { fetchGroups, createGroup, updateGroup, deleteGroup } from '../services/
 import { confirmAction } from '../utils/confirmAction.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
+import { applyGroupPreferences, saveGroupColor } from '../utils/groupPreferences.js';
 
-const initialForm = { name: '', days: '', startTime: '', endTime: '', maxCapacity: 20 };
+const initialForm = { name: '', days: '', startTime: '', endTime: '', maxCapacity: 20, color: '#2563eb' };
 
 const GroupsPage = () => {
   const [groups, setGroups] = useState([]);
@@ -17,7 +18,8 @@ const GroupsPage = () => {
 
   const loadGroups = async () => {
     try {
-      setGroups(await fetchGroups());
+      const loadedGroups = await fetchGroups();
+      setGroups(applyGroupPreferences(loadedGroups));
     } catch (error) {
       console.error(error);
     }
@@ -39,12 +41,20 @@ const GroupsPage = () => {
     }
 
     try {
-      const payload = { ...form, maxCapacity: parseLocalizedNumber(form.maxCapacity), days: form.days.split(',').map((d) => d.trim()) };
+      const payload = {
+        name: form.name,
+        days: form.days.split(',').map((d) => d.trim()),
+        startTime: form.startTime,
+        endTime: form.endTime,
+        maxCapacity: parseLocalizedNumber(form.maxCapacity)
+      };
       if (selectedGroup) {
         await updateGroup(selectedGroup._id, payload);
+        saveGroupColor(selectedGroup._id, form.color);
         setMessage('Group updated successfully.');
       } else {
-        await createGroup(payload);
+        const createdGroup = await createGroup(payload);
+        saveGroupColor(createdGroup._id, form.color);
         setMessage('Group added successfully.');
       }
       resetForm();
@@ -61,7 +71,8 @@ const GroupsPage = () => {
       days: group.days.join(', '),
       startTime: group.startTime,
       endTime: group.endTime,
-      maxCapacity: group.maxCapacity
+      maxCapacity: group.maxCapacity,
+      color: group.color || '#2563eb'
     });
     setMessage('');
   };
@@ -85,6 +96,7 @@ const GroupsPage = () => {
     group.days?.join(' '),
     group.startTime,
     group.endTime,
+    group.color,
     group.currentCount,
     group.maxCapacity
   ].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
@@ -109,6 +121,11 @@ const GroupsPage = () => {
               <input value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} required />
               <label>{t('maxCapacity')}</label>
               <input type="text" inputMode="numeric" value={form.maxCapacity} onChange={(e) => setForm({ ...form, maxCapacity: normalizeDigits(e.target.value) })} required />
+              <label>Group Color</label>
+              <div className="group-color-input">
+                <input type="color" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} aria-label="Group color" />
+                <input value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} pattern="#[0-9a-fA-F]{6}" required />
+              </div>
               <button className="btn-primary" type="submit">{selectedGroup ? t('updateGroup') : t('addGroup')}</button>
               {selectedGroup && <button type="button" className="btn-secondary" onClick={resetForm}>{t('cancel')}</button>}
             </form>
@@ -122,11 +139,17 @@ const GroupsPage = () => {
               </label>
             </div>
             <table className="data-table">
-              <thead><tr><th>{t('name')}</th><th>{t('days')}</th><th>{t('time')}</th><th>{t('capacity')}</th><th>{t('actions')}</th></tr></thead>
+              <thead><tr><th>{t('name')}</th><th>Color</th><th>{t('days')}</th><th>{t('time')}</th><th>{t('capacity')}</th><th>{t('actions')}</th></tr></thead>
               <tbody>
                 {filteredGroups.map((group) => (
                   <tr key={group._id}>
                     <td>{group.name}</td>
+                    <td>
+                      <span className="group-color-preview">
+                        <i style={{ background: group.color }} />
+                        {group.color}
+                      </span>
+                    </td>
                     <td>{group.days.join(', ')}</td>
                     <td>{group.startTime} - {group.endTime}</td>
                     <td>{group.currentCount}/{group.maxCapacity}</td>
@@ -136,7 +159,7 @@ const GroupsPage = () => {
                     </td>
                   </tr>
                 ))}
-                {filteredGroups.length === 0 && <tr><td colSpan="5">{t('noGroupsFound')}</td></tr>}
+                {filteredGroups.length === 0 && <tr><td colSpan="6">{t('noGroupsFound')}</td></tr>}
               </tbody>
             </table>
           </div>

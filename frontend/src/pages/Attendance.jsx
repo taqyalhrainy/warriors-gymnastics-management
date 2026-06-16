@@ -3,6 +3,7 @@ import Sidebar from '../components/Sidebar.jsx';
 import { updateTodayAttendance, cancelTodayAttendance, fetchAttendanceByPlayer } from '../services/attendance.js';
 import { fetchGroups, fetchGroupPlayers } from '../services/groups.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
+import { applyGroupPreferences, saveGroupOrder } from '../utils/groupPreferences.js';
 
 const AttendancePage = () => {
   const [groupColumns, setGroupColumns] = useState([]);
@@ -13,8 +14,9 @@ const AttendancePage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [hoveredSummaryGroup, setHoveredSummaryGroup] = useState(null);
   const [search, setSearch] = useState('');
+  const [draggedGroupId, setDraggedGroupId] = useState(null);
+  const [dragOverGroupId, setDragOverGroupId] = useState(null);
   const { t } = useLanguage();
-  const groupColors = ['#2563eb', '#f2c94c', '#16a34a', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16', '#ec4899'];
 
   const isToday = (date) => {
     if (!date) return false;
@@ -26,9 +28,9 @@ const AttendancePage = () => {
   const loadAttendanceBoard = async () => {
     try {
       setIsLoading(true);
-      const groups = await fetchGroups();
+      const groups = applyGroupPreferences(await fetchGroups());
       const groupsWithPlayers = await Promise.all(
-        groups.map(async (group, index) => {
+        groups.map(async (group) => {
           const players = await fetchGroupPlayers(group._id);
           const todayRecords = await Promise.all(
             players.map(async (player) => {
@@ -50,7 +52,7 @@ const AttendancePage = () => {
               ...player,
               todayAttendance: todayRecords[playerIndex] || null
             })),
-            color: groupColors[index % groupColors.length],
+            color: group.color,
             markedCount,
             presentCount
           };
@@ -67,6 +69,54 @@ const AttendancePage = () => {
   useEffect(() => {
     loadAttendanceBoard();
   }, []);
+
+  const reorderGroups = (items, fromGroupId, toGroupId) => {
+    const nextItems = [...items];
+    const fromIndex = nextItems.findIndex((group) => group._id === fromGroupId);
+    const toIndex = nextItems.findIndex((group) => group._id === toGroupId);
+
+    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
+      return items;
+    }
+
+    const [movedGroup] = nextItems.splice(fromIndex, 1);
+    nextItems.splice(toIndex, 0, movedGroup);
+    return nextItems;
+  };
+
+  const handleDragStart = (groupId) => {
+    setDraggedGroupId(groupId);
+    setDragOverGroupId(groupId);
+  };
+
+  const handleDragOver = (event, groupId) => {
+    event.preventDefault();
+    if (dragOverGroupId !== groupId) {
+      setDragOverGroupId(groupId);
+    }
+  };
+
+  const handleDrop = (targetGroupId) => {
+    if (!draggedGroupId || draggedGroupId === targetGroupId) {
+      setDraggedGroupId(null);
+      setDragOverGroupId(null);
+      return;
+    }
+
+    setGroupColumns((currentGroups) => {
+      const reorderedGroups = reorderGroups(currentGroups, draggedGroupId, targetGroupId);
+      saveGroupOrder(reorderedGroups.map((group) => group._id));
+      return reorderedGroups;
+    });
+
+    setDraggedGroupId(null);
+    setDragOverGroupId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedGroupId(null);
+    setDragOverGroupId(null);
+  };
 
   const handleAction = async (player, groupId, status) => {
     try {
@@ -245,9 +295,14 @@ const AttendancePage = () => {
           <div className="attendance-board">
             {filteredGroupColumns.map((group) => (
               <section
-                className="attendance-group attendance-group-marked"
+                className={`attendance-group attendance-group-marked${draggedGroupId === group._id ? ' is-dragging' : ''}${dragOverGroupId === group._id && draggedGroupId !== group._id ? ' is-drag-target' : ''}`}
                 key={group._id}
                 style={{ '--group-color': group.color }}
+                draggable
+                onDragStart={() => handleDragStart(group._id)}
+                onDragOver={(event) => handleDragOver(event, group._id)}
+                onDrop={() => handleDrop(group._id)}
+                onDragEnd={handleDragEnd}
               >
                 <div className="attendance-group-header">
                   <div>
@@ -257,7 +312,10 @@ const AttendancePage = () => {
                       {formatGroupTime(group) && ` | ${formatGroupTime(group)}`}
                     </p>
                   </div>
-                  <span>{group.players.length}/{group.maxCapacity || '-'}</span>
+                  <div className="attendance-group-header-meta">
+                    <span>{group.players.length}/{group.maxCapacity || '-'}</span>
+                    <small>Drag</small>
+                  </div>
                 </div>
 
                 <div className="attendance-player-list">
