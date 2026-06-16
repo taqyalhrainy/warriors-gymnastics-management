@@ -8,6 +8,8 @@ const trainingGroupSchema = new mongoose.Schema({
   coachId: { type: mongoose.Schema.Types.ObjectId, ref: 'Coach' },
   maxCapacity: { type: Number, required: true, default: 20 },
   currentCount: { type: Number, default: 0 },
+  color: { type: String, default: '#2563eb', trim: true },
+  displayOrder: { type: Number, default: 0 },
   programId: { type: mongoose.Schema.Types.ObjectId, ref: 'Program' }
 });
 

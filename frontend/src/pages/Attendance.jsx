@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
 import { updateTodayAttendance, cancelTodayAttendance, fetchAttendanceByPlayer } from '../services/attendance.js';
-import { fetchGroups, fetchGroupPlayers } from '../services/groups.js';
+import { fetchGroups, fetchGroupPlayers, reorderGroups as reorderGroupsRequest } from '../services/groups.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
-import { applyGroupPreferences, saveGroupOrder } from '../utils/groupPreferences.js';
 
 const AttendancePage = () => {
   const [groupColumns, setGroupColumns] = useState([]);
@@ -28,7 +27,7 @@ const AttendancePage = () => {
   const loadAttendanceBoard = async () => {
     try {
       setIsLoading(true);
-      const groups = applyGroupPreferences(await fetchGroups());
+      const groups = await fetchGroups();
       const groupsWithPlayers = await Promise.all(
         groups.map(async (group) => {
           const players = await fetchGroupPlayers(group._id);
@@ -96,21 +95,26 @@ const AttendancePage = () => {
     }
   };
 
-  const handleDrop = (targetGroupId) => {
+  const handleDrop = async (targetGroupId) => {
     if (!draggedGroupId || draggedGroupId === targetGroupId) {
       setDraggedGroupId(null);
       setDragOverGroupId(null);
       return;
     }
 
-    setGroupColumns((currentGroups) => {
-      const reorderedGroups = reorderGroups(currentGroups, draggedGroupId, targetGroupId);
-      saveGroupOrder(reorderedGroups.map((group) => group._id));
-      return reorderedGroups;
-    });
-
+    const reorderedGroups = reorderGroups(groupColumns, draggedGroupId, targetGroupId);
+    setGroupColumns(reorderedGroups);
     setDraggedGroupId(null);
     setDragOverGroupId(null);
+
+    try {
+      await reorderGroupsRequest(reorderedGroups.map((group) => group._id));
+      setMessage('Group order updated');
+      await loadAttendanceBoard();
+    } catch (err) {
+      setMessage(err.response?.data?.message || 'Unable to update group order');
+      await loadAttendanceBoard();
+    }
   };
 
   const handleDragEnd = () => {

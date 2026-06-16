@@ -20,6 +20,11 @@ export const updateGroup = async (id, data) => {
   return response.data;
 };
 
+export const reorderGroups = async (groupIds) => {
+  const response = await api.put('/groups/reorder', { groupIds });
+  return response.data;
+};
+
 export const deleteGroup = async (id) => {
   const response = await api.delete(`/groups/${id}`);
   return response.data;

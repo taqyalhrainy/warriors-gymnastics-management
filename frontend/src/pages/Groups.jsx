@@ -4,7 +4,6 @@ import { fetchGroups, createGroup, updateGroup, deleteGroup } from '../services/
 import { confirmAction } from '../utils/confirmAction.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
-import { applyGroupPreferences, saveGroupColor } from '../utils/groupPreferences.js';
 
 const initialForm = { name: '', days: '', startTime: '', endTime: '', maxCapacity: 20, color: '#2563eb' };
 
@@ -18,8 +17,7 @@ const GroupsPage = () => {
 
   const loadGroups = async () => {
     try {
-      const loadedGroups = await fetchGroups();
-      setGroups(applyGroupPreferences(loadedGroups));
+      setGroups(await fetchGroups());
     } catch (error) {
       console.error(error);
     }
@@ -46,15 +44,14 @@ const GroupsPage = () => {
         days: form.days.split(',').map((d) => d.trim()),
         startTime: form.startTime,
         endTime: form.endTime,
-        maxCapacity: parseLocalizedNumber(form.maxCapacity)
+        maxCapacity: parseLocalizedNumber(form.maxCapacity),
+        color: form.color
       };
       if (selectedGroup) {
         await updateGroup(selectedGroup._id, payload);
-        saveGroupColor(selectedGroup._id, form.color);
         setMessage('Group updated successfully.');
       } else {
-        const createdGroup = await createGroup(payload);
-        saveGroupColor(createdGroup._id, form.color);
+        await createGroup(payload);
         setMessage('Group added successfully.');
       }
       resetForm();

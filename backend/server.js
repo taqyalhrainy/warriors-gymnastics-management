@@ -24,6 +24,14 @@ const Program = require('./models/Program');
 const TrainingGroup = require('./models/TrainingGroup');
 const bcrypt = require('bcryptjs');
 
+const normalizeGroupName = (value) => String(value || '')
+  .replace(/&amp;amp;#x2F;/g, '/')
+  .replace(/&amp;#x2F;/g, '/')
+  .replace(/&#x2F;/g, '/')
+  .replace(/&amp;/g, '&')
+  .replace(/\s+/g, ' ')
+  .trim();
+
 const app = express();
 
 const allowedOrigins = [
@@ -112,6 +120,7 @@ const initializeDefaultData = async () => {
     }
   }
 
+  const groupColors = ['#2563eb', '#f2c94c', '#16a34a', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16', '#ec4899'];
   const groups = [
     { name: 'Saturday / Wednesday 4:00 PM - 5:00 PM', days: ['Saturday', 'Wednesday'], startTime: '16:00', endTime: '17:00', maxCapacity: 20 },
     { name: 'Saturday / Wednesday 5:00 PM - 6:30 PM', days: ['Saturday', 'Wednesday'], startTime: '17:00', endTime: '18:30', maxCapacity: 20 },
@@ -124,10 +133,11 @@ const initializeDefaultData = async () => {
     { name: 'Monday / Thursday 6:30 PM - 8:00 PM', days: ['Monday', 'Thursday'], startTime: '18:30', endTime: '20:00', maxCapacity: 20 }
   ];
 
-  for (const group of groups) {
-    const exists = await TrainingGroup.findOne({ name: group.name });
+  const existingGroups = await TrainingGroup.find().lean();
+  for (const [index, group] of groups.entries()) {
+    const exists = existingGroups.find((existingGroup) => normalizeGroupName(existingGroup.name) === group.name);
     if (!exists) {
-      await TrainingGroup.create(group);
+      await TrainingGroup.create({ ...group, color: groupColors[index], displayOrder: index + 1 });
     }
   }
 };
