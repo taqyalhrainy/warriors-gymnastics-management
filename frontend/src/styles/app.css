@@ -986,6 +986,9 @@ button[type="submit"],
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-strong) 100%);
   color: #ffffff;
   cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .attendance-group-marked .attendance-group-header {

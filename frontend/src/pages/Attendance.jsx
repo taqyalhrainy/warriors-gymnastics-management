@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
 import { updateTodayAttendance, cancelTodayAttendance, fetchAttendanceByPlayer } from '../services/attendance.js';
 import { fetchGroups, fetchGroupPlayers, reorderGroups as reorderGroupsRequest } from '../services/groups.js';
@@ -15,6 +15,8 @@ const AttendancePage = () => {
   const [search, setSearch] = useState('');
   const [draggedGroupId, setDraggedGroupId] = useState(null);
   const [dragOverGroupId, setDragOverGroupId] = useState(null);
+  const touchHoldTimeoutRef = useRef(null);
+  const touchDragActiveRef = useRef(false);
   const { t } = useLanguage();
 
   const isToday = (date) => {
@@ -69,6 +71,12 @@ const AttendancePage = () => {
     loadAttendanceBoard();
   }, []);
 
+  useEffect(() => () => {
+    if (touchHoldTimeoutRef.current) {
+      clearTimeout(touchHoldTimeoutRef.current);
+    }
+  }, []);
+
   const reorderGroups = (items, fromGroupId, toGroupId) => {
     const nextItems = [...items];
     const fromIndex = nextItems.findIndex((group) => group._id === fromGroupId);
@@ -95,17 +103,13 @@ const AttendancePage = () => {
     }
   };
 
-  const handleDrop = async (targetGroupId) => {
-    if (!draggedGroupId || draggedGroupId === targetGroupId) {
-      setDraggedGroupId(null);
-      setDragOverGroupId(null);
+  const commitReorder = async (fromGroupId, targetGroupId) => {
+    if (!fromGroupId || fromGroupId === targetGroupId) {
       return;
     }
 
-    const reorderedGroups = reorderGroups(groupColumns, draggedGroupId, targetGroupId);
+    const reorderedGroups = reorderGroups(groupColumns, fromGroupId, targetGroupId);
     setGroupColumns(reorderedGroups);
-    setDraggedGroupId(null);
-    setDragOverGroupId(null);
 
     try {
       await reorderGroupsRequest(reorderedGroups.map((group) => group._id));
@@ -117,7 +121,80 @@ const AttendancePage = () => {
     }
   };
 
+  const handleDrop = async (targetGroupId) => {
+    if (!draggedGroupId || draggedGroupId === targetGroupId) {
+      setDraggedGroupId(null);
+      setDragOverGroupId(null);
+      return;
+    }
+
+    const sourceGroupId = draggedGroupId;
+    setDraggedGroupId(null);
+    setDragOverGroupId(null);
+    await commitReorder(sourceGroupId, targetGroupId);
+  };
+
   const handleDragEnd = () => {
+    setDraggedGroupId(null);
+    setDragOverGroupId(null);
+  };
+
+  const clearTouchHold = () => {
+    if (touchHoldTimeoutRef.current) {
+      clearTimeout(touchHoldTimeoutRef.current);
+      touchHoldTimeoutRef.current = null;
+    }
+  };
+
+  const findTouchedGroupId = (touch) => {
+    const touchedElement = document.elementFromPoint(touch.clientX, touch.clientY);
+    return touchedElement?.closest('[data-group-id]')?.getAttribute('data-group-id') || null;
+  };
+
+  const handleTouchStart = (groupId) => {
+    clearTouchHold();
+    touchHoldTimeoutRef.current = setTimeout(() => {
+      touchDragActiveRef.current = true;
+      setDraggedGroupId(groupId);
+      setDragOverGroupId(groupId);
+      setMessage('Drag the group to a new position');
+    }, 350);
+  };
+
+  const handleTouchMove = (event) => {
+    if (!touchDragActiveRef.current) {
+      return;
+    }
+
+    event.preventDefault();
+    const touch = event.touches[0];
+    const hoveredGroupId = touch ? findTouchedGroupId(touch) : null;
+    if (hoveredGroupId && hoveredGroupId !== dragOverGroupId) {
+      setDragOverGroupId(hoveredGroupId);
+    }
+  };
+
+  const handleTouchEnd = async () => {
+    clearTouchHold();
+
+    if (!touchDragActiveRef.current) {
+      return;
+    }
+
+    touchDragActiveRef.current = false;
+    const sourceGroupId = draggedGroupId;
+    const targetGroupId = dragOverGroupId;
+    setDraggedGroupId(null);
+    setDragOverGroupId(null);
+
+    if (sourceGroupId && targetGroupId && sourceGroupId !== targetGroupId) {
+      await commitReorder(sourceGroupId, targetGroupId);
+    }
+  };
+
+  const handleTouchCancel = () => {
+    clearTouchHold();
+    touchDragActiveRef.current = false;
     setDraggedGroupId(null);
     setDragOverGroupId(null);
   };
@@ -301,6 +378,7 @@ const AttendancePage = () => {
               <section
                 className={`attendance-group attendance-group-marked${draggedGroupId === group._id ? ' is-dragging' : ''}${dragOverGroupId === group._id && draggedGroupId !== group._id ? ' is-drag-target' : ''}`}
                 key={group._id}
+                data-group-id={group._id}
                 style={{ '--group-color': group.color }}
                 draggable
                 onDragStart={() => handleDragStart(group._id)}
@@ -308,7 +386,13 @@ const AttendancePage = () => {
                 onDrop={() => handleDrop(group._id)}
                 onDragEnd={handleDragEnd}
               >
-                <div className="attendance-group-header">
+                <div
+                  className="attendance-group-header"
+                  onTouchStart={() => handleTouchStart(group._id)}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
+                  onTouchCancel={handleTouchCancel}
+                >
                   <div>
                     <h2>{group.name}</h2>
                     <p>
