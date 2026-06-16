@@ -15,6 +15,7 @@ const AttendancePage = () => {
   const [search, setSearch] = useState('');
   const [draggedGroupId, setDraggedGroupId] = useState(null);
   const [dragOverGroupId, setDragOverGroupId] = useState(null);
+  const [touchDragPreview, setTouchDragPreview] = useState(null);
   const [isTouchDevice, setIsTouchDevice] = useState(false);
   const attendanceBoardRef = useRef(null);
   const touchHoldTimeoutRef = useRef(null);
@@ -22,7 +23,7 @@ const AttendancePage = () => {
   const dragOverGroupIdRef = useRef(null);
   const pointerDragActiveRef = useRef(false);
   const activePointerIdRef = useRef(null);
-  const pointerSourceGroupIdRef = useRef(null);
+  const dragStartRectRef = useRef(null);
   const pointerHoldGroupIdRef = useRef(null);
   const pointerStartPointRef = useRef(null);
   const { t } = useLanguage();
@@ -112,12 +113,13 @@ const AttendancePage = () => {
       clearTouchHold();
       pointerDragActiveRef.current = false;
       activePointerIdRef.current = null;
-      pointerSourceGroupIdRef.current = null;
+      dragStartRectRef.current = null;
       pointerHoldGroupIdRef.current = null;
       pointerStartPointRef.current = null;
       document.body.classList.remove('attendance-touch-dragging');
       setDraggedGroupId(null);
       setDragOverGroupId(null);
+      setTouchDragPreview(null);
     };
 
     const handleWindowPointerMove = (event) => {
@@ -131,7 +133,7 @@ const AttendancePage = () => {
         if (deltaX > 18 || deltaY > 18) {
           clearTouchHold();
           activePointerIdRef.current = null;
-          pointerSourceGroupIdRef.current = null;
+          dragStartRectRef.current = null;
           pointerHoldGroupIdRef.current = null;
           pointerStartPointRef.current = null;
         }
@@ -142,6 +144,14 @@ const AttendancePage = () => {
       }
 
       event.preventDefault();
+      if (dragStartRectRef.current && pointerStartPointRef.current) {
+        setTouchDragPreview({
+          x: dragStartRectRef.current.left + (event.clientX - pointerStartPointRef.current.x),
+          y: dragStartRectRef.current.top + (event.clientY - pointerStartPointRef.current.y),
+          width: dragStartRectRef.current.width,
+          height: dragStartRectRef.current.height
+        });
+      }
       autoScrollBoard(event.clientX);
       const hoveredGroupId = findTouchedGroupId({ clientX: event.clientX, clientY: event.clientY });
       if (hoveredGroupId && hoveredGroupId !== dragOverGroupIdRef.current) {
@@ -158,7 +168,7 @@ const AttendancePage = () => {
 
       if (!pointerDragActiveRef.current) {
         activePointerIdRef.current = null;
-        pointerSourceGroupIdRef.current = null;
+        dragStartRectRef.current = null;
         pointerHoldGroupIdRef.current = null;
         pointerStartPointRef.current = null;
         return;
@@ -279,6 +289,25 @@ const AttendancePage = () => {
     }
   };
 
+  const getGroupStyle = (group) => {
+    if (!isTouchDevice || draggedGroupId !== group._id || !touchDragPreview) {
+      return { '--group-color': group.color };
+    }
+
+    return {
+      '--group-color': group.color,
+      position: 'fixed',
+      left: `${touchDragPreview.x}px`,
+      top: `${touchDragPreview.y}px`,
+      width: `${touchDragPreview.width}px`,
+      height: `${touchDragPreview.height}px`,
+      zIndex: 1200,
+      pointerEvents: 'none',
+      transform: 'rotate(1deg) scale(0.98)',
+      opacity: 0.96
+    };
+  };
+
   const handlePointerDown = (event, groupId) => {
     if (event.pointerType !== 'touch' && event.pointerType !== 'pen') {
       return;
@@ -286,15 +315,25 @@ const AttendancePage = () => {
 
     clearTouchHold();
     activePointerIdRef.current = event.pointerId;
-    pointerSourceGroupIdRef.current = groupId;
     pointerHoldGroupIdRef.current = groupId;
     pointerStartPointRef.current = { x: event.clientX, y: event.clientY };
+    dragStartRectRef.current = event.currentTarget.closest('[data-group-id]')?.getBoundingClientRect() || null;
     event.currentTarget.setPointerCapture?.(event.pointerId);
     touchHoldTimeoutRef.current = setTimeout(() => {
+      const activeRect = event.currentTarget.closest('[data-group-id]')?.getBoundingClientRect();
+      dragStartRectRef.current = activeRect || dragStartRectRef.current;
       pointerDragActiveRef.current = true;
       document.body.classList.add('attendance-touch-dragging');
       setDraggedGroupId(groupId);
       setDragOverGroupId(groupId);
+      if (dragStartRectRef.current) {
+        setTouchDragPreview({
+          x: dragStartRectRef.current.left,
+          y: dragStartRectRef.current.top,
+          width: dragStartRectRef.current.width,
+          height: dragStartRectRef.current.height
+        });
+      }
       setMessage('Drag the group to a new position');
     }, 450);
   };
@@ -479,7 +518,7 @@ const AttendancePage = () => {
                 className={`attendance-group attendance-group-marked${draggedGroupId === group._id ? ' is-dragging' : ''}${dragOverGroupId === group._id && draggedGroupId !== group._id ? ' is-drag-target' : ''}`}
                 key={group._id}
                 data-group-id={group._id}
-                style={{ '--group-color': group.color }}
+                style={getGroupStyle(group)}
                 draggable={!isTouchDevice}
                 onDragStart={() => handleDragStart(group._id)}
                 onDragOver={(event) => handleDragOver(event, group._id)}
