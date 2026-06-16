@@ -17,6 +17,10 @@ const packageOptions = [
   { label: '16 classes (2 hours)', classes: 16, hours: 2 }
 ];
 
+const ATTENDANCE_BOARD_CACHE_TTL_MS = 5 * 60 * 1000;
+let attendanceBoardCache = null;
+let attendanceBoardCacheTimestamp = 0;
+
 const AttendancePage = () => {
   const [groupColumns, setGroupColumns] = useState([]);
   const [attendanceHistory, setAttendanceHistory] = useState([]);
@@ -52,7 +56,15 @@ const AttendancePage = () => {
     return recordDate.toDateString() === today.toDateString();
   };
 
-  const loadAttendanceBoard = async () => {
+  const loadAttendanceBoard = async (options = {}) => {
+    const force = Boolean(options.force);
+
+    if (!force && attendanceBoardCache && (Date.now() - attendanceBoardCacheTimestamp) < ATTENDANCE_BOARD_CACHE_TTL_MS) {
+      setGroupColumns(attendanceBoardCache);
+      setIsLoading(false);
+      return attendanceBoardCache;
+    }
+
     try {
       setIsLoading(true);
       const groups = await fetchGroups();
@@ -85,9 +97,13 @@ const AttendancePage = () => {
           };
         })
       );
+      attendanceBoardCache = groupsWithPlayers;
+      attendanceBoardCacheTimestamp = Date.now();
       setGroupColumns(groupsWithPlayers);
+      return groupsWithPlayers;
     } catch (err) {
       setMessage(err.response?.data?.message || 'Unable to load attendance board');
+      return [];
     } finally {
       setIsLoading(false);
     }
@@ -252,10 +268,10 @@ const AttendancePage = () => {
     try {
       await reorderGroupsRequest(reorderedGroups.map((group) => group._id));
       setMessage('Group order updated');
-      await loadAttendanceBoard();
+      await loadAttendanceBoard({ force: true });
     } catch (err) {
       setMessage(err.response?.data?.message || 'Unable to update group order');
-      await loadAttendanceBoard();
+      await loadAttendanceBoard({ force: true });
     }
   };
 
@@ -355,15 +371,58 @@ const AttendancePage = () => {
     }, 450);
   };
 
+  const updatePlayerInBoard = (playerId, updater) => {
+    setGroupColumns((currentGroups) => currentGroups.map((group) => {
+      let changed = false;
+      const nextPlayers = group.players.map((player) => {
+        if (player._id !== playerId) {
+          return player;
+        }
+
+        changed = true;
+        return updater(player, group);
+      });
+
+      if (!changed) {
+        return group;
+      }
+
+      const markedCount = nextPlayers.filter((item) => Boolean(item.todayAttendance)).length;
+      const presentCount = nextPlayers.filter((item) => item.todayAttendance?.status === 'present').length;
+
+      return {
+        ...group,
+        players: nextPlayers,
+        markedCount,
+        presentCount
+      };
+    }));
+  };
+
   const handleAction = async (player, groupId, status) => {
     try {
       setMessage('');
       await updateTodayAttendance({ playerId: player._id, groupId, status });
       setMessage('Attendance recorded');
-      await loadAttendanceBoard();
+      const optimisticAttendance = {
+        ...(player.todayAttendance || {}),
+        status,
+        date: new Date().toISOString(),
+        checkInTime: new Date().toISOString()
+      };
+
+      updatePlayerInBoard(player._id, (currentPlayer) => ({
+        ...currentPlayer,
+        todayAttendance: optimisticAttendance
+      }));
+
       if (selectedPlayer?._id === player._id) {
         const history = await fetchAttendanceByPlayer(player._id);
         setAttendanceHistory(history);
+        setSelectedPlayer((currentPlayer) => currentPlayer ? {
+          ...currentPlayer,
+          todayAttendance: optimisticAttendance
+        } : currentPlayer);
       }
     } catch (err) {
       setMessage(err.response?.data?.message || 'Unable to record attendance');
@@ -375,10 +434,18 @@ const AttendancePage = () => {
       setMessage('');
       await cancelTodayAttendance({ playerId: player._id });
       setMessage('Attendance cancelled');
-      await loadAttendanceBoard();
+      updatePlayerInBoard(player._id, (currentPlayer) => ({
+        ...currentPlayer,
+        todayAttendance: null
+      }));
+
       if (selectedPlayer?._id === player._id) {
         const history = await fetchAttendanceByPlayer(player._id);
         setAttendanceHistory(history);
+        setSelectedPlayer((currentPlayer) => currentPlayer ? {
+          ...currentPlayer,
+          todayAttendance: null
+        } : currentPlayer);
       }
     } catch (err) {
       setMessage(err.response?.data?.message || 'Unable to cancel attendance');
@@ -420,17 +487,22 @@ const AttendancePage = () => {
 
     try {
       setMessage('');
+      setIsEditingSelectedPlayer(true);
+      setSelectedPlayerForm(createSelectedPlayerForm(selectedPlayer));
+
       const [parentsData, groupsData, latestPlayer] = await Promise.all([
         fetchParents(),
         fetchGroups(),
         getPlayer(selectedPlayer._id)
       ]);
+
       setEditParents(parentsData);
       setEditGroups(groupsData);
       setSelectedPlayer(latestPlayer);
       setSelectedPlayerForm(createSelectedPlayerForm(latestPlayer));
-      setIsEditingSelectedPlayer(true);
     } catch (err) {
+      setIsEditingSelectedPlayer(false);
+      setSelectedPlayerForm(null);
       setMessage(err.response?.data?.message || 'Unable to open player editor');
     }
   };
@@ -512,7 +584,7 @@ const AttendancePage = () => {
       setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
       setIsEditingSelectedPlayer(false);
       setMessage('Player updated successfully');
-      await loadAttendanceBoard();
+      await loadAttendanceBoard({ force: true });
     } catch (err) {
       setMessage(err.response?.data?.message || 'Unable to update player');
     }
@@ -645,7 +717,7 @@ const AttendancePage = () => {
             <span>Search</span>
             <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search students or groups..." />
           </label>
-          <button type="button" className="btn-secondary" onClick={loadAttendanceBoard}>{t('refresh')}</button>
+          <button type="button" className="btn-secondary" onClick={() => loadAttendanceBoard({ force: true })}>{t('refresh')}</button>
         </div>
 
         {isLoading ? (

@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import api from '../services/api.js';
+import { clearCache } from '../services/cache.js';
+import { warmAdminAppCache, resetPrefetchState } from '../services/prefetch.js';
 
 const AuthContext = createContext(null);
 
@@ -20,7 +22,19 @@ export const AuthProvider = ({ children }) => {
     }
   }, [token, user]);
 
+  useEffect(() => {
+    if (!token || !user) {
+      return;
+    }
+
+    if (['admin', 'coach', 'receptionist'].includes(user.role)) {
+      warmAdminAppCache(user).catch(console.error);
+    }
+  }, [token, user]);
+
   const login = (data) => {
+    clearCache();
+    resetPrefetchState();
     api.defaults.headers.common.Authorization = `Bearer ${data.token}`;
     localStorage.setItem('warriors-token', data.token);
     localStorage.setItem('warriors-user', JSON.stringify(data.user));
@@ -34,6 +48,8 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('warriors-token');
     localStorage.removeItem('warriors-user');
     delete api.defaults.headers.common.Authorization;
+    clearCache();
+    resetPrefetchState();
   };
 
   return <AuthContext.Provider value={{ user, token, login, logout }}>{children}</AuthContext.Provider>;
