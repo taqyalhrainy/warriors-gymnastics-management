@@ -759,7 +759,11 @@ const AttendancePage = () => {
                       <button type="button" className="attendance-player-main" onClick={() => handleSelectPlayer(player)}>
                         <strong>{player.fullName}</strong>
                         <span>{player.parentId?.name || t('noParent')} | {player.status}</span>
-                        {player.todayAttendance && <em>{player.todayAttendance.status}</em>}
+                        {player.todayAttendance && (
+                          <em className={`attendance-status-pill attendance-status-pill-${player.todayAttendance.status}`}>
+                            {player.todayAttendance.status}
+                          </em>
+                        )}
                       </button>
                       <div className="attendance-actions">
                         <button

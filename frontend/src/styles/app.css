@@ -1092,12 +1092,21 @@ body.attendance-touch-dragging {
   width: fit-content;
   padding: 3px 8px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--group-color) 16%, var(--surface));
-  color: color-mix(in srgb, var(--group-color) 72%, var(--ink));
-  border: 1px solid color-mix(in srgb, var(--group-color) 24%, transparent);
   font-size: 0.74rem;
   font-style: normal;
   font-weight: 800;
+}
+
+.attendance-status-pill-present {
+  background: color-mix(in srgb, var(--success) 18%, var(--surface));
+  color: color-mix(in srgb, var(--success) 78%, #0f172a);
+  border: 1px solid color-mix(in srgb, var(--success) 34%, transparent);
+}
+
+.attendance-status-pill-absent {
+  background: color-mix(in srgb, var(--danger) 18%, var(--surface));
+  color: color-mix(in srgb, var(--danger) 82%, #0f172a);
+  border: 1px solid color-mix(in srgb, var(--danger) 34%, transparent);
 }
 
 .attendance-actions {
