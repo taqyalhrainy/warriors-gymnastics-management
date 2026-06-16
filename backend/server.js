@@ -15,6 +15,7 @@ const paymentRoutes = require('./routes/payments');
 const notificationRoutes = require('./routes/notifications');
 const reportRoutes = require('./routes/reports');
 const auditRoutes = require('./routes/auditLogs');
+const historyRoutes = require('./routes/history');
 const parentRoutes = require('./routes/parents');
 const programRoutes = require('./routes/programs');
 const coachRoutes = require('./routes/coaches');
@@ -22,6 +23,7 @@ const errorHandler = require('./middleware/errorHandler');
 const User = require('./models/User');
 const Program = require('./models/Program');
 const TrainingGroup = require('./models/TrainingGroup');
+const { ensureHistoryBaselines } = require('./utils/history');
 const bcrypt = require('bcryptjs');
 
 const normalizeGroupName = (value) => String(value || '')
@@ -87,6 +89,7 @@ app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/history', historyRoutes);
 app.use('/api/audit-logs', auditRoutes);
 
 app.get('/api/health', (req, res) => {
@@ -145,6 +148,7 @@ const initializeDefaultData = async () => {
 const startServer = async () => {
   await connectDB();
   await initializeDefaultData();
+  await ensureHistoryBaselines();
   const PORT = process.env.PORT || 5000;
   app.listen(PORT, () => {
     console.log(`Backend running on port ${PORT}`);

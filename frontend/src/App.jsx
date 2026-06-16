@@ -14,6 +14,7 @@ const AttendancePage = lazy(() => import('./pages/Attendance.jsx'));
 const PaymentsPage = lazy(() => import('./pages/Payments.jsx'));
 const NotificationsPage = lazy(() => import('./pages/Notifications.jsx'));
 const ReportsPage = lazy(() => import('./pages/Reports.jsx'));
+const HistoryPage = lazy(() => import('./pages/History.jsx'));
 const AuditLogsPage = lazy(() => import('./pages/AuditLogs.jsx'));
 const ParentsPage = lazy(() => import('./pages/Parents.jsx'));
 const ParentDashboard = lazy(() => import('./pages/ParentDashboard.jsx'));
@@ -64,6 +65,7 @@ function App() {
               <Route path="/notifications/:id" element={<NotificationDetailPage />} />
               <Route path="/parents" element={<ParentsPage />} />
               <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/history" element={<HistoryPage />} />
               <Route path="/audit-logs" element={<AuditLogsPage />} />
             </Route>
             <Route element={<ProtectedRoute roles={parentRoles} />}>

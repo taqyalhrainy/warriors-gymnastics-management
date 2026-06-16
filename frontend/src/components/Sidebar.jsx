@@ -47,6 +47,7 @@ const Sidebar = () => {
       { path: '/payments', key: 'payments' },
       { path: '/notifications', key: 'notifications' },
       { path: '/reports', key: 'reports' },
+      { path: '/history', key: 'history' },
       { path: '/audit-logs', key: 'auditLogs' }
     ];
 

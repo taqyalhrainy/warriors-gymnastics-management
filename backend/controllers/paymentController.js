@@ -6,6 +6,7 @@ const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { encrypt, decrypt } = require('../utils/encryption');
 const { parseLocalizedNumber } = require('../utils/numberInput');
+const { snapshotPaymentDocument, createHistoryEntry } = require('../utils/history');
 
 const populatePaymentQuery = (query) => query
   .populate({
@@ -103,6 +104,15 @@ const createPayment = async (req, res, next) => {
         type: 'payment'
       });
     }
+    const paymentForHistory = await loadPaymentForHistory(payment._id);
+    await createHistoryEntry({
+      entityType: 'payment',
+      entityId: payment._id,
+      action: 'create',
+      after: snapshotPaymentDocument(paymentForHistory),
+      userId: req.user._id,
+      req
+    });
     await createAuditLog({ userId: req.user._id, action: 'create payment', entity: 'Payment', entityId: payment._id, req });
     await recalculatePlayerPayments(player._id);
     const createdPayment = await populatePaymentQuery(Payment.findById(payment._id));
@@ -111,6 +121,8 @@ const createPayment = async (req, res, next) => {
     next(error);
   }
 };
+
+const loadPaymentForHistory = (paymentId) => populatePaymentQuery(Payment.findById(paymentId));
 
 const updatePayment = async (req, res, next) => {
   try {
@@ -123,6 +135,8 @@ const updatePayment = async (req, res, next) => {
     if (!payment) {
       return res.status(404).json({ message: 'Payment not found.' });
     }
+    const beforePayment = await loadPaymentForHistory(id);
+    const beforeSnapshot = snapshotPaymentDocument(beforePayment);
 
     if (payload.paidAmount != null) {
       payment.paidAmount = parseLocalizedNumber(payload.paidAmount);
@@ -140,6 +154,16 @@ const updatePayment = async (req, res, next) => {
     payment.updatedAt = new Date();
     await payment.save();
     await recalculatePlayerPayments(payment.playerId);
+    const afterPayment = await loadPaymentForHistory(id);
+    await createHistoryEntry({
+      entityType: 'payment',
+      entityId: payment._id,
+      action: 'update',
+      before: beforeSnapshot,
+      after: snapshotPaymentDocument(afterPayment),
+      userId: req.user._id,
+      req
+    });
     await createAuditLog({ userId: req.user._id, action: 'update payment', entity: 'Payment', entityId: payment._id, req });
 
     const updatedPayment = await populatePaymentQuery(Payment.findById(payment._id));
@@ -159,9 +183,19 @@ const deletePayment = async (req, res, next) => {
     if (!payment) {
       return res.status(404).json({ message: 'Payment not found.' });
     }
+    const paymentForHistory = await loadPaymentForHistory(id);
+    const beforeSnapshot = snapshotPaymentDocument(paymentForHistory);
     const { playerId } = payment;
     await payment.deleteOne();
     await recalculatePlayerPayments(playerId);
+    await createHistoryEntry({
+      entityType: 'payment',
+      entityId: payment._id,
+      action: 'delete',
+      before: beforeSnapshot,
+      userId: req.user._id,
+      req
+    });
     await createAuditLog({ userId: req.user._id, action: 'delete payment', entity: 'Payment', entityId: id, req });
     res.json({ message: 'Payment deleted successfully.' });
   } catch (error) {

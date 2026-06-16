@@ -1182,6 +1182,45 @@ body.attendance-touch-dragging {
   color: var(--muted);
 }
 
+.student-modal-header-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.student-modal-edit-form {
+  display: grid;
+  gap: 16px;
+}
+
+.student-modal-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.student-modal-edit-grid label,
+.student-modal-edit-groups {
+  display: grid;
+  gap: 6px;
+}
+
+.student-modal-edit-grid label span,
+.student-modal-edit-groups > span {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.student-modal-edit-grid-full {
+  grid-column: 1 / -1;
+}
+
+.student-modal-edit-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .student-info-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1617,6 +1656,45 @@ body.attendance-touch-dragging {
 
 .payment-database-table a {
   color: #8bd3ff;
+}
+
+.history-controls-card {
+  display: grid;
+  gap: 14px;
+}
+
+.history-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.history-controls label {
+  display: grid;
+  gap: 6px;
+}
+
+.history-controls label span,
+.history-hint-row {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.history-controls select,
+.history-controls input {
+  width: 100%;
+}
+
+.history-hint-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.history-table td {
+  vertical-align: top;
 }
 
 .payment-row-actions button {
@@ -2328,6 +2406,10 @@ body.rtl .payment-table-wrap {
     gap: 10px;
   }
 
+  .student-modal-edit-grid {
+    grid-template-columns: 1fr;
+  }
+
   .table-toolbar h2 {
     font-size: 1.18rem;
   }
@@ -2456,6 +2538,10 @@ body.rtl .payment-table-wrap {
   .student-history-row {
     grid-template-columns: 1fr;
     flex-direction: column;
+  }
+
+  .student-modal-edit-grid {
+    grid-template-columns: 1fr;
   }
 
   .payments-admin-page {

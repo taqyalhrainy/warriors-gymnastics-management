@@ -2,12 +2,29 @@ import { useEffect, useRef, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
 import { updateTodayAttendance, cancelTodayAttendance, fetchAttendanceByPlayer } from '../services/attendance.js';
 import { fetchGroups, fetchGroupPlayers, reorderGroups as reorderGroupsRequest } from '../services/groups.js';
+import { fetchParents } from '../services/parents.js';
+import { getPlayer, updatePlayer } from '../services/players.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
+import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
+
+const packageOptions = [
+  { label: '8 classes (1 hour)', classes: 8, hours: 1 },
+  { label: '8 classes (1.5 hours)', classes: 8, hours: 1.5 },
+  { label: '8 classes (2 hours)', classes: 8, hours: 2 },
+  { label: '12 classes (1.5 hours)', classes: 12, hours: 1.5 },
+  { label: '12 classes (2 hours)', classes: 12, hours: 2 },
+  { label: '16 classes (1.5 hours)', classes: 16, hours: 1.5 },
+  { label: '16 classes (2 hours)', classes: 16, hours: 2 }
+];
 
 const AttendancePage = () => {
   const [groupColumns, setGroupColumns] = useState([]);
   const [attendanceHistory, setAttendanceHistory] = useState([]);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
+  const [isEditingSelectedPlayer, setIsEditingSelectedPlayer] = useState(false);
+  const [selectedPlayerForm, setSelectedPlayerForm] = useState(null);
+  const [editParents, setEditParents] = useState([]);
+  const [editGroups, setEditGroups] = useState([]);
   const [selectedSummaryGroup, setSelectedSummaryGroup] = useState(null);
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -374,8 +391,130 @@ const AttendancePage = () => {
       const history = await fetchAttendanceByPlayer(player._id);
       setAttendanceHistory(history);
       setSelectedPlayer(player);
+      setIsEditingSelectedPlayer(false);
+      setSelectedPlayerForm(null);
     } catch (err) {
       setMessage(err.response?.data?.message || 'Unable to load student card');
+    }
+  };
+
+  const createSelectedPlayerForm = (player) => ({
+    fullName: player?.fullName || '',
+    parentId: player?.parentId?._id || '',
+    parentPhone: player?.parentPhone || '',
+    groupIds: player?.groupIds?.length ? player.groupIds.map((group) => group._id || group) : (player?.groupId?._id ? [player.groupId._id] : []),
+    startDate: player?.startDate?.split?.('T')?.[0] || '',
+    endDate: player?.endDate?.split?.('T')?.[0] || '',
+    packageName: player?.packageName || '',
+    packageClasses: player?.packageClasses ?? '',
+    packageHours: player?.packageHours ?? '',
+    payment: player?.payment ?? '',
+    note: player?.note || '',
+    status: player?.status || 'active'
+  });
+
+  const handleStartEditSelectedPlayer = async () => {
+    if (!selectedPlayer?._id) {
+      return;
+    }
+
+    try {
+      setMessage('');
+      const [parentsData, groupsData, latestPlayer] = await Promise.all([
+        fetchParents(),
+        fetchGroups(),
+        getPlayer(selectedPlayer._id)
+      ]);
+      setEditParents(parentsData);
+      setEditGroups(groupsData);
+      setSelectedPlayer(latestPlayer);
+      setSelectedPlayerForm(createSelectedPlayerForm(latestPlayer));
+      setIsEditingSelectedPlayer(true);
+    } catch (err) {
+      setMessage(err.response?.data?.message || 'Unable to open player editor');
+    }
+  };
+
+  const handleSelectedPlayerFormChange = (event) => {
+    const { name, value } = event.target;
+
+    if (name === 'parentId') {
+      const selectedParent = editParents.find((parent) => parent._id === value);
+      setSelectedPlayerForm((current) => ({
+        ...current,
+        parentId: value,
+        parentPhone: selectedParent?.phone || current.parentPhone || ''
+      }));
+      return;
+    }
+
+    if (name === 'packageName') {
+      const selectedPackage = packageOptions.find((option) => option.label === value);
+      setSelectedPlayerForm((current) => ({
+        ...current,
+        packageName: value,
+        packageClasses: selectedPackage ? selectedPackage.classes : '',
+        packageHours: selectedPackage ? selectedPackage.hours : ''
+      }));
+      return;
+    }
+
+    if (name === 'payment' || name === 'packageClasses' || name === 'packageHours') {
+      setSelectedPlayerForm((current) => ({ ...current, [name]: normalizeDigits(value) }));
+      return;
+    }
+
+    setSelectedPlayerForm((current) => ({ ...current, [name]: value }));
+  };
+
+  const handleSelectedPlayerGroupToggle = (groupId) => {
+    setSelectedPlayerForm((current) => {
+      const nextGroupIds = current.groupIds.includes(groupId)
+        ? current.groupIds.filter((id) => id !== groupId)
+        : [...current.groupIds, groupId];
+
+      return {
+        ...current,
+        groupIds: nextGroupIds
+      };
+    });
+  };
+
+  const handleCancelSelectedPlayerEdit = () => {
+    setIsEditingSelectedPlayer(false);
+    setSelectedPlayerForm(selectedPlayer ? createSelectedPlayerForm(selectedPlayer) : null);
+  };
+
+  const handleSaveSelectedPlayerEdit = async (event) => {
+    event.preventDefault();
+    if (!selectedPlayer?._id || !selectedPlayerForm) {
+      return;
+    }
+
+    try {
+      setMessage('');
+      await updatePlayer(selectedPlayer._id, {
+        ...selectedPlayerForm,
+        groupId: selectedPlayerForm.groupIds[0] || '',
+        groupIds: selectedPlayerForm.groupIds,
+        packageClasses: parseLocalizedNumber(selectedPlayerForm.packageClasses),
+        packageHours: parseLocalizedNumber(selectedPlayerForm.packageHours),
+        payment: parseLocalizedNumber(selectedPlayerForm.payment)
+      });
+
+      const [history, refreshedPlayer] = await Promise.all([
+        fetchAttendanceByPlayer(selectedPlayer._id),
+        getPlayer(selectedPlayer._id)
+      ]);
+
+      setAttendanceHistory(history);
+      setSelectedPlayer(refreshedPlayer);
+      setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
+      setIsEditingSelectedPlayer(false);
+      setMessage('Player updated successfully');
+      await loadAttendanceBoard();
+    } catch (err) {
+      setMessage(err.response?.data?.message || 'Unable to update player');
     }
   };
 
@@ -591,21 +730,119 @@ const AttendancePage = () => {
                   <h2>{selectedPlayer.fullName}</h2>
                   <p>{getPlayerGroups(selectedPlayer) || t('noGroupAssigned')}</p>
                 </div>
-                <button type="button" className="btn-secondary" onClick={() => setSelectedPlayer(null)}>{t('close')}</button>
+                <div className="student-modal-header-actions">
+                  {!isEditingSelectedPlayer && (
+                    <button type="button" className="btn-primary" onClick={handleStartEditSelectedPlayer}>{t('edit')}</button>
+                  )}
+                  <button type="button" className="btn-secondary" onClick={() => setSelectedPlayer(null)}>{t('close')}</button>
+                </div>
               </div>
 
-              <div className="student-info-grid">
-                <div><span>{t('status')}</span><strong>{selectedPlayer.status || t('notSet')}</strong></div>
-                <div><span>{t('birthDate')}</span><strong>{formatDate(selectedPlayer.dateOfBirth)}</strong></div>
-                <div><span>{t('parent')}</span><strong>{selectedPlayer.parentId?.name || t('notSet')}</strong></div>
-                <div><span>{t('parentPhone')}</span><strong>{selectedPlayer.parentPhone || t('notSet')}</strong></div>
-                <div><span>{t('program')}</span><strong>{selectedPlayer.programId?.name || t('notSet')}</strong></div>
-                <div><span>{t('coach')}</span><strong>{selectedPlayer.coachId?.name || t('notSet')}</strong></div>
-                <div><span>{t('level')}</span><strong>{selectedPlayer.level || t('notSet')}</strong></div>
-                <div><span>{t('subscription')}</span><strong>{selectedPlayer.subscriptionId?.status || t('notSet')}</strong></div>
-                <div><span>{t('remainingSessions')}</span><strong>{selectedPlayer.subscriptionId?.remainingSessions ?? t('notSet')}</strong></div>
-                <div><span>{t('subscriptionEnds')}</span><strong>{formatDate(selectedPlayer.subscriptionId?.endDate)}</strong></div>
-              </div>
+              {isEditingSelectedPlayer && selectedPlayerForm ? (
+                <form className="student-modal-edit-form" onSubmit={handleSaveSelectedPlayerEdit}>
+                  <div className="student-modal-edit-grid">
+                    <label>
+                      <span>{t('name')}</span>
+                      <input name="fullName" value={selectedPlayerForm.fullName} onChange={handleSelectedPlayerFormChange} required />
+                    </label>
+                    <label>
+                      <span>{t('parent')}</span>
+                      <select name="parentId" value={selectedPlayerForm.parentId} onChange={handleSelectedPlayerFormChange} required>
+                        <option value="">{t('selectParent')}</option>
+                        {editParents.map((parent) => (
+                          <option key={parent._id} value={parent._id}>
+                            {parent.phone ? `${parent.name} (${parent.phone})` : parent.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>{t('parentPhone')}</span>
+                      <input name="parentPhone" value={selectedPlayerForm.parentPhone} onChange={handleSelectedPlayerFormChange} />
+                    </label>
+                    <label>
+                      <span>{t('status')}</span>
+                      <select name="status" value={selectedPlayerForm.status} onChange={handleSelectedPlayerFormChange}>
+                        <option value="active">{t('activeStatus')}</option>
+                        <option value="expired">{t('expiredStatus')}</option>
+                        <option value="frozen">{t('frozenStatus')}</option>
+                        <option value="left">{t('leftStatus')}</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>{t('startDate')}</span>
+                      <input name="startDate" type="date" value={selectedPlayerForm.startDate} onChange={handleSelectedPlayerFormChange} />
+                    </label>
+                    <label>
+                      <span>{t('endDate')}</span>
+                      <input name="endDate" type="date" value={selectedPlayerForm.endDate} onChange={handleSelectedPlayerFormChange} />
+                    </label>
+                    <label>
+                      <span>{t('package')}</span>
+                      <select name="packageName" value={selectedPlayerForm.packageName} onChange={handleSelectedPlayerFormChange}>
+                        <option value="">{t('selectPackage')}</option>
+                        {packageOptions.map((option) => (
+                          <option key={option.label} value={option.label}>{option.label}</option>
+                        ))}
+                        <option value="custom">{t('customPackage')}</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>{t('payment')}</span>
+                      <input name="payment" type="text" inputMode="decimal" value={selectedPlayerForm.payment} onChange={handleSelectedPlayerFormChange} />
+                    </label>
+                    <label>
+                      <span>{t('classes')}</span>
+                      <input name="packageClasses" type="text" inputMode="numeric" value={selectedPlayerForm.packageClasses} onChange={handleSelectedPlayerFormChange} />
+                    </label>
+                    <label>
+                      <span>{t('hours')}</span>
+                      <input name="packageHours" type="text" inputMode="decimal" value={selectedPlayerForm.packageHours} onChange={handleSelectedPlayerFormChange} />
+                    </label>
+                    <label className="student-modal-edit-grid-full">
+                      <span>{t('note')}</span>
+                      <textarea name="note" value={selectedPlayerForm.note} onChange={handleSelectedPlayerFormChange} placeholder={t('discountNotePlaceholder')} />
+                    </label>
+                  </div>
+
+                  <div className="student-modal-edit-groups">
+                    <span>{t('group')}</span>
+                    <div className="multi-select-list">
+                      {editGroups.length ? editGroups.map((group) => (
+                        <label className="multi-select-option" key={group._id}>
+                          <input
+                            type="checkbox"
+                            checked={selectedPlayerForm.groupIds.includes(group._id)}
+                            onChange={() => handleSelectedPlayerGroupToggle(group._id)}
+                          />
+                          <span>
+                            <strong>{group.name}</strong>
+                            <small>{[group.days?.join(', '), [group.startTime, group.endTime].filter(Boolean).join(' - ')].filter(Boolean).join(' | ')}</small>
+                          </span>
+                        </label>
+                      )) : <p className="empty-state">{t('noGroupsFound')}</p>}
+                    </div>
+                  </div>
+
+                  <div className="student-modal-edit-actions">
+                    <button type="submit" className="btn-primary">{t('savePlayer')}</button>
+                    <button type="button" className="btn-secondary" onClick={handleCancelSelectedPlayerEdit}>{t('cancel')}</button>
+                  </div>
+                </form>
+              ) : (
+                <div className="student-info-grid">
+                  <div><span>{t('status')}</span><strong>{selectedPlayer.status || t('notSet')}</strong></div>
+                  <div><span>{t('birthDate')}</span><strong>{formatDate(selectedPlayer.dateOfBirth)}</strong></div>
+                  <div><span>{t('parent')}</span><strong>{selectedPlayer.parentId?.name || t('notSet')}</strong></div>
+                  <div><span>{t('parentPhone')}</span><strong>{selectedPlayer.parentPhone || t('notSet')}</strong></div>
+                  <div><span>{t('program')}</span><strong>{selectedPlayer.programId?.name || t('notSet')}</strong></div>
+                  <div><span>{t('coach')}</span><strong>{selectedPlayer.coachId?.name || t('notSet')}</strong></div>
+                  <div><span>{t('level')}</span><strong>{selectedPlayer.level || t('notSet')}</strong></div>
+                  <div><span>{t('subscription')}</span><strong>{selectedPlayer.subscriptionId?.status || t('notSet')}</strong></div>
+                  <div><span>{t('remainingSessions')}</span><strong>{selectedPlayer.subscriptionId?.remainingSessions ?? t('notSet')}</strong></div>
+                  <div><span>{t('subscriptionEnds')}</span><strong>{formatDate(selectedPlayer.subscriptionId?.endDate)}</strong></div>
+                </div>
+              )}
 
               <div className="student-history">
                 <h3>{t('attendanceHistory')}</h3>

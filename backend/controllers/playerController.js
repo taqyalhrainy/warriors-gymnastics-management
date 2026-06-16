@@ -6,6 +6,7 @@ const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { encrypt, decrypt } = require('../utils/encryption');
 const { parseLocalizedNumber } = require('../utils/numberInput');
+const { snapshotPlayerDocument, createHistoryEntry } = require('../utils/history');
 
 const formatPlayerResponse = (player) => {
   const obj = player.toObject({ virtuals: true });
@@ -119,6 +120,13 @@ const getPlayers = async (req, res, next) => {
   }
 };
 
+const loadPlayerForHistory = (playerId) => Player.findById(playerId)
+  .populate('parentId', 'name email')
+  .populate('programId', 'name level')
+  .populate('groupId', 'name days startTime endTime')
+  .populate('groupIds', 'name days startTime endTime')
+  .populate('coachId', 'name');
+
 const createPlayer = async (req, res, next) => {
   try {
     const data = cleanPlayerPayload(sanitizeObject(req.body));
@@ -159,6 +167,15 @@ const createPlayer = async (req, res, next) => {
     const player = await Player.create(payload);
     parent.children.push(player._id);
     await parent.save();
+    const playerForHistory = await loadPlayerForHistory(player._id);
+    await createHistoryEntry({
+      entityType: 'player',
+      entityId: player._id,
+      action: 'create',
+      after: snapshotPlayerDocument(playerForHistory),
+      userId: req.user._id,
+      req
+    });
     await createAuditLog({ userId: req.user._id, action: 'add player', entity: 'Player', entityId: player._id, req });
     res.status(201).json(formatPlayerResponse(player));
   } catch (error) {
@@ -202,6 +219,8 @@ const updatePlayer = async (req, res, next) => {
     if (!player) {
       return res.status(404).json({ message: 'Player not found.' });
     }
+    const beforePlayer = await loadPlayerForHistory(id);
+    const beforeSnapshot = snapshotPlayerDocument(beforePlayer);
 
     if (updates.parentId && String(updates.parentId) !== String(player.parentId)) {
       const newParent = await Parent.findById(updates.parentId);
@@ -250,6 +269,16 @@ const updatePlayer = async (req, res, next) => {
     }
     Object.assign(player, updates);
     await player.save();
+    const afterPlayer = await loadPlayerForHistory(id);
+    await createHistoryEntry({
+      entityType: 'player',
+      entityId: player._id,
+      action: 'update',
+      before: beforeSnapshot,
+      after: snapshotPlayerDocument(afterPlayer),
+      userId: req.user._id,
+      req
+    });
     await createAuditLog({ userId: req.user._id, action: 'edit player', entity: 'Player', entityId: player._id, req });
     res.json(formatPlayerResponse(player));
   } catch (error) {
@@ -270,6 +299,8 @@ const deletePlayer = async (req, res, next) => {
     if (!player) {
       return res.status(404).json({ message: 'Player not found.' });
     }
+    const beforePlayer = await loadPlayerForHistory(id);
+    const beforeSnapshot = snapshotPlayerDocument(beforePlayer);
     await incrementGroups(getPlayerGroupIds(player), -1);
     const parent = await Parent.findById(player.parentId);
     if (parent) {
@@ -284,6 +315,16 @@ const deletePlayer = async (req, res, next) => {
     player.deletedAt = new Date();
     player.status = 'left';
     await player.save();
+    const afterPlayer = await loadPlayerForHistory(id);
+    await createHistoryEntry({
+      entityType: 'player',
+      entityId: player._id,
+      action: 'delete',
+      before: beforeSnapshot,
+      after: snapshotPlayerDocument(afterPlayer),
+      userId: req.user._id,
+      req
+    });
     await createAuditLog({ userId: req.user._id, action: 'delete player', entity: 'Player', entityId: player._id, req });
     res.json({ message: 'Player deleted successfully.' });
   } catch (error) {
