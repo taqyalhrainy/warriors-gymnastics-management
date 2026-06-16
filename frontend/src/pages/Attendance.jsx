@@ -17,6 +17,8 @@ const AttendancePage = () => {
   const [dragOverGroupId, setDragOverGroupId] = useState(null);
   const touchHoldTimeoutRef = useRef(null);
   const touchDragActiveRef = useRef(false);
+  const draggedGroupIdRef = useRef(null);
+  const dragOverGroupIdRef = useRef(null);
   const { t } = useLanguage();
 
   const isToday = (date) => {
@@ -71,11 +73,64 @@ const AttendancePage = () => {
     loadAttendanceBoard();
   }, []);
 
-  useEffect(() => () => {
-    if (touchHoldTimeoutRef.current) {
-      clearTimeout(touchHoldTimeoutRef.current);
-    }
-  }, []);
+  useEffect(() => {
+    draggedGroupIdRef.current = draggedGroupId;
+  }, [draggedGroupId]);
+
+  useEffect(() => {
+    dragOverGroupIdRef.current = dragOverGroupId;
+  }, [dragOverGroupId]);
+
+  useEffect(() => {
+    const handleWindowTouchMove = (event) => {
+      if (!touchDragActiveRef.current) {
+        return;
+      }
+
+      event.preventDefault();
+      const touch = event.touches[0];
+      const hoveredGroupId = touch ? findTouchedGroupId(touch) : null;
+      if (hoveredGroupId && hoveredGroupId !== dragOverGroupIdRef.current) {
+        setDragOverGroupId(hoveredGroupId);
+      }
+    };
+
+    const handleWindowTouchEnd = async () => {
+      clearTouchHold();
+
+      if (!touchDragActiveRef.current) {
+        return;
+      }
+
+      touchDragActiveRef.current = false;
+      const sourceGroupId = draggedGroupIdRef.current;
+      const targetGroupId = dragOverGroupIdRef.current;
+      setDraggedGroupId(null);
+      setDragOverGroupId(null);
+
+      if (sourceGroupId && targetGroupId && sourceGroupId !== targetGroupId) {
+        await commitReorder(sourceGroupId, targetGroupId);
+      }
+    };
+
+    const handleWindowTouchCancel = () => {
+      clearTouchHold();
+      touchDragActiveRef.current = false;
+      setDraggedGroupId(null);
+      setDragOverGroupId(null);
+    };
+
+    window.addEventListener('touchmove', handleWindowTouchMove, { passive: false });
+    window.addEventListener('touchend', handleWindowTouchEnd);
+    window.addEventListener('touchcancel', handleWindowTouchCancel);
+
+    return () => {
+      clearTouchHold();
+      window.removeEventListener('touchmove', handleWindowTouchMove);
+      window.removeEventListener('touchend', handleWindowTouchEnd);
+      window.removeEventListener('touchcancel', handleWindowTouchCancel);
+    };
+  }, [groupColumns]);
 
   const reorderGroups = (items, fromGroupId, toGroupId) => {
     const nextItems = [...items];
@@ -159,44 +214,6 @@ const AttendancePage = () => {
       setDragOverGroupId(groupId);
       setMessage('Drag the group to a new position');
     }, 350);
-  };
-
-  const handleTouchMove = (event) => {
-    if (!touchDragActiveRef.current) {
-      return;
-    }
-
-    event.preventDefault();
-    const touch = event.touches[0];
-    const hoveredGroupId = touch ? findTouchedGroupId(touch) : null;
-    if (hoveredGroupId && hoveredGroupId !== dragOverGroupId) {
-      setDragOverGroupId(hoveredGroupId);
-    }
-  };
-
-  const handleTouchEnd = async () => {
-    clearTouchHold();
-
-    if (!touchDragActiveRef.current) {
-      return;
-    }
-
-    touchDragActiveRef.current = false;
-    const sourceGroupId = draggedGroupId;
-    const targetGroupId = dragOverGroupId;
-    setDraggedGroupId(null);
-    setDragOverGroupId(null);
-
-    if (sourceGroupId && targetGroupId && sourceGroupId !== targetGroupId) {
-      await commitReorder(sourceGroupId, targetGroupId);
-    }
-  };
-
-  const handleTouchCancel = () => {
-    clearTouchHold();
-    touchDragActiveRef.current = false;
-    setDraggedGroupId(null);
-    setDragOverGroupId(null);
   };
 
   const handleAction = async (player, groupId, status) => {
@@ -389,9 +406,6 @@ const AttendancePage = () => {
                 <div
                   className="attendance-group-header"
                   onTouchStart={() => handleTouchStart(group._id)}
-                  onTouchMove={handleTouchMove}
-                  onTouchEnd={handleTouchEnd}
-                  onTouchCancel={handleTouchCancel}
                 >
                   <div>
                     <h2>{group.name}</h2>
