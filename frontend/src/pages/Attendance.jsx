@@ -49,6 +49,7 @@ const AttendancePage = () => {
 
   const loadAttendanceBoard = async (options = {}) => {
     const force = Boolean(options.force);
+    const silent = Boolean(options.silent);
 
     if (!force && attendanceBoardCache && (Date.now() - attendanceBoardCacheTimestamp) < ATTENDANCE_BOARD_CACHE_TTL_MS) {
       setGroupColumns(attendanceBoardCache);
@@ -57,7 +58,9 @@ const AttendancePage = () => {
     }
 
     try {
-      setIsLoading(true);
+      if (!silent) {
+        setIsLoading(true);
+      }
       const groups = await fetchGroups();
       const groupsWithPlayers = await Promise.all(
         groups.map(async (group) => {
@@ -93,10 +96,12 @@ const AttendancePage = () => {
       setGroupColumns(groupsWithPlayers);
       return groupsWithPlayers;
     } catch (err) {
-      setMessage(err.response?.data?.message || 'Unable to load attendance board');
+        setMessage(err.response?.data?.message || 'Unable to load attendance board');
       return [];
     } finally {
-      setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -264,16 +269,20 @@ const AttendancePage = () => {
       return;
     }
 
+    const previousGroups = groupColumns;
     const reorderedGroups = reorderGroups(groupColumns, fromGroupId, targetGroupId);
     setGroupColumns(reorderedGroups);
+    attendanceBoardCache = reorderedGroups;
+    attendanceBoardCacheTimestamp = Date.now();
 
     try {
       await reorderGroupsRequest(reorderedGroups.map((group) => group._id));
       setMessage('Group order updated');
-      await loadAttendanceBoard({ force: true });
     } catch (err) {
+      setGroupColumns(previousGroups);
+      attendanceBoardCache = previousGroups;
+      attendanceBoardCacheTimestamp = Date.now();
       setMessage(err.response?.data?.message || 'Unable to update group order');
-      await loadAttendanceBoard({ force: true });
     }
   };
 
@@ -727,7 +736,7 @@ const AttendancePage = () => {
             <span>Search</span>
             <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search students or groups..." />
           </label>
-          <button type="button" className="btn-secondary" onClick={() => loadAttendanceBoard({ force: true })}>{t('refresh')}</button>
+          <button type="button" className="btn-secondary" onClick={() => loadAttendanceBoard({ force: true, silent: true })}>{t('refresh')}</button>
         </div>
 
         {isLoading ? (
