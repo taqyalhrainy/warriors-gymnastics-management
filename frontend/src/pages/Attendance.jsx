@@ -37,7 +37,7 @@ const AttendancePage = () => {
   const [draggedGroupId, setDraggedGroupId] = useState(null);
   const [dragOverGroupId, setDragOverGroupId] = useState(null);
   const [touchDragPreview, setTouchDragPreview] = useState(null);
-  const [isTouchDevice, setIsTouchDevice] = useState(false);
+  const [isCoarsePointerDevice, setIsCoarsePointerDevice] = useState(false);
   const attendanceBoardRef = useRef(null);
   const touchHoldTimeoutRef = useRef(null);
   const draggedGroupIdRef = useRef(null);
@@ -118,9 +118,9 @@ const AttendancePage = () => {
       return undefined;
     }
 
-    const mediaQuery = window.matchMedia('(pointer: coarse)');
+    const mediaQuery = window.matchMedia('(hover: none) and (pointer: coarse)');
     const updateTouchDeviceState = () => {
-      setIsTouchDevice(mediaQuery.matches || navigator.maxTouchPoints > 0);
+      setIsCoarsePointerDevice(mediaQuery.matches);
     };
 
     updateTouchDeviceState();
@@ -330,7 +330,7 @@ const AttendancePage = () => {
   };
 
   const getGroupStyle = (group) => {
-    if (!isTouchDevice || draggedGroupId !== group._id || !touchDragPreview) {
+    if (!isCoarsePointerDevice || draggedGroupId !== group._id || !touchDragPreview) {
       return { '--group-color': group.color };
     }
 
@@ -742,7 +742,7 @@ const AttendancePage = () => {
               >
                 <div
                   className="attendance-group-header"
-                  draggable={!isTouchDevice}
+                  draggable
                   onDragStart={(event) => handleDragStart(event, group._id)}
                   onDragEnd={handleDragEnd}
                   onPointerDown={(event) => handlePointerDown(event, group._id)}
