@@ -25,6 +25,15 @@ const formatTime = (date) => {
 
 const formatMoney = (value) => Number(value || 0).toLocaleString('en-US');
 
+const getDateInputValue = (date = new Date()) => {
+  const value = new Date(date);
+  if (Number.isNaN(value.getTime())) return '';
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const getTransactionLabel = (payment) => {
   if (Number(payment.remainingAmount || 0) <= 0) return 'Full payment';
   return 'Partial payment';
@@ -41,6 +50,11 @@ const getPaymentMonthKey = (date) => {
   if (!date) return 'undated';
   const value = new Date(date);
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`;
+};
+
+const getPaymentDayKey = (date) => {
+  if (!date) return 'undated';
+  return getDateInputValue(date);
 };
 
 const getMemberName = (payment) => payment.playerId?.fullName || payment.playerNameSnapshot || '-';
@@ -63,12 +77,13 @@ const getPlayerGroups = (player) => {
 const PaymentsPage = () => {
   const [payments, setPayments] = useState([]);
   const [players, setPlayers] = useState([]);
-  const [form, setForm] = useState({ playerId: '', paidAmount: 0, paymentMethod: 'Cash', receiptImage: '', notes: '' });
+  const [form, setForm] = useState({ playerId: '', paidAmount: 0, paymentMethod: 'Cash', paymentDate: getDateInputValue(), receiptImage: '', notes: '' });
   const [editingPaymentId, setEditingPaymentId] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeView, setActiveView] = useState('all');
   const [selectedMonth, setSelectedMonth] = useState(getPaymentMonthKey(new Date()));
+  const [selectedDay, setSelectedDay] = useState(getDateInputValue());
   const [searchQuery, setSearchQuery] = useState('');
   const [playerSearch, setPlayerSearch] = useState('');
   const { t } = useLanguage();
@@ -99,6 +114,12 @@ const PaymentsPage = () => {
     return months.sort().reverse();
   }, [payments, selectedMonth]);
 
+  const dayOptions = useMemo(() => {
+    const days = [...new Set(payments.map((payment) => getPaymentDayKey(payment.paymentDate)).filter((key) => key !== 'undated'))];
+    if (!days.includes(selectedDay)) days.push(selectedDay);
+    return days.sort().reverse();
+  }, [payments, selectedDay]);
+
   const filteredPlayers = useMemo(() => {
     const query = playerSearch.trim().toLowerCase();
     if (!query) return players;
@@ -118,8 +139,11 @@ const PaymentsPage = () => {
     if (activeView === 'month') {
       return payments.filter((payment) => getPaymentMonthKey(payment.paymentDate) === selectedMonth);
     }
+    if (activeView === 'day') {
+      return payments.filter((payment) => getPaymentDayKey(payment.paymentDate) === selectedDay);
+    }
     return payments;
-  }, [payments, activeView, selectedMonth]);
+  }, [payments, activeView, selectedMonth, selectedDay]);
 
   const searchedPayments = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -197,7 +221,7 @@ const PaymentsPage = () => {
       } else {
         await createPayment(payload);
       }
-      setForm({ playerId: '', paidAmount: 0, paymentMethod: 'Cash', receiptImage: '', notes: '' });
+      setForm({ playerId: '', paidAmount: 0, paymentMethod: 'Cash', paymentDate: getDateInputValue(), receiptImage: '', notes: '' });
       setEditingPaymentId('');
       await loadPayments();
     } catch (err) {
@@ -213,6 +237,7 @@ const PaymentsPage = () => {
       playerId: payment.playerId?._id || payment.playerId || '',
       paidAmount: String(payment.paidAmount ?? 0),
       paymentMethod: payment.paymentMethod || 'Cash',
+      paymentDate: getDateInputValue(payment.paymentDate),
       receiptImage: payment.receiptImage || '',
       notes: payment.notes || ''
     });
@@ -222,7 +247,7 @@ const PaymentsPage = () => {
 
   const handleCancelEdit = () => {
     setEditingPaymentId('');
-    setForm({ playerId: '', paidAmount: 0, paymentMethod: 'Cash', receiptImage: '', notes: '' });
+    setForm({ playerId: '', paidAmount: 0, paymentMethod: 'Cash', paymentDate: getDateInputValue(), receiptImage: '', notes: '' });
     setPlayerSearch('');
   };
 
@@ -248,6 +273,7 @@ const PaymentsPage = () => {
     { id: 'calendar', label: 'Payment Calendar' },
     { id: 'status', label: 'Payment Status' },
     { id: 'month', label: 'By Month' },
+    { id: 'day', label: 'By Day' },
     { id: 'thisMonth', label: 'This Month' }
   ];
 
@@ -339,6 +365,16 @@ const PaymentsPage = () => {
               </label>
 
               <label>
+                <span>Payment Date</span>
+                <input
+                  type="date"
+                  value={form.paymentDate}
+                  onChange={(e) => setForm({ ...form, paymentDate: e.target.value || getDateInputValue() })}
+                  required
+                />
+              </label>
+
+              <label>
                 <span>{t('receiptImageUrl')}</span>
                 <input value={form.receiptImage} onChange={(e) => setForm({ ...form, receiptImage: e.target.value })} />
               </label>
@@ -375,6 +411,11 @@ const PaymentsPage = () => {
                 {activeView === 'month' && (
                   <select value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}>
                     {monthOptions.map((month) => <option key={month} value={month}>{month}</option>)}
+                  </select>
+                )}
+                {activeView === 'day' && (
+                  <select value={selectedDay} onChange={(event) => setSelectedDay(event.target.value)}>
+                    {dayOptions.map((day) => <option key={day} value={day}>{day}</option>)}
                   </select>
                 )}
               </div>
@@ -422,9 +463,9 @@ const PaymentsPage = () => {
               </div>
             )}
 
-            {(activeView === 'month' || activeView === 'thisMonth') && (
+            {(activeView === 'month' || activeView === 'day' || activeView === 'thisMonth') && (
               <div className="payment-view-panel payment-month-banner">
-                <span>{activeView === 'thisMonth' ? 'Showing this month' : `Showing ${selectedMonth}`}</span>
+                <span>{activeView === 'thisMonth' ? 'Showing this month' : activeView === 'day' ? `Showing ${selectedDay}` : `Showing ${selectedMonth}`}</span>
                 <strong>{searchedPayments.length} records / {formatMoney(searchedPayments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0))}</strong>
               </div>
             )}

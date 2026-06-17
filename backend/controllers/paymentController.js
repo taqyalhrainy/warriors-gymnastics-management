@@ -48,6 +48,17 @@ const recalculatePlayerPayments = async (playerId) => {
   }
 };
 
+const parsePaymentDate = (value) => {
+  if (!value) return new Date();
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    const error = new Error('Invalid payment date.');
+    error.statusCode = 400;
+    throw error;
+  }
+  return parsed;
+};
+
 const getPayments = async (req, res, next) => {
   try {
     const filter = {};
@@ -64,7 +75,7 @@ const getPayments = async (req, res, next) => {
 const createPayment = async (req, res, next) => {
   try {
     const payload = sanitizeObject(req.body);
-    const { playerId, paidAmount, paymentMethod, receiptImage, notes } = payload;
+    const { playerId, paidAmount, paymentMethod, paymentDate, receiptImage, notes } = payload;
     if (!validateObjectId(playerId) || paidAmount == null) {
       return res.status(400).json({ message: 'Payment requires player and paid amount.' });
     }
@@ -92,6 +103,7 @@ const createPayment = async (req, res, next) => {
       paidAmount: parseLocalizedNumber(paidAmount),
       remainingAmount,
       paymentMethod,
+      paymentDate: parsePaymentDate(paymentDate),
       receiptImage: receiptImage || '',
       notesEncrypted: encrypt(notes || ''),
       createdBy: req.user._id
@@ -143,6 +155,9 @@ const updatePayment = async (req, res, next) => {
     }
     if (payload.paymentMethod) {
       payment.paymentMethod = payload.paymentMethod;
+    }
+    if (typeof payload.paymentDate !== 'undefined') {
+      payment.paymentDate = parsePaymentDate(payload.paymentDate);
     }
     if (typeof payload.receiptImage !== 'undefined') {
       payment.receiptImage = payload.receiptImage || '';
