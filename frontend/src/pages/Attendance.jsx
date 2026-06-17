@@ -246,6 +246,8 @@ const AttendancePage = () => {
   };
 
   const handleDragStart = (event, groupId) => {
+    draggedGroupIdRef.current = groupId;
+    dragOverGroupIdRef.current = groupId;
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('text/plain', groupId);
@@ -259,7 +261,9 @@ const AttendancePage = () => {
     if (event.dataTransfer) {
       event.dataTransfer.dropEffect = 'move';
     }
+    autoScrollBoard(event.clientX);
     if (dragOverGroupId !== groupId) {
+      dragOverGroupIdRef.current = groupId;
       setDragOverGroupId(groupId);
     }
   };
@@ -282,20 +286,28 @@ const AttendancePage = () => {
     }
   };
 
-  const handleDrop = async (targetGroupId) => {
-    if (!draggedGroupId || draggedGroupId === targetGroupId) {
+  const handleDrop = async (event, targetGroupId) => {
+    event.preventDefault();
+    const sourceGroupId = event.dataTransfer?.getData('text/plain') || draggedGroupIdRef.current || draggedGroupId;
+
+    if (!sourceGroupId || sourceGroupId === targetGroupId) {
+      draggedGroupIdRef.current = null;
+      dragOverGroupIdRef.current = null;
       setDraggedGroupId(null);
       setDragOverGroupId(null);
       return;
     }
 
-    const sourceGroupId = draggedGroupId;
+    draggedGroupIdRef.current = null;
+    dragOverGroupIdRef.current = null;
     setDraggedGroupId(null);
     setDragOverGroupId(null);
     await commitReorder(sourceGroupId, targetGroupId);
   };
 
   const handleDragEnd = () => {
+    draggedGroupIdRef.current = null;
+    dragOverGroupIdRef.current = null;
     setDraggedGroupId(null);
     setDragOverGroupId(null);
   };
@@ -738,7 +750,7 @@ const AttendancePage = () => {
                 data-group-id={group._id}
                 style={getGroupStyle(group)}
                 onDragOver={(event) => handleDragOver(event, group._id)}
-                onDrop={() => handleDrop(group._id)}
+                onDrop={(event) => handleDrop(event, group._id)}
               >
                 <div
                   className="attendance-group-header"
