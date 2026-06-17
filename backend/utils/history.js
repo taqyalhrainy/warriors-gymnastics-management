@@ -1,5 +1,6 @@
 const Player = require('../models/Player');
 const Payment = require('../models/Payment');
+const Attendance = require('../models/Attendance');
 const HistoryEntry = require('../models/HistoryEntry');
 const { decrypt } = require('./encryption');
 
@@ -181,7 +182,44 @@ const getHistoryAvailableSince = async (entityType) => {
   return entry?.changedAt || null;
 };
 
+const loadAttendanceForDate = async (asOf) => {
+  const dayKey = new Date(asOf).toISOString().split('T')[0];
+  const startOfDay = new Date(`${dayKey}T00:00:00.000Z`);
+  const endOfDay = new Date(`${dayKey}T23:59:59.999Z`);
+
+  const attendance = await Attendance.find({
+    date: { $gte: startOfDay, $lte: endOfDay }
+  })
+    .sort({ date: -1, _id: -1 })
+    .populate({
+      path: 'playerId',
+      select: 'fullName parentId packageName packageClasses packageHours',
+      populate: { path: 'parentId', select: 'name' }
+    })
+    .populate('groupId', 'name days startTime endTime')
+    .lean();
+
+  return attendance.map((record) => ({
+    _id: normalizeId(record._id),
+    playerId: normalizeId(record.playerId),
+    playerName: record.playerId?.fullName || '',
+    parentName: record.playerId?.parentId?.name || '',
+    groupId: normalizeId(record.groupId),
+    groupName: record.groupId?.name || '',
+    packageName: record.playerId?.packageName || '',
+    packageClasses: Number(record.playerId?.packageClasses || 0),
+    packageHours: Number(record.playerId?.packageHours || 0),
+    date: record.date || null,
+    checkInTime: record.checkInTime || null,
+    status: record.status || ''
+  }));
+};
+
 const restoreStateAt = async (entityType, asOf) => {
+  if (entityType === 'attendance') {
+    return loadAttendanceForDate(asOf);
+  }
+
   const baseState = entityType === 'player'
     ? await loadCurrentPlayerSnapshots()
     : await loadCurrentPaymentSnapshots();
@@ -215,7 +253,10 @@ const restoreStateAt = async (entityType, asOf) => {
 
   if (entityType === 'player') {
     return rows
-      .filter((player) => !player.isDeleted)
+      .filter((player) => {
+        const createdAt = player.createdAt ? new Date(player.createdAt) : null;
+        return !player.isDeleted && (!createdAt || createdAt <= asOf);
+      })
       .sort((a, b) => {
         const createdAtDiff = new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
         if (createdAtDiff !== 0) {
@@ -258,6 +299,7 @@ module.exports = {
   snapshotPaymentDocument,
   createHistoryEntry,
   restoreStateAt,
+  loadAttendanceForDate,
   ensureHistoryBaseline,
   ensureHistoryBaselines,
   getHistoryAvailableSince

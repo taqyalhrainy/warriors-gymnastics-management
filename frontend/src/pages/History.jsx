@@ -53,7 +53,7 @@ const HistoryPage = () => {
       setRows(result.rows || []);
       setRequestedAt(result.asOf);
       setAvailableSince(result.availableSince || '');
-      setMessage(`Loaded ${result.count || 0} ${entityType === 'player' ? 'players' : 'payments'} from the selected moment.`);
+      setMessage(`Loaded ${result.count || 0} ${entityType === 'player' ? 'players' : entityType === 'payment' ? 'payments' : 'attendance records'} from the selected moment.`);
     } catch (error) {
       setRows([]);
       setRequestedAt('');
@@ -80,10 +80,13 @@ const HistoryPage = () => {
       : [
         row.playerName,
         row.parentName,
+        row.groupName,
         row.packageName,
         row.paymentMethod,
         row.notes,
-        row.paymentDate
+        row.paymentDate,
+        row.status,
+        row.date
       ];
 
     return haystack.join(' ').toLowerCase().includes(search.trim().toLowerCase());
@@ -107,6 +110,7 @@ const HistoryPage = () => {
               <select value={entityType} onChange={(event) => setEntityType(event.target.value)}>
                 <option value="player">{t('players')}</option>
                 <option value="payment">{t('payments')}</option>
+                <option value="attendance">Attendance</option>
               </select>
             </label>
 
@@ -148,7 +152,7 @@ const HistoryPage = () => {
 
         <div className="table-card">
           <div className="table-toolbar">
-            <h2>{entityType === 'player' ? 'Player Snapshot' : 'Payment Snapshot'}</h2>
+            <h2>{entityType === 'player' ? 'Player Snapshot' : entityType === 'payment' ? 'Payment Snapshot' : 'Attendance Snapshot'}</h2>
             <label className="table-search">
               <span>Search</span>
               <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search snapshot..." />
@@ -187,7 +191,7 @@ const HistoryPage = () => {
                   )) : <tr><td colSpan="9">No players found for this snapshot.</td></tr>}
                 </tbody>
               </>
-            ) : (
+            ) : entityType === 'payment' ? (
               <>
                 <thead>
                   <tr>
@@ -216,6 +220,37 @@ const HistoryPage = () => {
                       <td>{row.notes || '-'}</td>
                     </tr>
                   )) : <tr><td colSpan="9">No payments found for this snapshot.</td></tr>}
+                </tbody>
+              </>
+            ) : (
+              <>
+                <thead>
+                  <tr>
+                    <th>{t('player')}</th>
+                    <th>{t('parent')}</th>
+                    <th>{t('group')}</th>
+                    <th>{t('package')}</th>
+                    <th>{t('classes')}</th>
+                    <th>{t('hours')}</th>
+                    <th>{t('status')}</th>
+                    <th>{t('date')}</th>
+                    <th>{t('time')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRows.length ? filteredRows.map((row) => (
+                    <tr key={row._id}>
+                      <td>{row.playerName || t('unknown')}</td>
+                      <td>{row.parentName || t('unknown')}</td>
+                      <td>{row.groupName || t('unassigned')}</td>
+                      <td>{row.packageName || t('notSet')}</td>
+                      <td>{row.packageClasses ?? 0}</td>
+                      <td>{row.packageHours ?? 0}</td>
+                      <td>{row.status || t('notSet')}</td>
+                      <td>{row.date ? new Date(row.date).toLocaleDateString() : '-'}</td>
+                      <td>{row.checkInTime ? new Date(row.checkInTime).toLocaleTimeString() : '-'}</td>
+                    </tr>
+                  )) : <tr><td colSpan="9">No attendance found for this snapshot.</td></tr>}
                 </tbody>
               </>
             )}

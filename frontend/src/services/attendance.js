@@ -25,7 +25,7 @@ export const fetchAttendanceByPlayer = async (playerId) => {
   return response.data;
 };
 
-export const fetchTodayAttendance = async () => {
-  const response = await api.get('/attendance/today');
+export const fetchTodayAttendance = async (params) => {
+  const response = await api.get('/attendance/today', { params });
   return response.data;
 };

@@ -2,16 +2,25 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import { getPlayer } from '../services/players.js';
+import { fetchAttendanceByPlayer } from '../services/attendance.js';
 import { formatCurrency } from '../utils/format.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
 const PlayerProfilePage = () => {
   const { id } = useParams();
   const [player, setPlayer] = useState(null);
+  const [attendanceHistory, setAttendanceHistory] = useState([]);
   const { t } = useLanguage();
 
   useEffect(() => {
-    getPlayer(id).then(setPlayer).catch(console.error);
+    Promise.all([getPlayer(id), fetchAttendanceByPlayer(id)])
+      .then(([playerData, attendanceData]) => {
+        const threeMonthsAgo = new Date();
+        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+        setPlayer(playerData);
+        setAttendanceHistory(attendanceData.filter((record) => new Date(record.date) >= threeMonthsAgo));
+      })
+      .catch(console.error);
   }, [id]);
 
   const getPlayerGroups = (value) => {
@@ -40,6 +49,18 @@ const PlayerProfilePage = () => {
             <div><strong>{t('hours')}:</strong> {player.packageHours || t('notSet')}</div>
             <div><strong>{t('payment')}:</strong> {formatCurrency(player.payment || 0)}</div>
             <div><strong>{t('note')}:</strong> {player.note || t('notSet')}</div>
+            <div className="profile-attendance-history">
+              <h2>Attendance History</h2>
+              <div className="student-history-list">
+                {attendanceHistory.length ? attendanceHistory.map((record) => (
+                  <div className="student-history-row" key={record._id}>
+                    <span>{new Date(record.date).toLocaleDateString()}</span>
+                    <strong>{record.status}</strong>
+                    <span>{record.checkInTime ? new Date(record.checkInTime).toLocaleTimeString() : '-'}</span>
+                  </div>
+                )) : <p className="empty-state">No attendance history found for the last 3 months.</p>}
+              </div>
+            </div>
           </div>
         ) : (
           <p>{t('loadingPlayer')}</p>

@@ -4,8 +4,8 @@ const getHistorySnapshot = async (req, res, next) => {
   try {
     const { entityType, at } = req.query;
 
-    if (!['player', 'payment'].includes(entityType)) {
-      return res.status(400).json({ message: 'History requires entityType=player or entityType=payment.' });
+    if (!['player', 'payment', 'attendance'].includes(entityType)) {
+      return res.status(400).json({ message: 'History requires entityType=player, entityType=payment, or entityType=attendance.' });
     }
 
     if (!at) {

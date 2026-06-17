@@ -25,6 +25,7 @@ const User = require('./models/User');
 const Program = require('./models/Program');
 const TrainingGroup = require('./models/TrainingGroup');
 const { ensureHistoryBaselines } = require('./utils/history');
+const { cleanupOldAttendanceData } = require('./utils/retention');
 const bcrypt = require('bcryptjs');
 
 const normalizeGroupName = (value) => String(value || '')
@@ -151,6 +152,18 @@ const startServer = async () => {
   await connectDB();
   await initializeDefaultData();
   await ensureHistoryBaselines();
+  const cleanupResult = await cleanupOldAttendanceData();
+  console.log(`Attendance retention cleanup removed ${cleanupResult.deletedAttendance} attendance records and ${cleanupResult.deletedNotifications} attendance notifications.`);
+  setInterval(async () => {
+    try {
+      const result = await cleanupOldAttendanceData();
+      if (result.deletedAttendance || result.deletedNotifications) {
+        console.log(`Attendance retention cleanup removed ${result.deletedAttendance} attendance records and ${result.deletedNotifications} attendance notifications.`);
+      }
+    } catch (error) {
+      console.error('Attendance retention cleanup failed:', error.message);
+    }
+  }, 24 * 60 * 60 * 1000);
   const PORT = process.env.PORT || 5000;
   app.listen(PORT, () => {
     console.log(`Backend running on port ${PORT}`);

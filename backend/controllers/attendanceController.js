@@ -5,6 +5,30 @@ const Notification = require('../models/Notification');
 const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 
+const toDateKey = (date = new Date()) => new Date(date).toISOString().split('T')[0];
+
+const getAttendanceDateOnly = (value) => {
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return new Date(`${value}T00:00:00.000Z`);
+  }
+  return new Date(`${toDateKey()}T00:00:00.000Z`);
+};
+
+const getAttendanceRangeStart = () => {
+  const start = new Date();
+  start.setMonth(start.getMonth() - 3);
+  start.setHours(0, 0, 0, 0);
+  return start;
+};
+
+const validateAttendanceDateInRange = (dateOnly) => {
+  if (dateOnly < getAttendanceRangeStart()) {
+    const error = new Error('Attendance date is out of range. Maximum range is 3 months.');
+    error.statusCode = 400;
+    throw error;
+  }
+};
+
 const markPresent = async (req, res, next) => {
   try {
     const { playerId, groupId } = sanitizeObject(req.body);
@@ -93,13 +117,15 @@ const markAbsent = async (req, res, next) => {
 
 const updateTodayAttendance = async (req, res, next) => {
   try {
-    const { playerId, groupId, status } = sanitizeObject(req.body);
+    const { playerId, groupId, status, date } = sanitizeObject(req.body);
     if (!validateObjectId(playerId) || !validateObjectId(groupId) || !['present', 'absent'].includes(status)) {
       return res.status(400).json({ message: 'Valid player, group, and attendance status are required.' });
     }
 
     const today = new Date();
-    const dateOnly = new Date(today.toISOString().split('T')[0]);
+    const dateOnly = getAttendanceDateOnly(date);
+    validateAttendanceDateInRange(dateOnly);
+    const isCurrentDate = toDateKey(dateOnly) === toDateKey(today);
     const player = await Player.findById(playerId).populate({ path: 'parentId', populate: { path: 'userId', select: '_id' } });
     if (!player || player.isDeleted) {
       return res.status(404).json({ message: 'Player not found.' });
@@ -113,7 +139,7 @@ const updateTodayAttendance = async (req, res, next) => {
         playerId,
         groupId,
         date: dateOnly,
-        checkInTime: status === 'present' ? today : undefined,
+        checkInTime: status === 'present' ? (isCurrentDate ? today : dateOnly) : undefined,
         status,
         markedBy: req.user._id
       });
@@ -121,7 +147,7 @@ const updateTodayAttendance = async (req, res, next) => {
       attendance.groupId = groupId;
       attendance.status = status;
       attendance.markedBy = req.user._id;
-      attendance.checkInTime = status === 'present' ? (attendance.checkInTime || today) : undefined;
+      attendance.checkInTime = status === 'present' ? (attendance.checkInTime || (isCurrentDate ? today : dateOnly)) : undefined;
       await attendance.save();
     }
 
@@ -135,7 +161,7 @@ const updateTodayAttendance = async (req, res, next) => {
         subscription.usedSessions = Math.max(0, subscription.usedSessions - 1);
         subscription.remainingSessions += 1;
       }
-      subscription.lastAttendanceDate = status === 'present' ? today : subscription.lastAttendanceDate;
+      subscription.lastAttendanceDate = status === 'present' ? dateOnly : subscription.lastAttendanceDate;
       if (subscription.endDate <= today || subscription.remainingSessions === 0) {
         subscription.status = 'expired';
       } else if (subscription.remainingSessions <= 2) {
@@ -146,7 +172,7 @@ const updateTodayAttendance = async (req, res, next) => {
       await subscription.save();
     }
 
-    if (status === 'present' && previousStatus !== 'present' && player.parentId?.userId) {
+    if (isCurrentDate && status === 'present' && previousStatus !== 'present' && player.parentId?.userId) {
       const attendanceTime = today.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
       await Notification.create({
         recipientUserId: player.parentId.userId._id,
@@ -167,13 +193,14 @@ const updateTodayAttendance = async (req, res, next) => {
 
 const cancelTodayAttendance = async (req, res, next) => {
   try {
-    const { playerId } = sanitizeObject(req.body);
+    const { playerId, date } = sanitizeObject(req.body);
     if (!validateObjectId(playerId)) {
       return res.status(400).json({ message: 'Valid player ID is required.' });
     }
 
     const today = new Date();
-    const dateOnly = new Date(today.toISOString().split('T')[0]);
+    const dateOnly = getAttendanceDateOnly(date);
+    validateAttendanceDateInRange(dateOnly);
     const attendance = await Attendance.findOne({ playerId, date: dateOnly });
     if (!attendance) {
       return res.status(404).json({ message: 'No attendance record to cancel today.' });
@@ -209,7 +236,10 @@ const getAttendanceByPlayer = async (req, res, next) => {
     if (!validateObjectId(playerId)) {
       return res.status(400).json({ message: 'Invalid player ID.' });
     }
-    const attendance = await Attendance.find({ playerId }).sort({ date: -1, _id: -1 });
+    const attendance = await Attendance.find({
+      playerId,
+      date: { $gte: getAttendanceRangeStart() }
+    }).sort({ date: -1, _id: -1 });
     res.json(attendance);
   } catch (error) {
     next(error);
@@ -218,8 +248,8 @@ const getAttendanceByPlayer = async (req, res, next) => {
 
 const getTodayAttendance = async (req, res, next) => {
   try {
-    const today = new Date();
-    const dateOnly = new Date(today.toISOString().split('T')[0]);
+    const dateOnly = getAttendanceDateOnly(req.query.date);
+    validateAttendanceDateInRange(dateOnly);
     const attendance = await Attendance.find({ date: dateOnly }).sort({ _id: -1 });
     res.json(attendance);
   } catch (error) {

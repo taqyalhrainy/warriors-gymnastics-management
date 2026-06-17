@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
-import { updateTodayAttendance, cancelTodayAttendance, fetchTodayAttendance } from '../services/attendance.js';
+import { updateTodayAttendance, cancelTodayAttendance, fetchAttendanceByPlayer, fetchTodayAttendance } from '../services/attendance.js';
 import { fetchGroups, fetchGroupPlayers, reorderGroups as reorderGroupsRequest } from '../services/groups.js';
+import { fetchHistorySnapshot } from '../services/history.js';
 import { fetchParents } from '../services/parents.js';
 import { getPlayer, updatePlayer } from '../services/players.js';
 import { fetchPackageOptions } from '../services/packageOptions.js';
@@ -11,10 +12,86 @@ import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
 const ATTENDANCE_BOARD_CACHE_TTL_MS = 5 * 60 * 1000;
 let attendanceBoardCache = null;
 let attendanceBoardCacheTimestamp = 0;
+let attendanceBoardCacheDate = '';
+
+const getLocalDateValue = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getAttendanceRangeStartValue = () => {
+  const date = new Date();
+  date.setMonth(date.getMonth() - 3);
+  return getLocalDateValue(date);
+};
+
+const getHistorySnapshotIsoForDate = (dateValue) => new Date(`${dateValue}T23:59:59.999`).toISOString();
+
+const getSnapshotGroups = (player) => {
+  if (Array.isArray(player?.groupIds) && player.groupIds.length) {
+    return player.groupIds
+      .map((group) => ({
+        _id: group?._id || group,
+        name: group?.name || ''
+      }))
+      .filter((group) => group._id);
+  }
+
+  if (player?.groupId) {
+    return [{
+      _id: player.groupId,
+      name: player.groupName || ''
+    }];
+  }
+
+  return [];
+};
+
+const mapSnapshotPlayerToAttendancePlayer = (player) => {
+  const groups = getSnapshotGroups(player);
+  const firstGroup = groups[0] || null;
+
+  return {
+    _id: player._id,
+    fullName: player.fullName || '',
+    dateOfBirth: player.dateOfBirth || null,
+    parentId: (player.parentId || player.parentName) ? {
+      _id: player.parentId || '',
+      name: player.parentName || ''
+    } : null,
+    parentPhone: player.parentPhone || '',
+    programId: player.programId ? {
+      _id: player.programId,
+      name: player.programName || ''
+    } : null,
+    coachId: player.coachId ? {
+      _id: player.coachId,
+      name: player.coachName || ''
+    } : null,
+    subscriptionId: player.subscriptionId || '',
+    groupId: firstGroup ? { ...firstGroup } : null,
+    groupIds: groups.map((group) => ({ ...group })),
+    level: player.level || '',
+    startDate: player.startDate || null,
+    endDate: player.endDate || null,
+    packageName: player.packageName || '',
+    packageClasses: Number(player.packageClasses || 0),
+    packageHours: Number(player.packageHours || 0),
+    payment: Number(player.payment || 0),
+    note: player.note || '',
+    status: player.status || '',
+    profileImage: player.profileImage || '',
+    createdAt: player.createdAt || null
+  };
+};
 
 const AttendancePage = () => {
   const [groupColumns, setGroupColumns] = useState([]);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
+  const [selectedPlayerAttendanceHistory, setSelectedPlayerAttendanceHistory] = useState([]);
+  const [showSelectedPlayerAttendanceHistory, setShowSelectedPlayerAttendanceHistory] = useState(false);
   const [isEditingSelectedPlayer, setIsEditingSelectedPlayer] = useState(false);
   const [selectedPlayerForm, setSelectedPlayerForm] = useState(null);
   const [editParents, setEditParents] = useState([]);
@@ -25,6 +102,7 @@ const AttendancePage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [hoveredSummaryGroup, setHoveredSummaryGroup] = useState(null);
   const [search, setSearch] = useState('');
+  const [selectedAttendanceDate, setSelectedAttendanceDate] = useState(() => getLocalDateValue());
   const [draggedGroupId, setDraggedGroupId] = useState(null);
   const [dragOverGroupId, setDragOverGroupId] = useState(null);
   const [touchDragPreview, setTouchDragPreview] = useState(null);
@@ -38,7 +116,15 @@ const AttendancePage = () => {
   const dragStartRectRef = useRef(null);
   const pointerHoldGroupIdRef = useRef(null);
   const pointerStartPointRef = useRef(null);
+  const attendanceDateInputRef = useRef(null);
   const { t } = useLanguage();
+  const todayDateValue = getLocalDateValue();
+  const attendanceRangeStartValue = getAttendanceRangeStartValue();
+  const isViewingToday = selectedAttendanceDate === todayDateValue;
+  const isAttendanceDateOutOfRange = selectedAttendanceDate < attendanceRangeStartValue || selectedAttendanceDate > todayDateValue;
+  const selectedAttendanceDateLabel = isViewingToday
+    ? 'Today'
+    : new Date(`${selectedAttendanceDate}T00:00:00`).toLocaleDateString();
 
   const applyTodayRecordsToGroups = (groups, todayRecords) => {
     const recordsByPlayerId = new Map(
@@ -62,11 +148,75 @@ const AttendancePage = () => {
     });
   };
 
+  const buildHistoricalGroups = (groups, playerSnapshots, snapshotDate) => {
+    const groupsById = new Map();
+    const fallbackGroupIds = [];
+    const snapshotTime = new Date(`${snapshotDate}T23:59:59.999`).getTime();
+
+    groups.forEach((group) => {
+      groupsById.set(String(group._id), {
+        ...group,
+        players: [],
+        currentCount: 0,
+        markedCount: 0,
+        presentCount: 0,
+        color: group.color || '#2563eb'
+      });
+    });
+
+    playerSnapshots
+      .filter((player) => {
+        const createdAtTime = player.createdAt ? new Date(player.createdAt).getTime() : null;
+        return !player.isDeleted && (!createdAtTime || createdAtTime <= snapshotTime);
+      })
+      .forEach((player) => {
+        const playerGroups = getSnapshotGroups(player);
+        if (!playerGroups.length) {
+          return;
+        }
+
+        const attendancePlayer = mapSnapshotPlayerToAttendancePlayer(player);
+        playerGroups.forEach((snapshotGroup) => {
+          const groupId = String(snapshotGroup._id);
+          if (!groupsById.has(groupId)) {
+            fallbackGroupIds.push(groupId);
+            groupsById.set(groupId, {
+              _id: groupId,
+              name: snapshotGroup.name || 'Historical group',
+              days: [],
+              startTime: '',
+              endTime: '',
+              maxCapacity: '-',
+              currentCount: 0,
+              color: '#64748b',
+              players: [],
+              markedCount: 0,
+              presentCount: 0
+            });
+          }
+
+          const targetGroup = groupsById.get(groupId);
+          targetGroup.players.push({
+            ...attendancePlayer,
+            groupId: { _id: groupId, name: targetGroup.name }
+          });
+          targetGroup.currentCount = targetGroup.players.length;
+        });
+      });
+
+    return [
+      ...groups.map((group) => groupsById.get(String(group._id))),
+      ...fallbackGroupIds.map((groupId) => groupsById.get(groupId))
+    ].filter(Boolean);
+  };
+
   const loadAttendanceBoard = async (options = {}) => {
     const force = Boolean(options.force);
     const silent = Boolean(options.silent);
+    const date = options.date || selectedAttendanceDate;
+    const viewingToday = date === todayDateValue;
 
-    if (!force && attendanceBoardCache && (Date.now() - attendanceBoardCacheTimestamp) < ATTENDANCE_BOARD_CACHE_TTL_MS) {
+    if (!force && attendanceBoardCache && attendanceBoardCacheDate === date && (Date.now() - attendanceBoardCacheTimestamp) < ATTENDANCE_BOARD_CACHE_TTL_MS) {
       setGroupColumns(attendanceBoardCache);
       setIsLoading(false);
       return attendanceBoardCache;
@@ -78,26 +228,36 @@ const AttendancePage = () => {
       }
       const [groups, todayRecords] = await Promise.all([
         fetchGroups(),
-        fetchTodayAttendance()
+        fetchTodayAttendance({ date })
       ]);
-      const groupsWithPlayers = await Promise.all(
-        groups.map(async (group) => {
-          const players = await fetchGroupPlayers(group._id);
+      const playerSnapshotResult = viewingToday
+        ? null
+        : await fetchHistorySnapshot({
+          entityType: 'player',
+          at: getHistorySnapshotIsoForDate(date)
+        });
+      const groupsWithPlayers = viewingToday
+        ? await Promise.all(
+          groups.map(async (group) => {
+            const players = await fetchGroupPlayers(group._id);
 
-          return {
-            ...group,
-            players,
-            color: group.color
-          };
-        })
-      );
+            return {
+              ...group,
+              players,
+              color: group.color
+            };
+          })
+        )
+        : buildHistoricalGroups(groups, playerSnapshotResult?.rows || [], date);
       const groupsWithTodayAttendance = applyTodayRecordsToGroups(groupsWithPlayers, todayRecords);
       attendanceBoardCache = groupsWithTodayAttendance;
       attendanceBoardCacheTimestamp = Date.now();
+      attendanceBoardCacheDate = date;
       setGroupColumns(groupsWithTodayAttendance);
+      setMessage(`${date === todayDateValue ? 'Today' : new Date(`${date}T00:00:00`).toLocaleDateString()} attendance loaded`);
       return groupsWithTodayAttendance;
     } catch (err) {
-        setMessage(err.response?.data?.message || 'Unable to load attendance board');
+      setMessage(err.response?.data?.message || 'Unable to load attendance board');
       return [];
     } finally {
       if (!silent) {
@@ -106,30 +266,19 @@ const AttendancePage = () => {
     }
   };
 
-  const refreshTodayAttendanceOnly = async () => {
-    if (!groupColumns.length) {
-      await loadAttendanceBoard({ force: true, silent: true });
+  useEffect(() => {
+    loadAttendanceBoard({ date: selectedAttendanceDate });
+  }, []);
+
+  useEffect(() => {
+    if (isAttendanceDateOutOfRange) {
+      setGroupColumns([]);
+      setMessage('Out of range (maximum range is 3 months)');
       return;
     }
 
-    try {
-      setMessage('');
-      const todayRecords = await fetchTodayAttendance();
-      setGroupColumns((currentGroups) => {
-        const nextGroups = applyTodayRecordsToGroups(currentGroups, todayRecords);
-        attendanceBoardCache = nextGroups;
-        attendanceBoardCacheTimestamp = Date.now();
-        return nextGroups;
-      });
-      setMessage('Attendance refreshed');
-    } catch (err) {
-      setMessage(err.response?.data?.message || 'Unable to refresh attendance');
-    }
-  };
-
-  useEffect(() => {
-    loadAttendanceBoard();
-  }, []);
+    loadAttendanceBoard({ force: true, silent: true, date: selectedAttendanceDate });
+  }, [selectedAttendanceDate]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -296,6 +445,7 @@ const AttendancePage = () => {
     setGroupColumns(reorderedGroups);
     attendanceBoardCache = reorderedGroups;
     attendanceBoardCacheTimestamp = Date.now();
+    attendanceBoardCacheDate = selectedAttendanceDate;
 
     try {
       await reorderGroupsRequest(reorderedGroups.map((group) => group._id));
@@ -304,6 +454,7 @@ const AttendancePage = () => {
       setGroupColumns(previousGroups);
       attendanceBoardCache = previousGroups;
       attendanceBoardCacheTimestamp = Date.now();
+      attendanceBoardCacheDate = selectedAttendanceDate;
       setMessage(err.response?.data?.message || 'Unable to update group order');
     }
   };
@@ -442,14 +593,19 @@ const AttendancePage = () => {
 
   const handleAction = async (player, groupId, status) => {
     try {
+      if (isAttendanceDateOutOfRange) {
+        setMessage('Out of range (maximum range is 3 months)');
+        return;
+      }
+
       setMessage('');
-      await updateTodayAttendance({ playerId: player._id, groupId, status });
+      await updateTodayAttendance({ playerId: player._id, groupId, status, date: selectedAttendanceDate });
       setMessage('Attendance recorded');
       const optimisticAttendance = {
         ...(player.todayAttendance || {}),
         status,
-        date: new Date().toISOString(),
-        checkInTime: new Date().toISOString()
+        date: new Date(`${selectedAttendanceDate}T00:00:00`).toISOString(),
+        checkInTime: status === 'present' ? new Date().toISOString() : undefined
       };
 
       updatePlayerInBoard(player._id, (currentPlayer) => ({
@@ -470,8 +626,13 @@ const AttendancePage = () => {
 
   const handleCancelAttendance = async (player) => {
     try {
+      if (isAttendanceDateOutOfRange) {
+        setMessage('Out of range (maximum range is 3 months)');
+        return;
+      }
+
       setMessage('');
-      await cancelTodayAttendance({ playerId: player._id });
+      await cancelTodayAttendance({ playerId: player._id, date: selectedAttendanceDate });
       setMessage('Attendance cancelled');
       updatePlayerInBoard(player._id, (currentPlayer) => ({
         ...currentPlayer,
@@ -494,12 +655,18 @@ const AttendancePage = () => {
       setMessage('');
       setSelectedPlayer(player);
       setSelectedPlayerForm(createSelectedPlayerForm(player));
+      setSelectedPlayerAttendanceHistory([]);
+      setShowSelectedPlayerAttendanceHistory(false);
       setIsEditingSelectedPlayer(false);
 
-      const latestPlayer = await getPlayer(player._id);
+      const [latestPlayer, attendanceRecords] = await Promise.all([
+        getPlayer(player._id),
+        fetchAttendanceByPlayer(player._id)
+      ]);
 
       setSelectedPlayer(latestPlayer);
       setSelectedPlayerForm(createSelectedPlayerForm(latestPlayer));
+      setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
     } catch (err) {
       setMessage(err.response?.data?.message || 'Unable to load student card');
     }
@@ -622,7 +789,7 @@ const AttendancePage = () => {
       setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
       setIsEditingSelectedPlayer(false);
       setMessage('Player updated successfully');
-      await loadAttendanceBoard({ force: true });
+      await loadAttendanceBoard({ force: true, date: selectedAttendanceDate });
     } catch (err) {
       setMessage(err.response?.data?.message || 'Unable to update player');
     }
@@ -630,6 +797,11 @@ const AttendancePage = () => {
 
   const formatGroupTime = (group) => [group.startTime, group.endTime].filter(Boolean).join(' - ');
   const formatDate = (date) => date ? new Date(date).toLocaleDateString() : t('notSet');
+  const getRecentAttendanceRecords = (records) => {
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    return records.filter((record) => new Date(record.date) >= threeMonthsAgo);
+  };
   const getPlayerGroups = (player) => {
     const groups = player?.groupIds?.length ? player.groupIds : [player?.groupId].filter(Boolean);
     return groups.map((group) => group?.name).filter(Boolean).join(', ');
@@ -754,12 +926,43 @@ const AttendancePage = () => {
 
         <div className="attendance-toolbar">
           {message && <p className="alert-info">{message}</p>}
+          <div className="attendance-date-picker">
+            <span>{selectedAttendanceDateLabel}</span>
+            <button
+              type="button"
+              aria-label="Choose attendance date"
+              onClick={() => {
+                const input = attendanceDateInputRef.current;
+                if (!input) return;
+                if (typeof input.showPicker === 'function') {
+                  input.showPicker();
+                } else {
+                  input.click();
+                }
+              }}
+            />
+            <input
+              ref={attendanceDateInputRef}
+              type="date"
+              min={attendanceRangeStartValue}
+              max={todayDateValue}
+              value={selectedAttendanceDate}
+              onChange={(event) => setSelectedAttendanceDate(event.target.value || todayDateValue)}
+              aria-label="Attendance date"
+            />
+          </div>
           <label className="table-search attendance-search">
             <span>Search</span>
             <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search students or groups..." />
           </label>
-          <button type="button" className="btn-secondary" onClick={refreshTodayAttendanceOnly}>{t('refresh')}</button>
+          <button type="button" className="btn-secondary" onClick={() => loadAttendanceBoard({ force: true, date: selectedAttendanceDate })}>{t('refresh')}</button>
         </div>
+
+        {isAttendanceDateOutOfRange && (
+          <div className="attendance-range-warning">
+            Out of range <span>(maximum range is 3 months)</span>
+          </div>
+        )}
 
         {isLoading ? (
           <div className="form-card">{t('loadingAttendanceBoard')}</div>
@@ -947,21 +1150,43 @@ const AttendancePage = () => {
                   </div>
                 </form>
               ) : (
-                <div className="student-info-grid">
-                  <div><span>{t('name')}</span><strong>{selectedPlayer.fullName || t('notSet')}</strong></div>
-                  <div><span>{t('parent')}</span><strong>{selectedPlayer.parentId?.name || t('notSet')}</strong></div>
-                  <div><span>{t('parentPhone')}</span><strong>{selectedPlayer.parentPhone || t('notSet')}</strong></div>
-                  <div><span>{t('status')}</span><strong>{selectedPlayer.status || t('notSet')}</strong></div>
-                  <div><span>{t('startDate')}</span><strong>{formatDate(selectedPlayer.startDate)}</strong></div>
-                  <div><span>{t('endDate')}</span><strong>{formatDate(selectedPlayer.endDate)}</strong></div>
-                  <div><span>{t('package')}</span><strong>{selectedPlayer.packageName ? (selectedPlayer.packageName === 'custom' ? t('customPackage') : selectedPlayer.packageName) : t('notSet')}</strong></div>
-                  <div><span>{t('payment')}</span><strong>{selectedPlayer.payment ?? 0}</strong></div>
-                  <div><span>{t('classes')}</span><strong>{selectedPlayer.packageClasses ?? 0}</strong></div>
-                  <div><span>{t('hours')}</span><strong>{selectedPlayer.packageHours ?? 0}</strong></div>
-                  {selectedPlayer.note && (
-                    <div className="student-info-grid-full"><span>{t('note')}</span><strong>{selectedPlayer.note}</strong></div>
-                  )}
-                </div>
+                <>
+                  <div className="student-info-grid">
+                    <div><span>{t('name')}</span><strong>{selectedPlayer.fullName || t('notSet')}</strong></div>
+                    <div><span>{t('parent')}</span><strong>{selectedPlayer.parentId?.name || t('notSet')}</strong></div>
+                    <div><span>{t('parentPhone')}</span><strong>{selectedPlayer.parentPhone || t('notSet')}</strong></div>
+                    <div><span>{t('status')}</span><strong>{selectedPlayer.status || t('notSet')}</strong></div>
+                    <div><span>{t('startDate')}</span><strong>{formatDate(selectedPlayer.startDate)}</strong></div>
+                    <div><span>{t('endDate')}</span><strong>{formatDate(selectedPlayer.endDate)}</strong></div>
+                    <div><span>{t('package')}</span><strong>{selectedPlayer.packageName ? (selectedPlayer.packageName === 'custom' ? t('customPackage') : selectedPlayer.packageName) : t('notSet')}</strong></div>
+                    <div><span>{t('payment')}</span><strong>{selectedPlayer.payment ?? 0}</strong></div>
+                    <div><span>{t('classes')}</span><strong>{selectedPlayer.packageClasses ?? 0}</strong></div>
+                    <div><span>{t('hours')}</span><strong>{selectedPlayer.packageHours ?? 0}</strong></div>
+                    {selectedPlayer.note && (
+                      <div className="student-info-grid-full"><span>{t('note')}</span><strong>{selectedPlayer.note}</strong></div>
+                    )}
+                  </div>
+                  <div className="student-modal-history-panel">
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => setShowSelectedPlayerAttendanceHistory((current) => !current)}
+                    >
+                      Attendance History
+                    </button>
+                    {showSelectedPlayerAttendanceHistory && (
+                      <div className="student-history-list">
+                        {selectedPlayerAttendanceHistory.length ? selectedPlayerAttendanceHistory.map((record) => (
+                          <div className="student-history-row" key={record._id}>
+                            <span>{new Date(record.date).toLocaleDateString()}</span>
+                            <strong>{record.status}</strong>
+                            <span>{record.checkInTime ? new Date(record.checkInTime).toLocaleTimeString() : '-'}</span>
+                          </div>
+                        )) : <p className="empty-state">No attendance history found for the last 3 months.</p>}
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
             </section>
           </div>
