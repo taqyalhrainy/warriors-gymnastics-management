@@ -737,14 +737,14 @@ const AttendancePage = () => {
                 key={group._id}
                 data-group-id={group._id}
                 style={getGroupStyle(group)}
-                draggable={!isTouchDevice}
-                onDragStart={(event) => handleDragStart(event, group._id)}
                 onDragOver={(event) => handleDragOver(event, group._id)}
                 onDrop={() => handleDrop(group._id)}
-                onDragEnd={handleDragEnd}
               >
                 <div
                   className="attendance-group-header"
+                  draggable={!isTouchDevice}
+                  onDragStart={(event) => handleDragStart(event, group._id)}
+                  onDragEnd={handleDragEnd}
                   onPointerDown={(event) => handlePointerDown(event, group._id)}
                 >
                   <div>
