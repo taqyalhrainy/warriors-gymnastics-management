@@ -564,88 +564,123 @@ const AttendancePage = () => {
   };
 
   const updatePlayerInBoard = (playerId, updater) => {
-    setGroupColumns((currentGroups) => currentGroups.map((group) => {
-      let changed = false;
-      const nextPlayers = group.players.map((player) => {
-        if (player._id !== playerId) {
-          return player;
+    setGroupColumns((currentGroups) => {
+      const nextGroups = currentGroups.map((group) => {
+        let changed = false;
+        const nextPlayers = group.players.map((player) => {
+          if (player._id !== playerId) {
+            return player;
+          }
+
+          changed = true;
+          return updater(player, group);
+        });
+
+        if (!changed) {
+          return group;
         }
 
-        changed = true;
-        return updater(player, group);
+        const markedCount = nextPlayers.filter((item) => Boolean(item.todayAttendance)).length;
+        const presentCount = nextPlayers.filter((item) => item.todayAttendance?.status === 'present').length;
+
+        return {
+          ...group,
+          players: nextPlayers,
+          markedCount,
+          presentCount
+        };
       });
 
-      if (!changed) {
-        return group;
-      }
-
-      const markedCount = nextPlayers.filter((item) => Boolean(item.todayAttendance)).length;
-      const presentCount = nextPlayers.filter((item) => item.todayAttendance?.status === 'present').length;
-
-      return {
-        ...group,
-        players: nextPlayers,
-        markedCount,
-        presentCount
-      };
-    }));
+      attendanceBoardCache = nextGroups;
+      attendanceBoardCacheTimestamp = Date.now();
+      attendanceBoardCacheDate = selectedAttendanceDate;
+      return nextGroups;
+    });
   };
 
   const handleAction = async (player, groupId, status) => {
-    try {
-      if (isAttendanceDateOutOfRange) {
-        setMessage('Out of range (maximum range is 3 months)');
-        return;
-      }
+    if (isAttendanceDateOutOfRange) {
+      setMessage('Out of range (maximum range is 3 months)');
+      return;
+    }
 
-      setMessage('');
-      await updateTodayAttendance({ playerId: player._id, groupId, status, date: selectedAttendanceDate });
-      setMessage('Attendance recorded');
-      const optimisticAttendance = {
-        ...(player.todayAttendance || {}),
-        status,
-        date: new Date(`${selectedAttendanceDate}T00:00:00`).toISOString(),
-        checkInTime: status === 'present' ? new Date().toISOString() : undefined
-      };
+    const previousAttendance = player.todayAttendance || null;
+    const optimisticAttendance = {
+      ...(player.todayAttendance || {}),
+      status,
+      date: new Date(`${selectedAttendanceDate}T00:00:00`).toISOString(),
+      checkInTime: status === 'present' ? new Date().toISOString() : undefined
+    };
 
-      updatePlayerInBoard(player._id, (currentPlayer) => ({
+    setMessage('');
+    updatePlayerInBoard(player._id, (currentPlayer) => ({
+      ...currentPlayer,
+      todayAttendance: optimisticAttendance
+    }));
+
+    if (selectedPlayer?._id === player._id) {
+      setSelectedPlayer((currentPlayer) => currentPlayer ? {
         ...currentPlayer,
         todayAttendance: optimisticAttendance
+      } : currentPlayer);
+    }
+
+    try {
+      await updateTodayAttendance({ playerId: player._id, groupId, status, date: selectedAttendanceDate });
+      setMessage('Attendance recorded');
+    } catch (err) {
+      updatePlayerInBoard(player._id, (currentPlayer) => ({
+        ...currentPlayer,
+        todayAttendance: previousAttendance
       }));
 
       if (selectedPlayer?._id === player._id) {
         setSelectedPlayer((currentPlayer) => currentPlayer ? {
           ...currentPlayer,
-          todayAttendance: optimisticAttendance
+          todayAttendance: previousAttendance
         } : currentPlayer);
       }
-    } catch (err) {
+
       setMessage(err.response?.data?.message || 'Unable to record attendance');
     }
   };
 
   const handleCancelAttendance = async (player) => {
-    try {
-      if (isAttendanceDateOutOfRange) {
-        setMessage('Out of range (maximum range is 3 months)');
-        return;
-      }
+    if (isAttendanceDateOutOfRange) {
+      setMessage('Out of range (maximum range is 3 months)');
+      return;
+    }
 
-      setMessage('');
-      await cancelTodayAttendance({ playerId: player._id, date: selectedAttendanceDate });
-      setMessage('Attendance cancelled');
-      updatePlayerInBoard(player._id, (currentPlayer) => ({
+    const previousAttendance = player.todayAttendance || null;
+    setMessage('');
+    updatePlayerInBoard(player._id, (currentPlayer) => ({
+      ...currentPlayer,
+      todayAttendance: null
+    }));
+
+    if (selectedPlayer?._id === player._id) {
+      setSelectedPlayer((currentPlayer) => currentPlayer ? {
         ...currentPlayer,
         todayAttendance: null
+      } : currentPlayer);
+    }
+
+    try {
+      await cancelTodayAttendance({ playerId: player._id, date: selectedAttendanceDate });
+      setMessage('Attendance cancelled');
+    } catch (err) {
+      updatePlayerInBoard(player._id, (currentPlayer) => ({
+        ...currentPlayer,
+        todayAttendance: previousAttendance
       }));
 
       if (selectedPlayer?._id === player._id) {
         setSelectedPlayer((currentPlayer) => currentPlayer ? {
           ...currentPlayer,
-          todayAttendance: null
+          todayAttendance: previousAttendance
         } : currentPlayer);
       }
-    } catch (err) {
+
       setMessage(err.response?.data?.message || 'Unable to cancel attendance');
     }
   };
