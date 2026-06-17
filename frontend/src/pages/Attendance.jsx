@@ -14,7 +14,6 @@ let attendanceBoardCacheTimestamp = 0;
 
 const AttendancePage = () => {
   const [groupColumns, setGroupColumns] = useState([]);
-  const [attendanceHistory, setAttendanceHistory] = useState([]);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [isEditingSelectedPlayer, setIsEditingSelectedPlayer] = useState(false);
   const [selectedPlayerForm, setSelectedPlayerForm] = useState(null);
@@ -428,8 +427,6 @@ const AttendancePage = () => {
       }));
 
       if (selectedPlayer?._id === player._id) {
-        const history = await fetchAttendanceByPlayer(player._id);
-        setAttendanceHistory(history);
         setSelectedPlayer((currentPlayer) => currentPlayer ? {
           ...currentPlayer,
           todayAttendance: optimisticAttendance
@@ -451,8 +448,6 @@ const AttendancePage = () => {
       }));
 
       if (selectedPlayer?._id === player._id) {
-        const history = await fetchAttendanceByPlayer(player._id);
-        setAttendanceHistory(history);
         setSelectedPlayer((currentPlayer) => currentPlayer ? {
           ...currentPlayer,
           todayAttendance: null
@@ -466,11 +461,14 @@ const AttendancePage = () => {
   const handleSelectPlayer = async (player) => {
     try {
       setMessage('');
-      const history = await fetchAttendanceByPlayer(player._id);
-      setAttendanceHistory(history);
       setSelectedPlayer(player);
+      setSelectedPlayerForm(createSelectedPlayerForm(player));
       setIsEditingSelectedPlayer(false);
-      setSelectedPlayerForm(null);
+
+      const latestPlayer = await getPlayer(player._id);
+
+      setSelectedPlayer(latestPlayer);
+      setSelectedPlayerForm(createSelectedPlayerForm(latestPlayer));
     } catch (err) {
       setMessage(err.response?.data?.message || 'Unable to load student card');
     }
@@ -478,7 +476,7 @@ const AttendancePage = () => {
 
   const createSelectedPlayerForm = (player) => ({
     fullName: player?.fullName || '',
-    parentId: player?.parentId?._id || '',
+    parentId: player?.parentId?._id || player?.parentId || '',
     parentPhone: player?.parentPhone || '',
     groupIds: player?.groupIds?.length ? player.groupIds.map((group) => group._id || group) : (player?.groupId?._id ? [player.groupId._id] : []),
     startDate: player?.startDate?.split?.('T')?.[0] || '',
@@ -587,12 +585,8 @@ const AttendancePage = () => {
         payment: parseLocalizedNumber(selectedPlayerForm.payment)
       });
 
-      const [history, refreshedPlayer] = await Promise.all([
-        fetchAttendanceByPlayer(selectedPlayer._id),
-        getPlayer(selectedPlayer._id)
-      ]);
+      const refreshedPlayer = await getPlayer(selectedPlayer._id);
 
-      setAttendanceHistory(history);
       setSelectedPlayer(refreshedPlayer);
       setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
       setIsEditingSelectedPlayer(false);
@@ -603,12 +597,15 @@ const AttendancePage = () => {
     }
   };
 
-  const formatDate = (date) => date ? new Date(date).toLocaleDateString() : t('notSet');
   const formatGroupTime = (group) => [group.startTime, group.endTime].filter(Boolean).join(' - ');
+  const formatDate = (date) => date ? new Date(date).toLocaleDateString() : t('notSet');
   const getPlayerGroups = (player) => {
     const groups = player?.groupIds?.length ? player.groupIds : [player?.groupId].filter(Boolean);
     return groups.map((group) => group?.name).filter(Boolean).join(', ');
   };
+  const selectedPlayerParentOptions = selectedPlayer?.parentId && typeof selectedPlayer.parentId === 'object' && !editParents.some((parent) => parent._id === selectedPlayer.parentId._id)
+    ? [{ ...selectedPlayer.parentId, phone: selectedPlayer.parentPhone || selectedPlayer.parentId.phone || '' }, ...editParents]
+    : editParents;
   const filteredGroupColumns = groupColumns
     .map((group) => {
       const query = search.trim().toLowerCase();
@@ -838,7 +835,7 @@ const AttendancePage = () => {
                       <span>{t('parent')}</span>
                       <select name="parentId" value={selectedPlayerForm.parentId} onChange={handleSelectedPlayerFormChange} required>
                         <option value="">{t('selectParent')}</option>
-                        {editParents.map((parent) => (
+                        {selectedPlayerParentOptions.map((parent) => (
                           <option key={parent._id} value={parent._id}>
                             {parent.phone ? `${parent.name} (${parent.phone})` : parent.name}
                           </option>
@@ -920,33 +917,21 @@ const AttendancePage = () => {
                 </form>
               ) : (
                 <div className="student-info-grid">
-                  <div><span>{t('status')}</span><strong>{selectedPlayer.status || t('notSet')}</strong></div>
-                  <div><span>{t('birthDate')}</span><strong>{formatDate(selectedPlayer.dateOfBirth)}</strong></div>
+                  <div><span>{t('name')}</span><strong>{selectedPlayer.fullName || t('notSet')}</strong></div>
                   <div><span>{t('parent')}</span><strong>{selectedPlayer.parentId?.name || t('notSet')}</strong></div>
                   <div><span>{t('parentPhone')}</span><strong>{selectedPlayer.parentPhone || t('notSet')}</strong></div>
-                  <div><span>{t('program')}</span><strong>{selectedPlayer.programId?.name || t('notSet')}</strong></div>
-                  <div><span>{t('coach')}</span><strong>{selectedPlayer.coachId?.name || t('notSet')}</strong></div>
-                  <div><span>{t('level')}</span><strong>{selectedPlayer.level || t('notSet')}</strong></div>
-                  <div><span>{t('subscription')}</span><strong>{selectedPlayer.subscriptionId?.status || t('notSet')}</strong></div>
-                  <div><span>{t('remainingSessions')}</span><strong>{selectedPlayer.subscriptionId?.remainingSessions ?? t('notSet')}</strong></div>
-                  <div><span>{t('subscriptionEnds')}</span><strong>{formatDate(selectedPlayer.subscriptionId?.endDate)}</strong></div>
+                  <div><span>{t('status')}</span><strong>{selectedPlayer.status || t('notSet')}</strong></div>
+                  <div><span>{t('startDate')}</span><strong>{formatDate(selectedPlayer.startDate)}</strong></div>
+                  <div><span>{t('endDate')}</span><strong>{formatDate(selectedPlayer.endDate)}</strong></div>
+                  <div><span>{t('package')}</span><strong>{selectedPlayer.packageName ? (selectedPlayer.packageName === 'custom' ? t('customPackage') : selectedPlayer.packageName) : t('notSet')}</strong></div>
+                  <div><span>{t('payment')}</span><strong>{selectedPlayer.payment ?? 0}</strong></div>
+                  <div><span>{t('classes')}</span><strong>{selectedPlayer.packageClasses ?? 0}</strong></div>
+                  <div><span>{t('hours')}</span><strong>{selectedPlayer.packageHours ?? 0}</strong></div>
+                  {selectedPlayer.note && (
+                    <div className="student-info-grid-full"><span>{t('note')}</span><strong>{selectedPlayer.note}</strong></div>
+                  )}
                 </div>
               )}
-
-              <div className="student-history">
-                <h3>{t('attendanceHistory')}</h3>
-                {attendanceHistory.length ? (
-                  <div className="student-history-list">
-                    {attendanceHistory.slice(0, 8).map((record) => (
-                      <div className="student-history-row" key={record._id}>
-                        <span>{new Date(record.date).toLocaleDateString()}</span>
-                        <strong>{record.status}</strong>
-                        <span>{record.checkInTime ? new Date(record.checkInTime).toLocaleTimeString() : '-'}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : <p className="empty-state">{t('noAttendanceHistory')}</p>}
-              </div>
             </section>
           </div>
         )}

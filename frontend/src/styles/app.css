@@ -1280,6 +1280,10 @@ body.attendance-touch-dragging {
   background: var(--surface-alt);
 }
 
+.student-info-grid .student-info-grid-full {
+  grid-column: 1 / -1;
+}
+
 .student-info-grid span,
 .student-history-row span {
   color: var(--muted);
