@@ -245,13 +245,20 @@ const AttendancePage = () => {
     return nextItems;
   };
 
-  const handleDragStart = (groupId) => {
+  const handleDragStart = (event, groupId) => {
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', groupId);
+    }
     setDraggedGroupId(groupId);
     setDragOverGroupId(groupId);
   };
 
   const handleDragOver = (event, groupId) => {
     event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move';
+    }
     if (dragOverGroupId !== groupId) {
       setDragOverGroupId(groupId);
     }
@@ -731,7 +738,7 @@ const AttendancePage = () => {
                 data-group-id={group._id}
                 style={getGroupStyle(group)}
                 draggable={!isTouchDevice}
-                onDragStart={() => handleDragStart(group._id)}
+                onDragStart={(event) => handleDragStart(event, group._id)}
                 onDragOver={(event) => handleDragOver(event, group._id)}
                 onDrop={() => handleDrop(group._id)}
                 onDragEnd={handleDragEnd}
