@@ -216,6 +216,17 @@ const getAttendanceByPlayer = async (req, res, next) => {
   }
 };
 
+const getTodayAttendance = async (req, res, next) => {
+  try {
+    const today = new Date();
+    const dateOnly = new Date(today.toISOString().split('T')[0]);
+    const attendance = await Attendance.find({ date: dateOnly }).sort({ _id: -1 });
+    res.json(attendance);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getAttendanceByGroup = async (req, res, next) => {
   try {
     const { groupId } = req.params;
@@ -229,4 +240,4 @@ const getAttendanceByGroup = async (req, res, next) => {
   }
 };
 
-module.exports = { markPresent, markAbsent, updateTodayAttendance, cancelTodayAttendance, getAttendanceByPlayer, getAttendanceByGroup };
+module.exports = { markPresent, markAbsent, updateTodayAttendance, cancelTodayAttendance, getAttendanceByPlayer, getTodayAttendance, getAttendanceByGroup };

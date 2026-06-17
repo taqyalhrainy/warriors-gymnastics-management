@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
-import { updateTodayAttendance, cancelTodayAttendance, fetchAttendanceByPlayer } from '../services/attendance.js';
+import { updateTodayAttendance, cancelTodayAttendance, fetchTodayAttendance } from '../services/attendance.js';
 import { fetchGroups, fetchGroupPlayers, reorderGroups as reorderGroupsRequest } from '../services/groups.js';
 import { fetchParents } from '../services/parents.js';
 import { getPlayer, updatePlayer } from '../services/players.js';
@@ -40,11 +40,26 @@ const AttendancePage = () => {
   const pointerStartPointRef = useRef(null);
   const { t } = useLanguage();
 
-  const isToday = (date) => {
-    if (!date) return false;
-    const recordDate = new Date(date);
-    const today = new Date();
-    return recordDate.toDateString() === today.toDateString();
+  const applyTodayRecordsToGroups = (groups, todayRecords) => {
+    const recordsByPlayerId = new Map(
+      todayRecords.map((record) => [String(record.playerId?._id || record.playerId), record])
+    );
+
+    return groups.map((group) => {
+      const players = group.players.map((player) => ({
+        ...player,
+        todayAttendance: recordsByPlayerId.get(String(player._id)) || null
+      }));
+      const markedCount = players.filter((player) => Boolean(player.todayAttendance)).length;
+      const presentCount = players.filter((player) => player.todayAttendance?.status === 'present').length;
+
+      return {
+        ...group,
+        players,
+        markedCount,
+        presentCount
+      };
+    });
   };
 
   const loadAttendanceBoard = async (options = {}) => {
@@ -61,40 +76,26 @@ const AttendancePage = () => {
       if (!silent) {
         setIsLoading(true);
       }
-      const groups = await fetchGroups();
+      const [groups, todayRecords] = await Promise.all([
+        fetchGroups(),
+        fetchTodayAttendance()
+      ]);
       const groupsWithPlayers = await Promise.all(
         groups.map(async (group) => {
           const players = await fetchGroupPlayers(group._id);
-          const todayRecords = await Promise.all(
-            players.map(async (player) => {
-              try {
-                const history = await fetchAttendanceByPlayer(player._id);
-                return history.find((record) => isToday(record.date));
-              } catch (error) {
-                console.error(error);
-                return null;
-              }
-            })
-          );
-          const markedCount = todayRecords.filter(Boolean).length;
-          const presentCount = todayRecords.filter((record) => record?.status === 'present').length;
 
           return {
             ...group,
-            players: players.map((player, playerIndex) => ({
-              ...player,
-              todayAttendance: todayRecords[playerIndex] || null
-            })),
-            color: group.color,
-            markedCount,
-            presentCount
+            players,
+            color: group.color
           };
         })
       );
-      attendanceBoardCache = groupsWithPlayers;
+      const groupsWithTodayAttendance = applyTodayRecordsToGroups(groupsWithPlayers, todayRecords);
+      attendanceBoardCache = groupsWithTodayAttendance;
       attendanceBoardCacheTimestamp = Date.now();
-      setGroupColumns(groupsWithPlayers);
-      return groupsWithPlayers;
+      setGroupColumns(groupsWithTodayAttendance);
+      return groupsWithTodayAttendance;
     } catch (err) {
         setMessage(err.response?.data?.message || 'Unable to load attendance board');
       return [];
@@ -102,6 +103,27 @@ const AttendancePage = () => {
       if (!silent) {
         setIsLoading(false);
       }
+    }
+  };
+
+  const refreshTodayAttendanceOnly = async () => {
+    if (!groupColumns.length) {
+      await loadAttendanceBoard({ force: true, silent: true });
+      return;
+    }
+
+    try {
+      setMessage('');
+      const todayRecords = await fetchTodayAttendance();
+      setGroupColumns((currentGroups) => {
+        const nextGroups = applyTodayRecordsToGroups(currentGroups, todayRecords);
+        attendanceBoardCache = nextGroups;
+        attendanceBoardCacheTimestamp = Date.now();
+        return nextGroups;
+      });
+      setMessage('Attendance refreshed');
+    } catch (err) {
+      setMessage(err.response?.data?.message || 'Unable to refresh attendance');
     }
   };
 
@@ -736,7 +758,7 @@ const AttendancePage = () => {
             <span>Search</span>
             <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search students or groups..." />
           </label>
-          <button type="button" className="btn-secondary" onClick={() => loadAttendanceBoard({ force: true, silent: true })}>{t('refresh')}</button>
+          <button type="button" className="btn-secondary" onClick={refreshTodayAttendanceOnly}>{t('refresh')}</button>
         </div>
 
         {isLoading ? (

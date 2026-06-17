@@ -216,7 +216,13 @@ const restoreStateAt = async (entityType, asOf) => {
   if (entityType === 'player') {
     return rows
       .filter((player) => !player.isDeleted)
-      .sort((a, b) => String(a.fullName || '').localeCompare(String(b.fullName || '')));
+      .sort((a, b) => {
+        const createdAtDiff = new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+        if (createdAtDiff !== 0) {
+          return createdAtDiff;
+        }
+        return String(b._id || '').localeCompare(String(a._id || ''));
+      });
   }
 
   const paymentsByPlayer = new Map();
