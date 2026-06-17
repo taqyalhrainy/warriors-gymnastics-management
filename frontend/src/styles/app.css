@@ -509,6 +509,37 @@ body.theme-light .auth-loading-overlay {
   margin: 0;
 }
 
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.status-tabs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.status-tabs button {
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.status-tabs button.active {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 14%, var(--surface));
+  color: var(--primary);
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -732,6 +763,10 @@ button[type="submit"],
   display: grid;
   gap: 20px;
   grid-template-columns: 1fr 1fr;
+}
+
+.groups-package-section {
+  margin-top: 24px;
 }
 
 .form-inline-grid {

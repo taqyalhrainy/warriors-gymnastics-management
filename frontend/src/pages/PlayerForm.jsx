@@ -4,18 +4,9 @@ import Sidebar from '../components/Sidebar.jsx';
 import { createPlayer, updatePlayer, getPlayer } from '../services/players.js';
 import { fetchGroups } from '../services/groups.js';
 import { fetchParents } from '../services/parents.js';
+import { fetchPackageOptions } from '../services/packageOptions.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
-
-const packageOptions = [
-  { label: '8 classes (1 hour)', classes: 8, hours: 1 },
-  { label: '8 classes (1.5 hours)', classes: 8, hours: 1.5 },
-  { label: '8 classes (2 hours)', classes: 8, hours: 2 },
-  { label: '12 classes (1.5 hours)', classes: 12, hours: 1.5 },
-  { label: '12 classes (2 hours)', classes: 12, hours: 2 },
-  { label: '16 classes (1.5 hours)', classes: 16, hours: 1.5 },
-  { label: '16 classes (2 hours)', classes: 16, hours: 2 }
-];
 
 const PlayerFormPage = () => {
   const { id } = useParams();
@@ -36,36 +27,48 @@ const PlayerFormPage = () => {
     status: 'active'
   });
   const [parents, setParents] = useState([]);
+  const [currentParent, setCurrentParent] = useState(null);
   const [groups, setGroups] = useState([]);
+  const [packageOptions, setPackageOptions] = useState([]);
   const [message, setMessage] = useState('');
   const [parentSearch, setParentSearch] = useState('');
   const [groupSearch, setGroupSearch] = useState('');
   const { t } = useLanguage();
 
   useEffect(() => {
-    Promise.all([fetchParents(), fetchGroups()])
-      .then(([parentData, groupData]) => {
+    Promise.all([fetchParents(), fetchGroups(), fetchPackageOptions()])
+      .then(([parentData, groupData, packageData]) => {
         setParents(parentData);
         setGroups(groupData);
+        setPackageOptions(packageData);
       })
       .catch(console.error);
 
     if (id) {
-      getPlayer(id).then((data) => setPlayer({
-        fullName: data.fullName,
-        parentId: data.parentId?._id || '',
-        parentPhone: data.parentPhone || '',
-        groupId: data.groupId?._id || '',
-        groupIds: data.groupIds?.length ? data.groupIds.map((group) => group._id || group) : (data.groupId?._id ? [data.groupId._id] : []),
-        startDate: data.startDate?.split('T')[0] || '',
-        endDate: data.endDate?.split('T')[0] || '',
-        packageName: data.packageName || '',
-        packageClasses: data.packageClasses || '',
-        packageHours: data.packageHours || '',
-        payment: data.payment ?? '',
-        note: data.note || '',
-        status: data.status || 'active'
-      })).catch(console.error);
+      getPlayer(id).then((data) => {
+        const parentId = data.parentId?._id || data.parentId || '';
+        if (data.parentId && typeof data.parentId === 'object') {
+          setCurrentParent({
+            ...data.parentId,
+            phone: data.parentPhone || data.parentId.phone || ''
+          });
+        }
+        setPlayer({
+          fullName: data.fullName,
+          parentId,
+          parentPhone: data.parentPhone || '',
+          groupId: data.groupId?._id || '',
+          groupIds: data.groupIds?.length ? data.groupIds.map((group) => group._id || group) : (data.groupId?._id ? [data.groupId._id] : []),
+          startDate: data.startDate?.split('T')[0] || '',
+          endDate: data.endDate?.split('T')[0] || '',
+          packageName: data.packageName || '',
+          packageClasses: data.packageClasses || '',
+          packageHours: data.packageHours || '',
+          payment: data.payment ?? '',
+          note: data.note || '',
+          status: data.status || 'active'
+        });
+      }).catch(console.error);
     }
   }, [id]);
 
@@ -110,24 +113,23 @@ const PlayerFormPage = () => {
     e.preventDefault();
     setMessage('');
     try {
+      const payload = {
+        ...player,
+        groupId: player.groupIds[0] || '',
+        groupIds: player.groupIds,
+        packageClasses: parseLocalizedNumber(player.packageClasses),
+        packageHours: parseLocalizedNumber(player.packageHours),
+        payment: parseLocalizedNumber(player.payment)
+      };
+
+      if (id && !payload.parentId) {
+        delete payload.parentId;
+      }
+
       if (id) {
-        await updatePlayer(id, {
-          ...player,
-          groupId: player.groupIds[0] || '',
-          groupIds: player.groupIds,
-          packageClasses: parseLocalizedNumber(player.packageClasses),
-          packageHours: parseLocalizedNumber(player.packageHours),
-          payment: parseLocalizedNumber(player.payment)
-        });
+        await updatePlayer(id, payload);
       } else {
-        await createPlayer({
-          ...player,
-          groupId: player.groupIds[0] || '',
-          groupIds: player.groupIds,
-          packageClasses: parseLocalizedNumber(player.packageClasses),
-          packageHours: parseLocalizedNumber(player.packageHours),
-          payment: parseLocalizedNumber(player.payment)
-        });
+        await createPlayer(payload);
       }
       navigate('/players');
     } catch (err) {
@@ -135,7 +137,11 @@ const PlayerFormPage = () => {
     }
   };
 
-  const filteredParents = parents.filter((parent) => [
+  const parentOptions = currentParent && !parents.some((parent) => parent._id === currentParent._id)
+    ? [currentParent, ...parents]
+    : parents;
+
+  const filteredParents = parentOptions.filter((parent) => parent._id === player.parentId || [
     parent.name,
     parent.email,
     parent.phone
@@ -161,7 +167,7 @@ const PlayerFormPage = () => {
 
             <label>{t('parent')}</label>
             <input className="select-search-input" type="search" value={parentSearch} onChange={(event) => setParentSearch(event.target.value)} placeholder="Search parent..." />
-            <select name="parentId" value={player.parentId} onChange={handleChange} required>
+            <select name="parentId" value={player.parentId} onChange={handleChange} required={!id}>
               <option value="">{t('selectParent')}</option>
               {filteredParents.map((parent) => (
                 <option key={parent._id} value={parent._id}>{parent.phone ? `${parent.name} (${parent.phone})` : parent.name}</option>

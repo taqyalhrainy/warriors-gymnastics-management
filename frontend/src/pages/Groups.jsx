@@ -1,18 +1,25 @@
 import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchGroups, createGroup, updateGroup, deleteGroup } from '../services/groups.js';
+import { fetchPackageOptions, createPackageOption, updatePackageOption, deletePackageOption } from '../services/packageOptions.js';
 import { confirmAction } from '../utils/confirmAction.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
 
 const initialForm = { name: '', days: '', startTime: '', endTime: '', maxCapacity: 20, color: '#2563eb' };
+const initialPackageForm = { name: '', classes: '', hours: '' };
 
 const GroupsPage = () => {
   const [groups, setGroups] = useState([]);
+  const [packages, setPackages] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState(null);
+  const [selectedPackage, setSelectedPackage] = useState(null);
   const [form, setForm] = useState(initialForm);
+  const [packageForm, setPackageForm] = useState(initialPackageForm);
   const [message, setMessage] = useState('');
+  const [packageMessage, setPackageMessage] = useState('');
   const [search, setSearch] = useState('');
+  const [packageSearch, setPackageSearch] = useState('');
   const { t } = useLanguage();
 
   const loadGroups = async () => {
@@ -23,12 +30,29 @@ const GroupsPage = () => {
     }
   };
 
-  useEffect(() => { loadGroups(); }, []);
+  const loadPackages = async () => {
+    try {
+      setPackages(await fetchPackageOptions());
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  useEffect(() => {
+    loadGroups();
+    loadPackages();
+  }, []);
 
   const resetForm = () => {
     setSelectedGroup(null);
     setForm(initialForm);
     setMessage('');
+  };
+
+  const resetPackageForm = () => {
+    setSelectedPackage(null);
+    setPackageForm(initialPackageForm);
+    setPackageMessage('');
   };
 
   const handleSubmit = async (e) => {
@@ -98,11 +122,68 @@ const GroupsPage = () => {
     group.maxCapacity
   ].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
 
+  const handlePackageSubmit = async (e) => {
+    e.preventDefault();
+    if (selectedPackage) {
+      const confirmed = confirmAction('update package');
+      if (!confirmed) return;
+    }
+
+    try {
+      const payload = {
+        name: packageForm.name,
+        classes: parseLocalizedNumber(packageForm.classes),
+        hours: parseLocalizedNumber(packageForm.hours)
+      };
+      if (selectedPackage) {
+        await updatePackageOption(selectedPackage._id, payload);
+        setPackageMessage('Package updated successfully.');
+      } else {
+        await createPackageOption(payload);
+        setPackageMessage('Package added successfully.');
+      }
+      resetPackageForm();
+      loadPackages();
+    } catch (error) {
+      setPackageMessage(error.response?.data?.message || 'Unable to save package.');
+    }
+  };
+
+  const handlePackageEdit = (pkg) => {
+    setSelectedPackage(pkg);
+    setPackageForm({
+      name: pkg.name,
+      classes: pkg.classes ?? '',
+      hours: pkg.hours ?? ''
+    });
+    setPackageMessage('');
+  };
+
+  const handlePackageDelete = async (id) => {
+    const confirmed = confirmAction('delete package');
+    if (!confirmed) return;
+
+    try {
+      await deletePackageOption(id);
+      setPackageMessage('Package deleted successfully.');
+      if (selectedPackage?._id === id) resetPackageForm();
+      loadPackages();
+    } catch (error) {
+      setPackageMessage(error.response?.data?.message || 'Unable to delete package.');
+    }
+  };
+
+  const filteredPackages = packages.filter((pkg) => [
+    pkg.name,
+    pkg.classes,
+    pkg.hours
+  ].join(' ').toLowerCase().includes(packageSearch.trim().toLowerCase()));
+
   return (
     <div className="dashboard-layout">
       <Sidebar />
       <main className="page-content">
-        <div className="page-header"><h1>{t('trainingGroups')}</h1></div>
+        <div className="page-header"><h1>Group & Package</h1></div>
         <div className="grid-two">
           <div className="form-card">
             <h2>{selectedGroup ? t('editGroup') : t('newGroup')}</h2>
@@ -157,6 +238,59 @@ const GroupsPage = () => {
                   </tr>
                 ))}
                 {filteredGroups.length === 0 && <tr><td colSpan="6">{t('noGroupsFound')}</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div className="grid-two groups-package-section">
+          <div className="form-card">
+            <h2>{selectedPackage ? 'Edit Package' : 'New Package'}</h2>
+            {packageMessage && <p className="alert-info">{packageMessage}</p>}
+            <form onSubmit={handlePackageSubmit}>
+              <label>{t('name')}</label>
+              <input value={packageForm.name} onChange={(e) => setPackageForm({ ...packageForm, name: e.target.value })} required />
+              <label>{t('classes')}</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={packageForm.classes}
+                onChange={(e) => setPackageForm({ ...packageForm, classes: normalizeDigits(e.target.value) })}
+                required
+              />
+              <label>{t('hours')}</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={packageForm.hours}
+                onChange={(e) => setPackageForm({ ...packageForm, hours: normalizeDigits(e.target.value) })}
+                required
+              />
+              <button className="btn-primary" type="submit">{selectedPackage ? 'Update Package' : 'Add Package'}</button>
+              {selectedPackage && <button type="button" className="btn-secondary" onClick={resetPackageForm}>{t('cancel')}</button>}
+            </form>
+          </div>
+          <div className="table-card">
+            <div className="table-toolbar">
+              <h2>Package List</h2>
+              <label className="table-search">
+                <span>Search</span>
+                <input type="search" value={packageSearch} onChange={(event) => setPackageSearch(event.target.value)} placeholder="Search packages..." />
+              </label>
+            </div>
+            <table className="data-table">
+              <thead><tr><th>{t('name')}</th><th>{t('classes')}</th><th>{t('hours')}</th><th>{t('actions')}</th></tr></thead>
+              <tbody>
+                {filteredPackages.length ? filteredPackages.map((pkg) => (
+                  <tr key={pkg._id}>
+                    <td>{pkg.name}</td>
+                    <td>{pkg.classes ?? 0}</td>
+                    <td>{pkg.hours ?? 0}</td>
+                    <td>
+                      <button type="button" onClick={() => handlePackageEdit(pkg)}>{t('edit')}</button>
+                      <button type="button" onClick={() => handlePackageDelete(pkg._id)}>{t('delete')}</button>
+                    </td>
+                  </tr>
+                )) : <tr><td colSpan="4">{t('selectPackage')}</td></tr>}
               </tbody>
             </table>
           </div>

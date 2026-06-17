@@ -8,6 +8,7 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 const PlayersPage = () => {
   const [players, setPlayers] = useState([]);
   const [search, setSearch] = useState('');
+  const [statusView, setStatusView] = useState('active');
   const { t } = useLanguage();
 
   useEffect(() => {
@@ -31,12 +32,21 @@ const PlayersPage = () => {
     return groups.map((group) => group?.name).filter(Boolean).join(', ');
   };
 
-  const filteredPlayers = players.filter((player) => [
-    player.fullName,
-    getPlayerGroups(player),
-    player.status,
-    player.parentId?.name
-  ].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
+  const statusTabs = [
+    { key: 'active', label: 'Active Players' },
+    { key: 'left', label: 'Left Players' },
+    { key: 'expired', label: 'Expired' },
+    { key: 'frozen', label: 'Frozen' }
+  ];
+
+  const filteredPlayers = players
+    .filter((player) => (player.status || 'active') === statusView)
+    .filter((player) => [
+      player.fullName,
+      getPlayerGroups(player),
+      player.status,
+      player.parentId?.name
+    ].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
 
   return (
     <div className="dashboard-layout">
@@ -44,11 +54,25 @@ const PlayersPage = () => {
       <main className="page-content">
         <div className="page-header">
           <h1>{t('players')}</h1>
-          <Link className="btn-primary" to="/players/new">{t('addPlayer')}</Link>
+          <div className="page-header-actions">
+            <div className="status-tabs" role="tablist" aria-label="Player status">
+              {statusTabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  className={statusView === tab.key ? 'active' : ''}
+                  onClick={() => setStatusView(tab.key)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <Link className="btn-primary" to="/players/new">{t('addPlayer')}</Link>
+          </div>
         </div>
         <div className="table-card">
           <div className="table-toolbar">
-            <h2>{t('players')}</h2>
+            <h2>{statusTabs.find((tab) => tab.key === statusView)?.label || t('players')}</h2>
             <label className="table-search">
               <span>Search</span>
               <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search players..." />

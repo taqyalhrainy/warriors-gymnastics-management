@@ -4,18 +4,9 @@ import { updateTodayAttendance, cancelTodayAttendance, fetchAttendanceByPlayer }
 import { fetchGroups, fetchGroupPlayers, reorderGroups as reorderGroupsRequest } from '../services/groups.js';
 import { fetchParents } from '../services/parents.js';
 import { getPlayer, updatePlayer } from '../services/players.js';
+import { fetchPackageOptions } from '../services/packageOptions.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
-
-const packageOptions = [
-  { label: '8 classes (1 hour)', classes: 8, hours: 1 },
-  { label: '8 classes (1.5 hours)', classes: 8, hours: 1.5 },
-  { label: '8 classes (2 hours)', classes: 8, hours: 2 },
-  { label: '12 classes (1.5 hours)', classes: 12, hours: 1.5 },
-  { label: '12 classes (2 hours)', classes: 12, hours: 2 },
-  { label: '16 classes (1.5 hours)', classes: 16, hours: 1.5 },
-  { label: '16 classes (2 hours)', classes: 16, hours: 2 }
-];
 
 const ATTENDANCE_BOARD_CACHE_TTL_MS = 5 * 60 * 1000;
 let attendanceBoardCache = null;
@@ -29,6 +20,7 @@ const AttendancePage = () => {
   const [selectedPlayerForm, setSelectedPlayerForm] = useState(null);
   const [editParents, setEditParents] = useState([]);
   const [editGroups, setEditGroups] = useState([]);
+  const [packageOptions, setPackageOptions] = useState([]);
   const [selectedSummaryGroup, setSelectedSummaryGroup] = useState(null);
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -509,14 +501,16 @@ const AttendancePage = () => {
       setIsEditingSelectedPlayer(true);
       setSelectedPlayerForm(createSelectedPlayerForm(selectedPlayer));
 
-      const [parentsData, groupsData, latestPlayer] = await Promise.all([
+      const [parentsData, groupsData, packageData, latestPlayer] = await Promise.all([
         fetchParents(),
         fetchGroups(),
+        fetchPackageOptions(),
         getPlayer(selectedPlayer._id)
       ]);
 
       setEditParents(parentsData);
       setEditGroups(groupsData);
+      setPackageOptions(packageData);
       setSelectedPlayer(latestPlayer);
       setSelectedPlayerForm(createSelectedPlayerForm(latestPlayer));
     } catch (err) {

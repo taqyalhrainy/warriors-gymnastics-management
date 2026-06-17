@@ -31,6 +31,12 @@ const Sidebar = () => {
 
   const isParentArea = pathname === '/parent' || pathname.startsWith('/parent/');
 
+  const handleLogout = () => {
+    if (window.confirm('Are you sure you want to log out?')) {
+      logout();
+    }
+  };
+
   const links = isParentArea
     ? [
       { path: '/parent', key: 'dashboard' },
@@ -68,7 +74,7 @@ const Sidebar = () => {
         ))}
       </div>
       <div className="sidebar-footer">
-        <button type="button" className="btn-secondary" onClick={logout}>{t('logout')}</button>
+        <button type="button" className="btn-secondary" onClick={handleLogout}>{t('logout')}</button>
       </div>
     </aside>
   );
