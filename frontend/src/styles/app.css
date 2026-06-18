@@ -652,10 +652,14 @@ body.theme-light .auth-loading-overlay {
 
 .waiting-list-form {
   display: grid;
-  grid-template-columns: repeat(4, minmax(150px, 1fr)) auto;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
   align-items: end;
   gap: 12px;
   margin-bottom: 18px;
+}
+
+.waiting-list-form-note {
+  grid-column: span 2;
 }
 
 .waiting-list-form label {
@@ -682,7 +686,7 @@ body.theme-light .auth-loading-overlay {
 }
 
 .waiting-list-table {
-  min-width: 760px;
+  min-width: 980px;
 }
 
 .waiting-phone-link {
@@ -2468,6 +2472,10 @@ body.rtl .payment-table-wrap {
   .waiting-list-form .btn-primary {
     grid-column: 1 / -1;
   }
+
+  .waiting-list-form-note {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 640px) {
@@ -2535,6 +2543,10 @@ body.rtl .payment-table-wrap {
 
   .waiting-list-form {
     grid-template-columns: 1fr;
+  }
+
+  .waiting-list-form-note {
+    grid-column: auto;
   }
 
   .table-toolbar,

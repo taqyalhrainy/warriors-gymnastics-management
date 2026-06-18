@@ -11,9 +11,11 @@ import { useAuth } from '../context/AuthContext.jsx';
 
 const initialWaitingForm = {
   playerName: '',
+  playerAge: '',
   parentName: '',
   parentPhone: '',
-  desiredGroupId: ''
+  desiredGroupId: '',
+  notes: ''
 };
 
 const EXPIRED_ALERT_READ_KEY = 'warriors-expired-alert-read-ids';
@@ -98,6 +100,8 @@ const AdminDashboard = () => {
       addedAt: 'Added at',
       call: 'Call'
     };
+  copy.playerAge = copy.playerAge || 'Age';
+  copy.note = copy.note || 'Note';
   const expiredCopy = language === 'ar'
     ? {
       title: 'Expired Alert',
@@ -284,6 +288,10 @@ const AdminDashboard = () => {
                   <input name="playerName" value={waitingForm.playerName} onChange={handleWaitingFormChange} required />
                 </label>
                 <label>
+                  <span>{copy.playerAge}</span>
+                  <input name="playerAge" type="number" min="0" max="120" value={waitingForm.playerAge} onChange={handleWaitingFormChange} />
+                </label>
+                <label>
                   <span>{copy.parentName}</span>
                   <input name="parentName" value={waitingForm.parentName} onChange={handleWaitingFormChange} required />
                 </label>
@@ -302,6 +310,10 @@ const AdminDashboard = () => {
                     ))}
                   </select>
                 </label>
+                <label className="waiting-list-form-note">
+                  <span>{copy.note}</span>
+                  <input name="notes" value={waitingForm.notes} onChange={handleWaitingFormChange} />
+                </label>
                 <button className="btn-primary" type="submit">{copy.save}</button>
               </form>
 
@@ -310,9 +322,11 @@ const AdminDashboard = () => {
                   <thead>
                     <tr>
                       <th>{copy.playerName}</th>
+                      <th>{copy.playerAge}</th>
                       <th>{copy.parentName}</th>
                       <th>{copy.parentPhone}</th>
                       <th>{copy.desiredGroup}</th>
+                      <th>{copy.note}</th>
                       <th>{copy.addedAt}</th>
                       <th>{t('actions')}</th>
                     </tr>
@@ -321,6 +335,7 @@ const AdminDashboard = () => {
                     {waitingList.length ? waitingList.map((entry) => (
                       <tr key={entry._id}>
                         <td>{entry.playerName}</td>
+                        <td>{entry.playerAge ?? '-'}</td>
                         <td>{entry.parentName}</td>
                         <td>
                           <a href={`tel:${entry.parentPhone}`} className="waiting-phone-link">
@@ -328,6 +343,7 @@ const AdminDashboard = () => {
                           </a>
                         </td>
                         <td>{entry.desiredGroupId?.name || t('notSet')}</td>
+                        <td>{entry.notes || '-'}</td>
                         <td>{entry.createdAt ? new Date(entry.createdAt).toLocaleDateString() : '-'}</td>
                         <td>
                           <div className="table-actions">
@@ -338,7 +354,7 @@ const AdminDashboard = () => {
                       </tr>
                     )) : (
                       <tr>
-                        <td colSpan="6">{copy.empty}</td>
+                        <td colSpan="8">{copy.empty}</td>
                       </tr>
                     )}
                   </tbody>

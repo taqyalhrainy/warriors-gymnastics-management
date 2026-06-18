@@ -21,10 +21,14 @@ const getWaitingListEntries = async (req, res, next) => {
 const createWaitingListEntry = async (req, res, next) => {
   try {
     const payload = sanitizeObject(req.body);
-    const { playerName, parentName, parentPhone, desiredGroupId, notes } = payload;
+    const { playerName, playerAge, parentName, parentPhone, desiredGroupId, notes } = payload;
 
     if (!playerName || !parentName || !parentPhone || !validateObjectId(desiredGroupId)) {
       return res.status(400).json({ message: 'Player name, parent name, parent phone, and desired group are required.' });
+    }
+    const parsedPlayerAge = playerAge === '' || typeof playerAge === 'undefined' ? undefined : Number(playerAge);
+    if (typeof parsedPlayerAge !== 'undefined' && (!Number.isFinite(parsedPlayerAge) || parsedPlayerAge < 0 || parsedPlayerAge > 120)) {
+      return res.status(400).json({ message: 'Player age must be a valid number.' });
     }
 
     const group = await TrainingGroup.findById(desiredGroupId);
@@ -34,6 +38,7 @@ const createWaitingListEntry = async (req, res, next) => {
 
     const entry = await WaitingListEntry.create({
       playerName,
+      playerAge: parsedPlayerAge,
       parentName,
       parentPhone,
       desiredGroupId,

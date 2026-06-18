@@ -1,6 +1,6 @@
 export const translations = {
   en: {
-    appName: 'Warriors Gym',
+    appName: 'Warriors',
     dashboard: 'Dashboard',
     players: 'Players',
     parents: 'Parents',
