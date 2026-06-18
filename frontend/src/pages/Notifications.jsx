@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchNotifications, sendNotification, announceAllParents, announceGroupParents } from '../services/notifications.js';
 import { fetchParents } from '../services/parents.js';
@@ -16,12 +16,32 @@ const NotificationsPage = () => {
   const [parentSearch, setParentSearch] = useState('');
   const [groupSearch, setGroupSearch] = useState('');
   const { t } = useLanguage();
+  const location = useLocation();
+  const prefillNotification = location.state?.prefillNotification || null;
 
   useEffect(() => {
     fetchNotifications().then(setNotifications).catch(console.error);
     fetchParents().then(setParents).catch(console.error);
     fetchGroups().then(setGroups).catch(console.error);
   }, []);
+
+  useEffect(() => {
+    if (!prefillNotification) return;
+
+    const recipientUserId = prefillNotification.recipientUserId
+      || parents.find((parent) => parent._id === prefillNotification.parentId)?.userId?._id
+      || '';
+
+    setForm((current) => ({
+      ...current,
+      recipientUserId,
+      groupId: '',
+      title: prefillNotification.title || current.title,
+      message: prefillNotification.message || current.message,
+      type: prefillNotification.type || current.type
+    }));
+    setParentSearch(prefillNotification.parentName || '');
+  }, [prefillNotification, parents]);
 
   const handleSend = async (e) => {
     e.preventDefault();

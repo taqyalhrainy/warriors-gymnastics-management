@@ -29,6 +29,9 @@ const getAttendanceRangeStartValue = () => {
 
 const getHistorySnapshotIsoForDate = (dateValue) => new Date(`${dateValue}T23:59:59.999`).toISOString();
 
+const getEntityId = (value) => String(value?._id || value || '');
+const getAttendanceRecordKey = (playerId, groupId) => `${getEntityId(playerId)}:${getEntityId(groupId)}`;
+
 const getSnapshotGroups = (player) => {
   if (Array.isArray(player?.groupIds) && player.groupIds.length) {
     return player.groupIds
@@ -127,14 +130,14 @@ const AttendancePage = () => {
     : new Date(`${selectedAttendanceDate}T00:00:00`).toLocaleDateString();
 
   const applyTodayRecordsToGroups = (groups, todayRecords) => {
-    const recordsByPlayerId = new Map(
-      todayRecords.map((record) => [String(record.playerId?._id || record.playerId), record])
+    const recordsByPlayerAndGroupId = new Map(
+      todayRecords.map((record) => [getAttendanceRecordKey(record.playerId, record.groupId), record])
     );
 
     return groups.map((group) => {
       const players = group.players.map((player) => ({
         ...player,
-        todayAttendance: recordsByPlayerId.get(String(player._id)) || null
+        todayAttendance: recordsByPlayerAndGroupId.get(getAttendanceRecordKey(player._id, group._id)) || null
       }));
       const markedCount = players.filter((player) => Boolean(player.todayAttendance)).length;
       const presentCount = players.filter((player) => player.todayAttendance?.status === 'present').length;
@@ -563,7 +566,7 @@ const AttendancePage = () => {
     }, 450);
   };
 
-  const updatePlayerInBoard = (playerId, updater) => {
+  const setPlayerAttendanceInBoard = (playerId, targetGroupId, attendance) => {
     setGroupColumns((currentGroups) => {
       const nextGroups = currentGroups.map((group) => {
         let changed = false;
@@ -573,7 +576,10 @@ const AttendancePage = () => {
           }
 
           changed = true;
-          return updater(player, group);
+          return {
+            ...player,
+            todayAttendance: targetGroupId && group._id === targetGroupId ? attendance : null
+          };
         });
 
         if (!changed) {
@@ -598,46 +604,55 @@ const AttendancePage = () => {
     });
   };
 
+  const restoreBoard = (groups) => {
+    setGroupColumns(groups);
+    attendanceBoardCache = groups;
+    attendanceBoardCacheTimestamp = Date.now();
+    attendanceBoardCacheDate = selectedAttendanceDate;
+  };
+
   const handleAction = async (player, groupId, status) => {
     if (isAttendanceDateOutOfRange) {
       setMessage('Out of range (maximum range is 3 months)');
       return;
     }
 
-    const previousAttendance = player.todayAttendance || null;
+    const previousGroups = groupColumns;
     const optimisticAttendance = {
       ...(player.todayAttendance || {}),
+      playerId: player._id,
+      groupId,
       status,
       date: new Date(`${selectedAttendanceDate}T00:00:00`).toISOString(),
       checkInTime: status === 'present' ? new Date().toISOString() : undefined
     };
 
     setMessage('');
-    updatePlayerInBoard(player._id, (currentPlayer) => ({
-      ...currentPlayer,
-      todayAttendance: optimisticAttendance
-    }));
+    setPlayerAttendanceInBoard(player._id, groupId, optimisticAttendance);
 
     if (selectedPlayer?._id === player._id) {
       setSelectedPlayer((currentPlayer) => currentPlayer ? {
         ...currentPlayer,
-        todayAttendance: optimisticAttendance
+        todayAttendance: getEntityId(currentPlayer.todayAttendance?.groupId) === groupId || getEntityId(currentPlayer.groupId) === groupId
+          ? optimisticAttendance
+          : currentPlayer.todayAttendance
       } : currentPlayer);
     }
 
     try {
-      await updateTodayAttendance({ playerId: player._id, groupId, status, date: selectedAttendanceDate });
+      const savedAttendance = await updateTodayAttendance({ playerId: player._id, groupId, status, date: selectedAttendanceDate });
+      setPlayerAttendanceInBoard(player._id, groupId, savedAttendance);
       setMessage('Attendance recorded');
     } catch (err) {
-      updatePlayerInBoard(player._id, (currentPlayer) => ({
-        ...currentPlayer,
-        todayAttendance: previousAttendance
-      }));
+      restoreBoard(previousGroups);
 
       if (selectedPlayer?._id === player._id) {
+        const previousSelectedPlayer = previousGroups
+          .flatMap((group) => group.players)
+          .find((currentPlayer) => currentPlayer._id === player._id && currentPlayer.todayAttendance);
         setSelectedPlayer((currentPlayer) => currentPlayer ? {
           ...currentPlayer,
-          todayAttendance: previousAttendance
+          todayAttendance: previousSelectedPlayer?.todayAttendance || null
         } : currentPlayer);
       }
 
@@ -651,12 +666,9 @@ const AttendancePage = () => {
       return;
     }
 
-    const previousAttendance = player.todayAttendance || null;
+    const previousGroups = groupColumns;
     setMessage('');
-    updatePlayerInBoard(player._id, (currentPlayer) => ({
-      ...currentPlayer,
-      todayAttendance: null
-    }));
+    setPlayerAttendanceInBoard(player._id, null, null);
 
     if (selectedPlayer?._id === player._id) {
       setSelectedPlayer((currentPlayer) => currentPlayer ? {
@@ -669,15 +681,15 @@ const AttendancePage = () => {
       await cancelTodayAttendance({ playerId: player._id, date: selectedAttendanceDate });
       setMessage('Attendance cancelled');
     } catch (err) {
-      updatePlayerInBoard(player._id, (currentPlayer) => ({
-        ...currentPlayer,
-        todayAttendance: previousAttendance
-      }));
+      restoreBoard(previousGroups);
 
       if (selectedPlayer?._id === player._id) {
+        const previousSelectedPlayer = previousGroups
+          .flatMap((group) => group.players)
+          .find((currentPlayer) => currentPlayer._id === player._id && currentPlayer.todayAttendance);
         setSelectedPlayer((currentPlayer) => currentPlayer ? {
           ...currentPlayer,
-          todayAttendance: previousAttendance
+          todayAttendance: previousSelectedPlayer?.todayAttendance || null
         } : currentPlayer);
       }
 

@@ -109,7 +109,7 @@ const getPlayers = async (req, res, next) => {
     }
     const players = await Player.find(filter)
       .sort({ createdAt: -1, _id: -1 })
-      .populate('parentId', 'name email')
+      .populate('parentId', 'name email userId')
       .populate('programId', 'name level')
       .populate('groupId', 'name days startTime endTime')
       .populate('groupIds', 'name days startTime endTime')
@@ -121,7 +121,7 @@ const getPlayers = async (req, res, next) => {
 };
 
 const loadPlayerForHistory = (playerId) => Player.findById(playerId)
-  .populate('parentId', 'name email')
+  .populate('parentId', 'name email userId')
   .populate('programId', 'name level')
   .populate('groupId', 'name days startTime endTime')
   .populate('groupIds', 'name days startTime endTime')
@@ -193,7 +193,7 @@ const getPlayerById = async (req, res, next) => {
       return res.status(400).json({ message: 'Invalid player ID.' });
     }
     const player = await Player.findById(id)
-      .populate('parentId', 'name email')
+      .populate('parentId', 'name email userId')
       .populate('programId', 'name level')
       .populate('groupId', 'name days startTime endTime')
       .populate('groupIds', 'name days startTime endTime')
