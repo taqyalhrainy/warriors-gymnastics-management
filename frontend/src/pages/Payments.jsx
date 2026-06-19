@@ -197,7 +197,16 @@ const PaymentsPage = () => {
 
   const totals = useMemo(() => {
     const paid = payments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
-    const remaining = payments.reduce((sum, payment) => sum + Number(payment.remainingAmount || 0), 0);
+    const latestPaymentsByPlayer = new Map();
+    sortPaymentsNewestFirst(payments).forEach((payment) => {
+      const player = payment.playerId && typeof payment.playerId === 'object' ? payment.playerId : null;
+      if (player && !isPaymentInCurrentSubscription(payment, player)) return;
+      const playerKey = getPaymentPlayerKey(payment);
+      if (!latestPaymentsByPlayer.has(playerKey)) {
+        latestPaymentsByPlayer.set(playerKey, payment);
+      }
+    });
+    const remaining = [...latestPaymentsByPlayer.values()].reduce((sum, payment) => sum + Number(payment.remainingAmount || 0), 0);
     const fullPayments = payments.filter((payment) => Number(payment.remainingAmount || 0) <= 0).length;
     return { paid, remaining, fullPayments };
   }, [payments]);
