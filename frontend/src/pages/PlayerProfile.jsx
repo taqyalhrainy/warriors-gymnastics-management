@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import { getPlayer } from '../services/players.js';
 import { fetchAttendanceByPlayer } from '../services/attendance.js';
+import { fetchPaymentsByPlayer } from '../services/payments.js';
 import { formatCurrency } from '../utils/format.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
@@ -10,15 +11,17 @@ const PlayerProfilePage = () => {
   const { id } = useParams();
   const [player, setPlayer] = useState(null);
   const [attendanceHistory, setAttendanceHistory] = useState([]);
+  const [paymentHistory, setPaymentHistory] = useState([]);
   const { t } = useLanguage();
 
   useEffect(() => {
-    Promise.all([getPlayer(id), fetchAttendanceByPlayer(id)])
-      .then(([playerData, attendanceData]) => {
+    Promise.all([getPlayer(id), fetchAttendanceByPlayer(id), fetchPaymentsByPlayer(id)])
+      .then(([playerData, attendanceData, paymentData]) => {
         const threeMonthsAgo = new Date();
         threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
         setPlayer(playerData);
         setAttendanceHistory(attendanceData.filter((record) => new Date(record.date) >= threeMonthsAgo));
+        setPaymentHistory(paymentData);
       })
       .catch(console.error);
   }, [id]);
@@ -27,6 +30,9 @@ const PlayerProfilePage = () => {
     const groups = value?.groupIds?.length ? value.groupIds : [value?.groupId].filter(Boolean);
     return groups.map((group) => group?.name).filter(Boolean).join(', ');
   };
+
+  const totalPaid = paymentHistory.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
+  const subscriptionPrice = Number(player?.payment || 0);
 
   return (
     <div className="dashboard-layout">
@@ -48,6 +54,8 @@ const PlayerProfilePage = () => {
             <div><strong>{t('classes')}:</strong> {player.packageClasses || t('notSet')}</div>
             <div><strong>{t('hours')}:</strong> {player.packageHours || t('notSet')}</div>
             <div><strong>{t('payment')}:</strong> {formatCurrency(player.payment || 0)}</div>
+            <div><strong>Total Paid:</strong> {formatCurrency(totalPaid)}</div>
+            <div><strong>Subscription Price:</strong> {formatCurrency(subscriptionPrice)}</div>
             <div><strong>{t('note')}:</strong> {player.note || t('notSet')}</div>
             <div className="profile-attendance-history">
               <h2>Attendance History</h2>

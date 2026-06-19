@@ -73,7 +73,6 @@ const sortPaymentsNewestFirst = (items) => [...items].sort((first, second) => {
 const getMemberName = (payment) => payment.playerId?.fullName || payment.playerNameSnapshot || '-';
 const getParentName = (payment) => payment.playerId?.parentId?.name || payment.parentNameSnapshot || '-';
 const getParentPhone = (payment) => payment.playerId?.parentId?.phone || payment.playerId?.parentPhone || payment.parentPhoneSnapshot || '-';
-const getSubscriptionPrice = (payment) => Number(payment.totalAmount || payment.playerId?.payment || 0);
 const getPaymentPlayerKey = (payment) => String(payment.playerId?._id || payment.playerId || payment.playerNameSnapshot || payment._id || '');
 const isDeletedPlayerPayment = (payment) => Boolean(payment.playerId?.isDeleted);
 const getPackageName = (payment) => {
@@ -225,42 +224,6 @@ const PaymentsPage = () => {
     return payments;
   }, [payments, activeView, selectedMonth, selectedDay]);
 
-  const totalPaidByPaymentId = useMemo(() => {
-    const totals = new Map();
-    const runningTotals = new Map();
-    const pendingTotals = new Map();
-    const chronologicalPayments = [...payments].sort((first, second) => {
-      const firstIsPending = isPendingPayment(first);
-      const secondIsPending = isPendingPayment(second);
-      const firstDate = new Date(first.paymentDate || 0).getTime();
-      const secondDate = new Date(second.paymentDate || 0).getTime();
-      if (firstDate !== secondDate) return firstDate - secondDate;
-      if (firstIsPending !== secondIsPending) return firstIsPending ? 1 : -1;
-      return String(first._id || '').localeCompare(String(second._id || ''));
-    });
-
-    chronologicalPayments.forEach((payment) => {
-      const playerKey = getPaymentPlayerKey(payment);
-      if (isPendingPayment(payment)) {
-        const savedTotal = payments
-          .filter((item) => getPaymentPlayerKey(item) === playerKey && !isPendingPayment(item))
-          .reduce((sum, item) => sum + Number(item.paidAmount || 0), 0);
-        const nextPendingTotal = Number(pendingTotals.get(playerKey) || 0) + Number(payment.paidAmount || 0);
-        const nextTotal = savedTotal + nextPendingTotal;
-        pendingTotals.set(playerKey, nextPendingTotal);
-        runningTotals.set(playerKey, nextTotal);
-        totals.set(payment._id, nextTotal);
-        return;
-      }
-
-      const nextTotal = Number(runningTotals.get(playerKey) || 0) + Number(payment.paidAmount || 0);
-      runningTotals.set(playerKey, nextTotal);
-      totals.set(payment._id, nextTotal);
-    });
-
-    return totals;
-  }, [payments]);
-
   const searchedPayments = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return visiblePayments;
@@ -277,8 +240,6 @@ const PaymentsPage = () => {
         payment.createdBy?.email,
         payment.paidAmount,
         payment.remainingAmount,
-        totalPaidByPaymentId.get(payment._id),
-        getSubscriptionPrice(payment),
         formatDate(payment.paymentDate),
         formatTime(payment.paymentDate),
         payment.receiptImage
@@ -286,7 +247,7 @@ const PaymentsPage = () => {
 
       return searchable.includes(query);
     });
-  }, [visiblePayments, searchQuery, totalPaidByPaymentId]);
+  }, [visiblePayments, searchQuery]);
 
   const memberSummaries = useMemo(() => {
     const map = new Map();
@@ -461,10 +422,6 @@ const PaymentsPage = () => {
           </div>
 
           <div className="payment-metrics">
-            <div>
-              <span>Total Paid</span>
-              <strong>{formatMoney(totals.paid)}</strong>
-            </div>
             <div>
               <span>Remaining Amount</span>
               <strong>{formatMoney(totals.remaining)}</strong>
@@ -666,8 +623,6 @@ const PaymentsPage = () => {
                     <th>Payment Method</th>
                     <th>Payment Amount</th>
                     <th>Remaining Amount</th>
-                    <th>Total Paid</th>
-                    <th>Subscription Price</th>
                     <th>Last edited time</th>
                     <th>Notes</th>
                     <th>Actions</th>
@@ -691,8 +646,6 @@ const PaymentsPage = () => {
                         <td><span className={`payment-pill method-${methodClass}`}>{payment.paymentMethod || '-'}</span></td>
                         <td className="payment-amount-cell">{formatMoney(payment.paidAmount)}</td>
                         <td className="payment-amount-cell">{formatMoney(payment.remainingAmount)}</td>
-                        <td className="payment-amount-cell">{formatMoney(totalPaidByPaymentId.get(payment._id))}</td>
-                        <td className="payment-amount-cell">{formatMoney(getSubscriptionPrice(payment))}</td>
                         <td>{payment.updatedAt ? `${formatDate(payment.updatedAt)} ${formatTime(payment.updatedAt)}` : '-'}</td>
                         <td>{payment.notes ? payment.notes : '-'}</td>
                         <td>
@@ -704,7 +657,7 @@ const PaymentsPage = () => {
                       </tr>
                     );
                   }) : (
-                    <tr><td colSpan="14" className="payment-empty-row">{t('noPaymentsRecorded')}</td></tr>
+                    <tr><td colSpan="12" className="payment-empty-row">{t('noPaymentsRecorded')}</td></tr>
                   )}
                 </tbody>
               </table>
