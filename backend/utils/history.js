@@ -54,6 +54,7 @@ const snapshotPlayerDocument = (playerDocument) => {
     level: player?.level || '',
     startDate: player?.startDate || null,
     endDate: player?.endDate || null,
+    currentSubscriptionStartedAt: player?.currentSubscriptionStartedAt || null,
     packageName: player?.packageName || '',
     packageClasses: Number(player?.packageClasses || 0),
     packageHours: Number(player?.packageHours || 0),

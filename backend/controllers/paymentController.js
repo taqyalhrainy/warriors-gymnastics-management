@@ -11,7 +11,7 @@ const { snapshotPaymentDocument, createHistoryEntry } = require('../utils/histor
 const populatePaymentQuery = (query) => query
   .populate({
     path: 'playerId',
-    select: 'fullName parentId parentPhoneEncrypted isDeleted deletedAt packageName packageClasses packageHours payment',
+    select: 'fullName parentId parentPhoneEncrypted isDeleted deletedAt packageName packageClasses packageHours payment startDate currentSubscriptionStartedAt',
     populate: {
       path: 'parentId',
       select: 'name email phoneEncrypted userId',
@@ -65,9 +65,17 @@ const recalculatePlayerPayments = async (playerId) => {
 
   const payments = await Payment.find({ playerId }).sort({ paymentDate: 1, _id: 1 });
   const totalAmount = Number(player.payment || 0);
+  const subscriptionStart = player.startDate ? new Date(player.startDate) : null;
+  const subscriptionCycleStart = player.currentSubscriptionStartedAt ? new Date(player.currentSubscriptionStartedAt) : null;
   let runningPaid = 0;
 
   for (const payment of payments) {
+    if (subscriptionCycleStart && (!payment.createdAt || new Date(payment.createdAt) < subscriptionCycleStart)) {
+      continue;
+    }
+    if (!subscriptionCycleStart && subscriptionStart && new Date(payment.paymentDate) < subscriptionStart) {
+      continue;
+    }
     runningPaid += Number(payment.paidAmount || 0);
     payment.totalAmount = totalAmount;
     payment.remainingAmount = totalAmount ? Math.max(0, totalAmount - runningPaid) : 0;
@@ -89,6 +97,16 @@ const parsePaymentDate = (value) => {
 const getTransactionType = (value, remainingAmount) => {
   if (value) return String(value).trim();
   return Number(remainingAmount || 0) <= 0 ? 'Full payment' : 'Partial payment';
+};
+
+const getCurrentSubscriptionPaymentMatch = (player) => {
+  const match = { playerId: player._id };
+  if (player.currentSubscriptionStartedAt) {
+    match.createdAt = { $gte: new Date(player.currentSubscriptionStartedAt) };
+  } else if (player.startDate) {
+    match.paymentDate = { $gte: new Date(player.startDate) };
+  }
+  return match;
 };
 
 const getPayments = async (req, res, next) => {
@@ -116,7 +134,7 @@ const createPayment = async (req, res, next) => {
       return res.status(404).json({ message: 'Player not found.' });
     }
     const previousPaid = await Payment.aggregate([
-      { $match: { playerId: player._id } },
+      { $match: getCurrentSubscriptionPaymentMatch(player) },
       { $group: { _id: '$playerId', totalPaid: { $sum: '$paidAmount' } } }
     ]);
     const playerTotalAmount = Number(player.payment || 0);

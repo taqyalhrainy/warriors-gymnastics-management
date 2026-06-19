@@ -18,6 +18,7 @@ const paymentSchema = new mongoose.Schema({
   paymentDate: { type: Date, default: Date.now },
   notesEncrypted: { type: String },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  createdAt: { type: Date, default: Date.now },
   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   updatedAt: { type: Date }
 });

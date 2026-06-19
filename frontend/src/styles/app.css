@@ -548,6 +548,107 @@ body.theme-light .auth-loading-overlay {
   color: var(--primary);
 }
 
+.profile-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.new-subscription-button {
+  position: relative;
+  isolation: isolate;
+  min-height: 44px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 22px;
+  overflow: hidden;
+  color: #ffffff;
+  font-weight: 950;
+  letter-spacing: 0;
+  cursor: pointer;
+  background: #0f172a;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.18) inset,
+    0 14px 28px rgba(20, 184, 166, 0.26);
+}
+
+.new-subscription-button::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  z-index: -2;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, #14b8a6, #38bdf8, #a3e635, #facc15, #14b8a6);
+  background-size: 260% 100%;
+  animation: subscription-glow-sweep 2.8s ease-in-out infinite;
+}
+
+.new-subscription-button::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  z-index: -1;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.32), transparent 24%),
+    linear-gradient(135deg, rgba(6, 78, 59, 0.94), rgba(15, 23, 42, 0.88));
+}
+
+.new-subscription-button span {
+  position: relative;
+  z-index: 1;
+}
+
+.new-subscription-button:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.22) inset,
+    0 0 24px rgba(20, 184, 166, 0.42),
+    0 18px 36px rgba(14, 165, 233, 0.24);
+}
+
+@keyframes subscription-glow-sweep {
+  0%,
+  100% {
+    background-position: 0% 50%;
+    filter: brightness(0.92);
+  }
+
+  50% {
+    background-position: 100% 50%;
+    filter: brightness(1.28);
+  }
+}
+
+.new-subscription-modal {
+  border-top: 0;
+  border-color: color-mix(in srgb, #14b8a6 42%, var(--border));
+  background:
+    linear-gradient(135deg, rgba(20, 184, 166, 0.12), rgba(56, 189, 248, 0.08) 52%, rgba(250, 204, 21, 0.08)),
+    var(--surface);
+}
+
+.new-subscription-modal .student-modal-header {
+  border-bottom: 1px solid color-mix(in srgb, #14b8a6 34%, var(--border));
+  padding-bottom: 16px;
+}
+
+.new-subscription-warning {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  border-radius: 8px;
+  background: color-mix(in srgb, #ef4444 12%, var(--surface));
+  color: #fecaca;
+  font-weight: 900;
+}
+
+body.theme-light .new-subscription-warning {
+  color: #991b1b;
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

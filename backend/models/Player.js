@@ -13,6 +13,7 @@ const playerSchema = new mongoose.Schema({
   level: { type: String, trim: true },
   startDate: { type: Date },
   endDate: { type: Date },
+  currentSubscriptionStartedAt: { type: Date },
   packageName: { type: String, trim: true, default: '' },
   packageClasses: { type: Number, min: 0, default: 0 },
   packageHours: { type: Number, min: 0, default: 0 },

@@ -75,6 +75,13 @@ const getParentName = (payment) => payment.playerId?.parentId?.name || payment.p
 const getParentPhone = (payment) => payment.playerId?.parentId?.phone || payment.playerId?.parentPhone || payment.parentPhoneSnapshot || '-';
 const getPaymentPlayerKey = (payment) => String(payment.playerId?._id || payment.playerId || payment.playerNameSnapshot || payment._id || '');
 const isDeletedPlayerPayment = (payment) => Boolean(payment.playerId?.isDeleted);
+const isPaymentInCurrentSubscription = (payment, player) => {
+  if (player?.currentSubscriptionStartedAt) {
+    return payment.createdAt && new Date(payment.createdAt) >= new Date(player.currentSubscriptionStartedAt);
+  }
+  if (!player?.startDate) return true;
+  return new Date(payment.paymentDate || 0) >= new Date(player.startDate);
+};
 const getPackageName = (payment) => {
   const classes = payment.playerId?.packageClasses || payment.packageClassesSnapshot;
   const hours = payment.playerId?.packageHours || payment.packageHoursSnapshot;
@@ -127,7 +134,7 @@ const PaymentsPage = () => {
   };
 
   useEffect(() => {
-    fetchPlayers().then(setPlayers).catch(console.error);
+    fetchPlayers({ fresh: Date.now() }).then(setPlayers).catch(console.error);
     loadPayments();
   }, []);
 
@@ -136,7 +143,11 @@ const PaymentsPage = () => {
     if (!player) return 'Partial payment';
     const totalAmount = Number(player.payment || 0);
     const paidBefore = payments
-      .filter((payment) => String(payment.playerId?._id || payment.playerId) === String(playerId) && payment._id !== editingPaymentId)
+      .filter((payment) => (
+        String(payment.playerId?._id || payment.playerId) === String(playerId)
+        && payment._id !== editingPaymentId
+        && isPaymentInCurrentSubscription(payment, player)
+      ))
       .reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
     const remainingBefore = totalAmount ? Math.max(0, totalAmount - paidBefore) : 0;
     return remainingBefore && parseLocalizedNumber(paidAmount) < remainingBefore ? 'Partial payment' : 'Full payment';
@@ -145,7 +156,11 @@ const PaymentsPage = () => {
   const buildOptimisticPayment = (payload, id) => {
     const player = players.find((item) => item._id === payload.playerId);
     const paidBefore = payments
-      .filter((payment) => String(payment.playerId?._id || payment.playerId) === String(payload.playerId) && payment._id !== editingPaymentId)
+      .filter((payment) => (
+        String(payment.playerId?._id || payment.playerId) === String(payload.playerId)
+        && payment._id !== editingPaymentId
+        && isPaymentInCurrentSubscription(payment, player)
+      ))
       .reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
     const subscriptionPrice = Number(player?.payment || 0);
     const paidAmount = Number(payload.paidAmount || 0);

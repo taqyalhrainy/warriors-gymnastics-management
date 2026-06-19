@@ -95,6 +95,27 @@ const incrementGroups = async (groupIds, amount) => {
   }
 };
 
+const recalculatePlayerPayments = async (player) => {
+  const payments = await Payment.find({ playerId: player._id }).sort({ paymentDate: 1, _id: 1 });
+  const totalAmount = Number(player.payment || 0);
+  const subscriptionStart = player.startDate ? new Date(player.startDate) : null;
+  const subscriptionCycleStart = player.currentSubscriptionStartedAt ? new Date(player.currentSubscriptionStartedAt) : null;
+  let runningPaid = 0;
+
+  for (const payment of payments) {
+    if (subscriptionCycleStart && (!payment.createdAt || new Date(payment.createdAt) < subscriptionCycleStart)) {
+      continue;
+    }
+    if (!subscriptionCycleStart && subscriptionStart && new Date(payment.paymentDate) < subscriptionStart) {
+      continue;
+    }
+    runningPaid += Number(payment.paidAmount || 0);
+    payment.totalAmount = totalAmount;
+    payment.remainingAmount = totalAmount ? Math.max(0, totalAmount - runningPaid) : 0;
+    await payment.save();
+  }
+};
+
 const getPlayers = async (req, res, next) => {
   try {
     const filter = { isDeleted: { $ne: true } };
@@ -215,6 +236,8 @@ const updatePlayer = async (req, res, next) => {
       return res.status(400).json({ message: 'Invalid player ID.' });
     }
     const updates = cleanPlayerPayload(sanitizeObject(req.body));
+    const startsNewSubscription = Boolean(updates.newSubscription);
+    delete updates.newSubscription;
     const player = await Player.findById(id);
     if (!player) {
       return res.status(404).json({ message: 'Player not found.' });
@@ -267,8 +290,14 @@ const updatePlayer = async (req, res, next) => {
     if (typeof updates.packageHours !== 'undefined') {
       updates.packageHours = parseLocalizedNumber(updates.packageHours);
     }
+    if (startsNewSubscription) {
+      updates.currentSubscriptionStartedAt = new Date();
+    }
     Object.assign(player, updates);
     await player.save();
+    if (startsNewSubscription || typeof updates.payment !== 'undefined' || typeof updates.startDate !== 'undefined') {
+      await recalculatePlayerPayments(player);
+    }
     const afterPlayer = await loadPlayerForHistory(id);
     await createHistoryEntry({
       entityType: 'player',
