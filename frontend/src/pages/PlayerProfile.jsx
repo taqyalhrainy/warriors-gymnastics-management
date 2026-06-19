@@ -32,7 +32,6 @@ const PlayerProfilePage = () => {
   };
 
   const totalPaid = paymentHistory.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
-  const subscriptionPrice = Number(player?.payment || 0);
 
   return (
     <div className="dashboard-layout">
@@ -55,7 +54,6 @@ const PlayerProfilePage = () => {
             <div><strong>{t('hours')}:</strong> {player.packageHours || t('notSet')}</div>
             <div><strong>{t('payment')}:</strong> {formatCurrency(player.payment || 0)}</div>
             <div><strong>Total Paid:</strong> {formatCurrency(totalPaid)}</div>
-            <div><strong>Subscription Price:</strong> {formatCurrency(subscriptionPrice)}</div>
             <div><strong>{t('note')}:</strong> {player.note || t('notSet')}</div>
             <div className="profile-attendance-history">
               <h2>Attendance History</h2>
