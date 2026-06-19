@@ -35,6 +35,7 @@ const getDateInputValue = (date = new Date()) => {
 };
 
 const getTransactionLabel = (payment) => {
+  if (payment.transactionType) return payment.transactionType;
   if (Number(payment.remainingAmount || 0) <= 0) return 'Full payment';
   return 'Partial payment';
 };
@@ -57,8 +58,23 @@ const getPaymentDayKey = (date) => {
   return getDateInputValue(date);
 };
 
+const isPendingPayment = (payment) => String(payment._id || '').startsWith('temp-payment-');
+
+const sortPaymentsNewestFirst = (items) => [...items].sort((first, second) => {
+  const firstIsPending = isPendingPayment(first);
+  const secondIsPending = isPendingPayment(second);
+  if (firstIsPending !== secondIsPending) return firstIsPending ? -1 : 1;
+  const firstDate = new Date(first.paymentDate || 0).getTime();
+  const secondDate = new Date(second.paymentDate || 0).getTime();
+  if (secondDate !== firstDate) return secondDate - firstDate;
+  return String(second._id || '').localeCompare(String(first._id || ''));
+});
+
 const getMemberName = (payment) => payment.playerId?.fullName || payment.playerNameSnapshot || '-';
 const getParentName = (payment) => payment.playerId?.parentId?.name || payment.parentNameSnapshot || '-';
+const getParentPhone = (payment) => payment.playerId?.parentId?.phone || payment.playerId?.parentPhone || payment.parentPhoneSnapshot || '-';
+const getSubscriptionPrice = (payment) => Number(payment.totalAmount || payment.playerId?.payment || 0);
+const getPaymentPlayerKey = (payment) => String(payment.playerId?._id || payment.playerId || payment.playerNameSnapshot || payment._id || '');
 const isDeletedPlayerPayment = (payment) => Boolean(payment.playerId?.isDeleted);
 const getPackageName = (payment) => {
   const classes = payment.playerId?.packageClasses || payment.packageClassesSnapshot;
@@ -74,10 +90,21 @@ const getPlayerGroups = (player) => {
   return groups.map((group) => group?.name).filter(Boolean).join(', ');
 };
 
+const initialPaymentForm = {
+  playerId: '',
+  paidAmount: 0,
+  transactionType: 'Partial payment',
+  customTransactionType: '',
+  paymentMethod: 'Cash',
+  paymentDate: getDateInputValue(),
+  notes: ''
+};
+
 const PaymentsPage = () => {
   const [payments, setPayments] = useState([]);
   const [players, setPlayers] = useState([]);
-  const [form, setForm] = useState({ playerId: '', paidAmount: 0, paymentMethod: 'Cash', paymentDate: getDateInputValue(), receiptImage: '', notes: '' });
+  const [form, setForm] = useState(initialPaymentForm);
+  const [isTransactionTouched, setIsTransactionTouched] = useState(false);
   const [editingPaymentId, setEditingPaymentId] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -90,16 +117,69 @@ const PaymentsPage = () => {
 
   const loadPayments = async () => {
     try {
-      setPayments(await fetchPayments());
+      setPayments(sortPaymentsNewestFirst(await fetchPayments({ fresh: Date.now() })));
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const refreshPaymentsInBackground = () => {
+    loadPayments().catch(console.error);
   };
 
   useEffect(() => {
     fetchPlayers().then(setPlayers).catch(console.error);
     loadPayments();
   }, []);
+
+  const getAutoTransactionType = (playerId, paidAmount) => {
+    const player = players.find((item) => item._id === playerId);
+    if (!player) return 'Partial payment';
+    const totalAmount = Number(player.payment || 0);
+    const paidBefore = payments
+      .filter((payment) => String(payment.playerId?._id || payment.playerId) === String(playerId) && payment._id !== editingPaymentId)
+      .reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
+    const remainingBefore = totalAmount ? Math.max(0, totalAmount - paidBefore) : 0;
+    return remainingBefore && parseLocalizedNumber(paidAmount) < remainingBefore ? 'Partial payment' : 'Full payment';
+  };
+
+  const buildOptimisticPayment = (payload, id) => {
+    const player = players.find((item) => item._id === payload.playerId);
+    const paidBefore = payments
+      .filter((payment) => String(payment.playerId?._id || payment.playerId) === String(payload.playerId) && payment._id !== editingPaymentId)
+      .reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
+    const subscriptionPrice = Number(player?.payment || 0);
+    const paidAmount = Number(payload.paidAmount || 0);
+    const remainingAmount = Math.max(0, subscriptionPrice - paidBefore - paidAmount);
+
+    return {
+      ...(editingPaymentId ? payments.find((payment) => payment._id === editingPaymentId) : {}),
+      _id: id,
+      playerId: player || payload.playerId,
+      playerNameSnapshot: player?.fullName || '',
+      parentNameSnapshot: player?.parentId?.name || '',
+      parentPhoneSnapshot: player?.parentId?.phone || player?.parentPhone || '',
+      packageNameSnapshot: player?.packageName || '',
+      packageClassesSnapshot: Number(player?.packageClasses || 0),
+      packageHoursSnapshot: Number(player?.packageHours || 0),
+      totalAmount: subscriptionPrice,
+      paidAmount,
+      remainingAmount,
+      transactionType: payload.transactionType,
+      paymentMethod: payload.paymentMethod,
+      paymentDate: new Date(payload.paymentDate).toISOString(),
+      notes: payload.notes || '',
+      updatedAt: editingPaymentId ? new Date().toISOString() : undefined
+    };
+  };
+
+  useEffect(() => {
+    if (isTransactionTouched) return;
+    setForm((current) => ({
+      ...current,
+      transactionType: getAutoTransactionType(current.playerId, current.paidAmount)
+    }));
+  }, [form.playerId, form.paidAmount, players, payments, editingPaymentId, isTransactionTouched]);
 
   const totals = useMemo(() => {
     const paid = payments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
@@ -145,6 +225,42 @@ const PaymentsPage = () => {
     return payments;
   }, [payments, activeView, selectedMonth, selectedDay]);
 
+  const totalPaidByPaymentId = useMemo(() => {
+    const totals = new Map();
+    const runningTotals = new Map();
+    const pendingTotals = new Map();
+    const chronologicalPayments = [...payments].sort((first, second) => {
+      const firstIsPending = isPendingPayment(first);
+      const secondIsPending = isPendingPayment(second);
+      const firstDate = new Date(first.paymentDate || 0).getTime();
+      const secondDate = new Date(second.paymentDate || 0).getTime();
+      if (firstDate !== secondDate) return firstDate - secondDate;
+      if (firstIsPending !== secondIsPending) return firstIsPending ? 1 : -1;
+      return String(first._id || '').localeCompare(String(second._id || ''));
+    });
+
+    chronologicalPayments.forEach((payment) => {
+      const playerKey = getPaymentPlayerKey(payment);
+      if (isPendingPayment(payment)) {
+        const savedTotal = payments
+          .filter((item) => getPaymentPlayerKey(item) === playerKey && !isPendingPayment(item))
+          .reduce((sum, item) => sum + Number(item.paidAmount || 0), 0);
+        const nextPendingTotal = Number(pendingTotals.get(playerKey) || 0) + Number(payment.paidAmount || 0);
+        const nextTotal = savedTotal + nextPendingTotal;
+        pendingTotals.set(playerKey, nextPendingTotal);
+        runningTotals.set(playerKey, nextTotal);
+        totals.set(payment._id, nextTotal);
+        return;
+      }
+
+      const nextTotal = Number(runningTotals.get(playerKey) || 0) + Number(payment.paidAmount || 0);
+      runningTotals.set(playerKey, nextTotal);
+      totals.set(payment._id, nextTotal);
+    });
+
+    return totals;
+  }, [payments]);
+
   const searchedPayments = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return visiblePayments;
@@ -153,6 +269,7 @@ const PaymentsPage = () => {
       const searchable = [
         getMemberName(payment),
         getParentName(payment),
+        getParentPhone(payment),
         getPackageName(payment),
         payment.paymentMethod,
         getTransactionLabel(payment),
@@ -160,6 +277,8 @@ const PaymentsPage = () => {
         payment.createdBy?.email,
         payment.paidAmount,
         payment.remainingAmount,
+        totalPaidByPaymentId.get(payment._id),
+        getSubscriptionPrice(payment),
         formatDate(payment.paymentDate),
         formatTime(payment.paymentDate),
         payment.receiptImage
@@ -167,7 +286,7 @@ const PaymentsPage = () => {
 
       return searchable.includes(query);
     });
-  }, [visiblePayments, searchQuery]);
+  }, [visiblePayments, searchQuery, totalPaidByPaymentId]);
 
   const memberSummaries = useMemo(() => {
     const map = new Map();
@@ -213,18 +332,50 @@ const PaymentsPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    setIsSubmitting(true);
+
+    const previousPayments = payments;
+    const previousForm = form;
+    const previousEditingPaymentId = editingPaymentId;
+    const previousPlayerSearch = playerSearch;
+    const optimisticId = editingPaymentId || `temp-payment-${Date.now()}`;
+
     try {
-      const payload = { ...form, paidAmount: parseLocalizedNumber(form.paidAmount) };
-      if (editingPaymentId) {
-        await updatePayment(editingPaymentId, payload);
-      } else {
-        await createPayment(payload);
-      }
-      setForm({ playerId: '', paidAmount: 0, paymentMethod: 'Cash', paymentDate: getDateInputValue(), receiptImage: '', notes: '' });
+      const payload = {
+        ...form,
+        paidAmount: parseLocalizedNumber(form.paidAmount),
+        transactionType: form.transactionType === 'custom' ? form.customTransactionType : form.transactionType
+      };
+      delete payload.customTransactionType;
+      const optimisticPayment = buildOptimisticPayment(payload, optimisticId);
+
+      setPayments((current) => sortPaymentsNewestFirst(
+        editingPaymentId
+          ? current.map((payment) => payment._id === editingPaymentId ? optimisticPayment : payment)
+          : [optimisticPayment, ...current]
+      ));
+      setForm({ ...initialPaymentForm, paymentDate: getDateInputValue() });
+      setIsTransactionTouched(false);
       setEditingPaymentId('');
-      await loadPayments();
+      setPlayerSearch('');
+      setIsSubmitting(true);
+
+      if (editingPaymentId) {
+        const savedPayment = await updatePayment(editingPaymentId, payload);
+        setPayments((current) => sortPaymentsNewestFirst(
+          current.map((payment) => payment._id === savedPayment._id ? savedPayment : payment)
+        ));
+      } else {
+        const savedPayment = await createPayment(payload);
+        setPayments((current) => sortPaymentsNewestFirst(
+          current.map((payment) => payment._id === optimisticId ? savedPayment : payment)
+        ));
+      }
+      refreshPaymentsInBackground();
     } catch (err) {
+      setPayments(previousPayments);
+      setForm(previousForm);
+      setEditingPaymentId(previousEditingPaymentId);
+      setPlayerSearch(previousPlayerSearch);
       setError(err.response?.data?.message || 'Unable to save payment.');
     } finally {
       setIsSubmitting(false);
@@ -236,18 +387,21 @@ const PaymentsPage = () => {
     setForm({
       playerId: payment.playerId?._id || payment.playerId || '',
       paidAmount: String(payment.paidAmount ?? 0),
+      transactionType: ['Full payment', 'Partial payment'].includes(getTransactionLabel(payment)) ? getTransactionLabel(payment) : 'custom',
+      customTransactionType: ['Full payment', 'Partial payment'].includes(getTransactionLabel(payment)) ? '' : getTransactionLabel(payment),
       paymentMethod: payment.paymentMethod || 'Cash',
       paymentDate: getDateInputValue(payment.paymentDate),
-      receiptImage: payment.receiptImage || '',
       notes: payment.notes || ''
     });
+    setIsTransactionTouched(false);
     setPlayerSearch(payment.playerId?.fullName || '');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleCancelEdit = () => {
     setEditingPaymentId('');
-    setForm({ playerId: '', paidAmount: 0, paymentMethod: 'Cash', paymentDate: getDateInputValue(), receiptImage: '', notes: '' });
+    setForm({ ...initialPaymentForm, paymentDate: getDateInputValue() });
+    setIsTransactionTouched(false);
     setPlayerSearch('');
   };
 
@@ -256,13 +410,16 @@ const PaymentsPage = () => {
     if (!confirmed) return;
 
     setError('');
+    const previousPayments = payments;
+    setPayments((current) => current.filter((item) => item._id !== payment._id));
     try {
       await deletePayment(payment._id);
       if (editingPaymentId === payment._id) {
         handleCancelEdit();
       }
-      await loadPayments();
+      refreshPaymentsInBackground();
     } catch (err) {
+      setPayments(previousPayments);
       setError(err.response?.data?.message || 'Unable to delete payment.');
     }
   };
@@ -305,11 +462,11 @@ const PaymentsPage = () => {
 
           <div className="payment-metrics">
             <div>
-              <span>Total Amount</span>
+              <span>Total Paid</span>
               <strong>{formatMoney(totals.paid)}</strong>
             </div>
             <div>
-              <span>Remaining</span>
+              <span>Remaining Amount</span>
               <strong>{formatMoney(totals.remaining)}</strong>
             </div>
             <div>
@@ -338,7 +495,15 @@ const PaymentsPage = () => {
                   placeholder="Search player..."
                   type="search"
                 />
-                <select value={form.playerId} onChange={(e) => setForm({ ...form, playerId: e.target.value })} required disabled={Boolean(editingPaymentId)}>
+                <select
+                  value={form.playerId}
+                  onChange={(e) => {
+                    setIsTransactionTouched(false);
+                    setForm({ ...form, playerId: e.target.value });
+                  }}
+                  required
+                  disabled={Boolean(editingPaymentId)}
+                >
                   <option value="">{t('selectPlayer')}</option>
                   {filteredPlayers.map((player) => <option key={player._id} value={player._id}>{player.fullName}</option>)}
                 </select>
@@ -353,6 +518,29 @@ const PaymentsPage = () => {
                   onChange={(e) => setForm({ ...form, paidAmount: normalizeDigits(e.target.value) })}
                   required
                 />
+              </label>
+
+              <label>
+                <span>Transaction</span>
+                <select
+                  value={form.transactionType}
+                  onChange={(e) => {
+                    setIsTransactionTouched(true);
+                    setForm({ ...form, transactionType: e.target.value, customTransactionType: e.target.value === 'custom' ? form.customTransactionType : '' });
+                  }}
+                >
+                  <option>Full payment</option>
+                  <option>Partial payment</option>
+                  <option value="custom">Custom</option>
+                </select>
+                {form.transactionType === 'custom' && (
+                  <input
+                    value={form.customTransactionType}
+                    onChange={(e) => setForm({ ...form, customTransactionType: e.target.value })}
+                    placeholder="Write transaction..."
+                    required
+                  />
+                )}
               </label>
 
               <label>
@@ -375,11 +563,6 @@ const PaymentsPage = () => {
               </label>
 
               <label>
-                <span>{t('receiptImageUrl')}</span>
-                <input value={form.receiptImage} onChange={(e) => setForm({ ...form, receiptImage: e.target.value })} />
-              </label>
-
-              <label>
                 <span>{t('notes')}</span>
                 <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
               </label>
@@ -389,7 +572,7 @@ const PaymentsPage = () => {
               <span>{form.playerId ? `Package: ${getPackageName({ playerId: players.find((player) => player._id === form.playerId) })}` : 'Select a player to see the package.'}</span>
               <div className="payment-entry-actions">
                 {editingPaymentId && <button className="btn-secondary" type="button" onClick={handleCancelEdit}>Cancel Edit</button>}
-                <button className="btn-primary" type="submit" disabled={isSubmitting}>{isSubmitting ? 'Saving...' : (editingPaymentId ? 'Update Payment' : t('recordPayment'))}</button>
+                <button className="btn-primary" type="submit">{isSubmitting ? 'Saving...' : (editingPaymentId ? 'Update Payment' : t('recordPayment'))}</button>
               </div>
             </div>
           </form>
@@ -481,9 +664,10 @@ const PaymentsPage = () => {
                     <th>Package</th>
                     <th>Payment Date</th>
                     <th>Payment Method</th>
-                    <th>Total Amount</th>
-                    <th>Created by</th>
-                    <th>Last edited by</th>
+                    <th>Payment Amount</th>
+                    <th>Remaining Amount</th>
+                    <th>Total Paid</th>
+                    <th>Subscription Price</th>
                     <th>Last edited time</th>
                     <th>Notes</th>
                     <th>Actions</th>
@@ -492,7 +676,7 @@ const PaymentsPage = () => {
                 <tbody>
                   {searchedPayments.length ? searchedPayments.map((payment, index) => {
                     const memberName = getMemberName(payment);
-                    const parentName = getParentName(payment);
+                    const parentPhone = getParentPhone(payment);
                     const packageName = getPackageName(payment);
                     const methodClass = getMethodClass(payment.paymentMethod);
                     const deletedPlayer = isDeletedPlayerPayment(payment);
@@ -500,15 +684,16 @@ const PaymentsPage = () => {
                       <tr key={payment._id}>
                         <td>{payment.receiptImage ? <a href={payment.receiptImage} target="_blank" rel="noreferrer">1</a> : index + 1}</td>
                         <td className={`payment-member-cell${deletedPlayer ? ' payment-member-deleted' : ''}`}>{memberName}</td>
-                        <td>{parentName || '-'}</td>
+                        <td>{parentPhone || '-'}</td>
                         <td><span className="payment-pill transaction-pill">{getTransactionLabel(payment)}</span></td>
                         <td><span className="payment-pill package-pill">{packageName}</span></td>
                         <td>{formatDate(payment.paymentDate)}</td>
                         <td><span className={`payment-pill method-${methodClass}`}>{payment.paymentMethod || '-'}</span></td>
                         <td className="payment-amount-cell">{formatMoney(payment.paidAmount)}</td>
-                        <td>{payment.createdBy?.name || 'Warriors gymnastics'}</td>
-                        <td>{payment.updatedBy?.name || payment.createdBy?.name || 'Warriors gymnastics'}</td>
-                        <td>{payment.updatedAt ? `${formatDate(payment.updatedAt)} ${formatTime(payment.updatedAt)}` : `${formatDate(payment.paymentDate)} ${formatTime(payment.paymentDate)}`}</td>
+                        <td className="payment-amount-cell">{formatMoney(payment.remainingAmount)}</td>
+                        <td className="payment-amount-cell">{formatMoney(totalPaidByPaymentId.get(payment._id))}</td>
+                        <td className="payment-amount-cell">{formatMoney(getSubscriptionPrice(payment))}</td>
+                        <td>{payment.updatedAt ? `${formatDate(payment.updatedAt)} ${formatTime(payment.updatedAt)}` : '-'}</td>
                         <td>{payment.notes ? payment.notes : '-'}</td>
                         <td>
                           <div className="payment-row-actions">
@@ -519,7 +704,7 @@ const PaymentsPage = () => {
                       </tr>
                     );
                   }) : (
-                    <tr><td colSpan="13" className="payment-empty-row">{t('noPaymentsRecorded')}</td></tr>
+                    <tr><td colSpan="14" className="payment-empty-row">{t('noPaymentsRecorded')}</td></tr>
                   )}
                 </tbody>
               </table>

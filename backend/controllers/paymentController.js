@@ -11,11 +11,29 @@ const { snapshotPaymentDocument, createHistoryEntry } = require('../utils/histor
 const populatePaymentQuery = (query) => query
   .populate({
     path: 'playerId',
-    select: 'fullName parentId isDeleted deletedAt packageName packageClasses packageHours payment',
-    populate: { path: 'parentId', select: 'name email' }
+    select: 'fullName parentId parentPhoneEncrypted isDeleted deletedAt packageName packageClasses packageHours payment',
+    populate: {
+      path: 'parentId',
+      select: 'name email phoneEncrypted userId',
+      populate: { path: 'userId', select: 'phone' }
+    }
   })
   .populate('createdBy', 'name email')
   .populate('updatedBy', 'name email');
+
+const normalizePhoneValue = (value) => {
+  const text = String(value || '').trim();
+  return /\d/.test(text) && !text.includes(':') ? text : '';
+};
+
+const decryptOptional = (value) => {
+  if (!value) return '';
+  try {
+    return normalizePhoneValue(decrypt(value));
+  } catch (err) {
+    return normalizePhoneValue(value);
+  }
+};
 
 const formatPaymentResponse = (payment) => {
   const obj = payment.toObject();
@@ -27,6 +45,15 @@ const formatPaymentResponse = (payment) => {
     }
   } else {
     obj.notes = '';
+  }
+  if (obj.playerId?.parentId) {
+    obj.playerId.parentId.phone = decryptOptional(obj.playerId.parentId.phoneEncrypted)
+      || normalizePhoneValue(obj.playerId.parentId.userId?.phone);
+    delete obj.playerId.parentId.phoneEncrypted;
+  }
+  if (obj.playerId?.parentPhoneEncrypted) {
+    obj.playerId.parentPhone = decryptOptional(obj.playerId.parentPhoneEncrypted);
+    delete obj.playerId.parentPhoneEncrypted;
   }
   delete obj.notesEncrypted;
   return obj;
@@ -59,13 +86,18 @@ const parsePaymentDate = (value) => {
   return parsed;
 };
 
+const getTransactionType = (value, remainingAmount) => {
+  if (value) return String(value).trim();
+  return Number(remainingAmount || 0) <= 0 ? 'Full payment' : 'Partial payment';
+};
+
 const getPayments = async (req, res, next) => {
   try {
     const filter = {};
     if (req.query.playerId && validateObjectId(req.query.playerId)) {
       filter.playerId = req.query.playerId;
     }
-    const payments = await populatePaymentQuery(Payment.find(filter).sort({ paymentDate: -1 }));
+    const payments = await populatePaymentQuery(Payment.find(filter).sort({ paymentDate: -1, _id: -1 }));
     res.json(payments.map(formatPaymentResponse));
   } catch (error) {
     next(error);
@@ -75,7 +107,7 @@ const getPayments = async (req, res, next) => {
 const createPayment = async (req, res, next) => {
   try {
     const payload = sanitizeObject(req.body);
-    const { playerId, paidAmount, paymentMethod, paymentDate, receiptImage, notes } = payload;
+    const { playerId, paidAmount, paymentMethod, paymentDate, receiptImage, notes, transactionType } = payload;
     if (!validateObjectId(playerId) || paidAmount == null) {
       return res.status(400).json({ message: 'Payment requires player and paid amount.' });
     }
@@ -96,12 +128,14 @@ const createPayment = async (req, res, next) => {
       playerId,
       playerNameSnapshot: player.fullName || '',
       parentNameSnapshot: parentRecord?.name || '',
+      parentPhoneSnapshot: decryptOptional(parentRecord?.phoneEncrypted) || normalizePhoneValue(parentRecord?.userId?.phone),
       packageNameSnapshot: player.packageName || '',
       packageClassesSnapshot: parseLocalizedNumber(player.packageClasses),
       packageHoursSnapshot: parseLocalizedNumber(player.packageHours),
       totalAmount: playerTotalAmount,
       paidAmount: parseLocalizedNumber(paidAmount),
       remainingAmount,
+      transactionType: getTransactionType(transactionType, remainingAmount),
       paymentMethod,
       paymentDate: parsePaymentDate(paymentDate),
       receiptImage: receiptImage || '',
@@ -155,6 +189,9 @@ const updatePayment = async (req, res, next) => {
     }
     if (payload.paymentMethod) {
       payment.paymentMethod = payload.paymentMethod;
+    }
+    if (payload.transactionType) {
+      payment.transactionType = getTransactionType(payload.transactionType, payment.remainingAmount);
     }
     if (typeof payload.paymentDate !== 'undefined') {
       payment.paymentDate = parsePaymentDate(payload.paymentDate);
@@ -224,7 +261,7 @@ const getPaymentsByPlayer = async (req, res, next) => {
     if (!validateObjectId(playerId)) {
       return res.status(400).json({ message: 'Invalid player ID.' });
     }
-    const payments = await populatePaymentQuery(Payment.find({ playerId }).sort({ paymentDate: -1 }));
+    const payments = await populatePaymentQuery(Payment.find({ playerId }).sort({ paymentDate: -1, _id: -1 }));
     res.json(payments.map(formatPaymentResponse));
   } catch (error) {
     next(error);
