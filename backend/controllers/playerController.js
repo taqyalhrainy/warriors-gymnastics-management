@@ -33,10 +33,13 @@ const normalizeGroupIds = (payload) => {
   return [...new Set(rawGroupIds.filter((groupId) => validateObjectId(groupId)).map(String))];
 };
 
-const getPlayerGroupIds = (player) => normalizeGroupIds({
-  groupIds: player.groupIds?.length ? player.groupIds.map(String) : [],
-  groupId: player.groupId ? String(player.groupId) : ''
-});
+const getPlayerGroupIds = (player) => {
+  if (player.groupIds?.length) {
+    return normalizeGroupIds({ groupIds: player.groupIds.map(String) });
+  }
+
+  return normalizeGroupIds({ groupId: player.groupId ? String(player.groupId) : '' });
+};
 
 const cleanPlayerPayload = (payload) => {
   optionalObjectIdFields.forEach((field) => {

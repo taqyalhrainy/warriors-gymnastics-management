@@ -65,6 +65,44 @@ const ensureGroupPresentationFields = async () => {
   }
 };
 
+const synchronizeGroupCounts = async () => {
+  const counts = await Player.aggregate([
+    { $match: { isDeleted: { $ne: true } } },
+    {
+      $project: {
+        groupIds: {
+          $setUnion: [
+            { $ifNull: ['$groupIds', []] },
+            {
+              $cond: [
+                { $ne: [{ $ifNull: ['$groupId', null] }, null] },
+                ['$groupId'],
+                []
+              ]
+            }
+          ]
+        }
+      }
+    },
+    { $unwind: '$groupIds' },
+    { $group: { _id: '$groupIds', currentCount: { $sum: 1 } } }
+  ]);
+  const countByGroupId = new Map(counts.map(({ _id, currentCount }) => [String(_id), currentCount]));
+  const groups = await TrainingGroup.find({}, '_id currentCount');
+  const updates = groups
+    .filter((group) => group.currentCount !== (countByGroupId.get(String(group._id)) || 0))
+    .map((group) => ({
+      updateOne: {
+        filter: { _id: group._id },
+        update: { $set: { currentCount: countByGroupId.get(String(group._id)) || 0 } }
+      }
+    }));
+
+  if (updates.length) {
+    await TrainingGroup.bulkWrite(updates);
+  }
+};
+
 const formatPlayerResponse = (player) => {
   const obj = player.toObject({ virtuals: true });
   if (obj.parentPhoneEncrypted) {
@@ -81,6 +119,7 @@ const formatPlayerResponse = (player) => {
 const getGroups = async (req, res, next) => {
   try {
     await ensureGroupPresentationFields();
+    await synchronizeGroupCounts();
     const groups = await TrainingGroup.find().sort({ displayOrder: 1, _id: -1 }).populate('coachId', 'name');
     res.json(groups);
   } catch (error) {
