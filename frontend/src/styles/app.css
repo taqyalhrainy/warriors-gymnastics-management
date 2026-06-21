@@ -912,7 +912,39 @@ body.theme-light .new-subscription-warning {
 }
 
 .expired-alert-table {
-  min-width: 720px;
+  min-width: 820px;
+}
+
+.expired-alert-actions {
+  display: grid;
+  grid-template-columns: minmax(72px, auto) minmax(120px, 1fr);
+  gap: 8px;
+  align-items: stretch;
+}
+
+.expired-alert-actions .btn-secondary {
+  min-height: 48px;
+  padding: 8px 12px;
+  white-space: normal;
+}
+
+.expired-player-view-backdrop {
+  z-index: 240;
+  background: rgba(15, 23, 42, 0.7);
+}
+
+.expired-player-view-modal {
+  width: min(820px, 100%);
+  border-top-color: #f97316;
+}
+
+.expired-player-view-modal .student-modal-header {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.expired-player-info-grid div {
+  background: color-mix(in srgb, #f97316 5%, var(--surface-alt));
 }
 
 .expired-alert-player-link {

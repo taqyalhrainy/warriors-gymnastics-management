@@ -4,8 +4,11 @@ import Sidebar from '../components/Sidebar.jsx';
 import StatsCard from '../components/StatsCard.jsx';
 import { fetchDashboard } from '../services/reports.js';
 import { fetchGroups } from '../services/groups.js';
-import { fetchPlayers } from '../services/players.js';
+import { fetchPlayers, getPlayer } from '../services/players.js';
+import { fetchAttendanceByPlayer } from '../services/attendance.js';
+import { fetchPaymentsByPlayer } from '../services/payments.js';
 import { createWaitingListEntry, deleteWaitingListEntry, fetchWaitingList } from '../services/waitingList.js';
+import { formatCurrency } from '../utils/format.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
@@ -56,6 +59,11 @@ const AdminDashboard = () => {
   const [expiredAlertReadIds, setExpiredAlertReadIds] = useState(() => readExpiredAlertIds());
   const [highlightedExpiredAlertIds, setHighlightedExpiredAlertIds] = useState([]);
   const [isExpiredAlertOpen, setIsExpiredAlertOpen] = useState(false);
+  const [viewedPlayer, setViewedPlayer] = useState(null);
+  const [viewedPlayerAttendance, setViewedPlayerAttendance] = useState([]);
+  const [viewedPlayerPayments, setViewedPlayerPayments] = useState([]);
+  const [isPlayerViewLoading, setIsPlayerViewLoading] = useState(false);
+  const [playerViewError, setPlayerViewError] = useState('');
   const [waitingForm, setWaitingForm] = useState(initialWaitingForm);
   const [isWaitingFormOpen, setIsWaitingFormOpen] = useState(false);
   const [error, setError] = useState('');
@@ -228,6 +236,43 @@ const AdminDashboard = () => {
     setHighlightedExpiredAlertIds([]);
   };
 
+  const getPlayerGroups = (player) => {
+    const playerGroups = player?.groupIds?.length ? player.groupIds : [player?.groupId].filter(Boolean);
+    return playerGroups.map((group) => group?.name).filter(Boolean).join(', ');
+  };
+
+  const openPlayerView = async (player) => {
+    setViewedPlayer(player);
+    setViewedPlayerAttendance([]);
+    setViewedPlayerPayments([]);
+    setPlayerViewError('');
+    setIsPlayerViewLoading(true);
+
+    try {
+      const [playerData, attendanceData, paymentData] = await Promise.all([
+        getPlayer(player._id),
+        fetchAttendanceByPlayer(player._id),
+        fetchPaymentsByPlayer(player._id)
+      ]);
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+      setViewedPlayer(playerData);
+      setViewedPlayerAttendance(attendanceData.filter((record) => new Date(record.date) >= threeMonthsAgo));
+      setViewedPlayerPayments(paymentData);
+    } catch (err) {
+      setPlayerViewError(err.response?.data?.message || 'Unable to load player details.');
+    } finally {
+      setIsPlayerViewLoading(false);
+    }
+  };
+
+  const closePlayerView = () => {
+    setViewedPlayer(null);
+    setViewedPlayerAttendance([]);
+    setViewedPlayerPayments([]);
+    setPlayerViewError('');
+  };
+
   const handleExpiredPlayerNotification = (player) => {
     navigate('/notifications', {
       state: {
@@ -243,6 +288,15 @@ const AdminDashboard = () => {
       }
     });
   };
+
+  const currentViewedPlayerPayments = viewedPlayerPayments.filter((payment) => {
+    if (viewedPlayer?.currentSubscriptionStartedAt) {
+      return payment.createdAt && new Date(payment.createdAt) >= new Date(viewedPlayer.currentSubscriptionStartedAt);
+    }
+    if (!viewedPlayer?.startDate) return true;
+    return new Date(payment.paymentDate || 0) >= new Date(viewedPlayer.startDate);
+  });
+  const viewedPlayerTotalPaid = currentViewedPlayerPayments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
 
   return (
     <div className="dashboard-layout">
@@ -414,9 +468,14 @@ const AdminDashboard = () => {
                         <td>{formatDate(player.endDate)}</td>
                         <td>{player.daysUntilEnd}</td>
                         <td>
-                          <button className="btn-secondary" type="button" onClick={() => handleExpiredPlayerNotification(player)}>
-                            {expiredCopy.sendMessage}
-                          </button>
+                          <div className="expired-alert-actions">
+                            <button className="btn-secondary" type="button" onClick={() => openPlayerView(player)}>
+                              {t('view')}
+                            </button>
+                            <button className="btn-secondary" type="button" onClick={() => handleExpiredPlayerNotification(player)}>
+                              {expiredCopy.sendMessage}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )) : (
@@ -427,6 +486,56 @@ const AdminDashboard = () => {
                   </tbody>
                 </table>
               </div>
+            </section>
+          </div>
+        )}
+
+        {viewedPlayer && (
+          <div className="student-modal-backdrop expired-player-view-backdrop" role="presentation" onClick={closePlayerView}>
+            <section className="student-modal expired-player-view-modal" role="dialog" aria-modal="true" aria-label={viewedPlayer.fullName} onClick={(event) => event.stopPropagation()}>
+              <div className="student-modal-header">
+                <div>
+                  <h2>{viewedPlayer.fullName}</h2>
+                  <p>{t('playerProfile')}</p>
+                </div>
+                <button className="btn-secondary" type="button" onClick={closePlayerView}>{t('close')}</button>
+              </div>
+
+              {playerViewError && <p className="alert-error">{playerViewError}</p>}
+              {isPlayerViewLoading ? (
+                <p className="empty-state">{t('loadingPlayer')}</p>
+              ) : (
+                <>
+                  <div className="student-info-grid expired-player-info-grid">
+                    <div><span>{t('name')}</span><strong>{viewedPlayer.fullName}</strong></div>
+                    <div><span>{t('status')}</span><strong>{viewedPlayer.status}</strong></div>
+                    <div className="student-info-grid-full"><span>{t('group')}</span><strong>{getPlayerGroups(viewedPlayer) || t('unassigned')}</strong></div>
+                    <div><span>{t('parent')}</span><strong>{viewedPlayer.parentId?.name || t('unknown')}</strong></div>
+                    <div><span>{t('parentPhone')}</span><strong>{viewedPlayer.parentPhone || t('notSet')}</strong></div>
+                    <div><span>{t('startDate')}</span><strong>{viewedPlayer.startDate?.split('T')[0] || t('notSet')}</strong></div>
+                    <div><span>{t('endDate')}</span><strong>{viewedPlayer.endDate?.split('T')[0] || t('notSet')}</strong></div>
+                    <div><span>{t('package')}</span><strong>{viewedPlayer.packageName || t('notSet')}</strong></div>
+                    <div><span>{t('classes')}</span><strong>{viewedPlayer.packageClasses || t('notSet')}</strong></div>
+                    <div><span>{t('hours')}</span><strong>{viewedPlayer.packageHours || t('notSet')}</strong></div>
+                    <div><span>{t('payment')}</span><strong>{formatCurrency(viewedPlayer.payment || 0)}</strong></div>
+                    <div><span>Total Paid</span><strong>{formatCurrency(viewedPlayerTotalPaid)}</strong></div>
+                    <div className="student-info-grid-full"><span>{t('note')}</span><strong>{viewedPlayer.note || t('notSet')}</strong></div>
+                  </div>
+
+                  <div className="student-history expired-player-attendance-history">
+                    <h3>Attendance History</h3>
+                    <div className="student-history-list">
+                      {viewedPlayerAttendance.length ? viewedPlayerAttendance.map((record) => (
+                        <div className="student-history-row" key={record._id}>
+                          <span>{new Date(record.date).toLocaleDateString()}</span>
+                          <strong>{record.status}</strong>
+                          <span>{record.checkInTime ? new Date(record.checkInTime).toLocaleTimeString() : '-'}</span>
+                        </div>
+                      )) : <p className="empty-state">No attendance history found for the last 3 months.</p>}
+                    </div>
+                  </div>
+                </>
+              )}
             </section>
           </div>
         )}
