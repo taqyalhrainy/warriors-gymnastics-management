@@ -32,11 +32,7 @@ const getHistorySnapshotIsoForDate = (dateValue) => new Date(`${dateValue}T23:59
 const getEntityId = (value) => String(value?._id || value || '');
 const getAttendanceRecordKey = (playerId, groupId) => `${getEntityId(playerId)}:${getEntityId(groupId)}`;
 
-const isPlayerVisibleInAttendance = (player, dateValue) => {
-  if (player?.isDeleted || ['expired', 'left'].includes(player?.status)) return false;
-  if (player?.status === 'frozen' || !player?.endDate) return true;
-  return player.endDate.split('T')[0] >= dateValue;
-};
+const isPlayerVisibleInAttendance = (player) => !player?.isDeleted && player?.status !== 'left';
 
 const getSnapshotGroups = (player) => {
   if (Array.isArray(player?.groupIds) && player.groupIds.length) {

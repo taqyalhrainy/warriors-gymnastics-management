@@ -67,7 +67,7 @@ const ensureGroupPresentationFields = async () => {
 
 const synchronizeGroupCounts = async () => {
   const counts = await Player.aggregate([
-    { $match: { isDeleted: { $ne: true }, status: { $nin: ['expired', 'left'] } } },
+    { $match: { isDeleted: { $ne: true }, status: { $ne: 'left' } } },
     {
       $project: {
         groupIds: {
@@ -222,7 +222,7 @@ const getGroupPlayers = async (req, res, next) => {
     }
     const players = await Player.find({
       isDeleted: { $ne: true },
-      status: { $nin: ['expired', 'left'] },
+      status: { $ne: 'left' },
       $or: [{ groupId: id }, { groupIds: id }]
     })
       .sort({ createdAt: -1, _id: -1 })
