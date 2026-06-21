@@ -216,6 +216,7 @@ const AdminDashboard = () => {
     const nextReadIds = [...new Set([...expiredAlertReadIds, ...currentIds])];
     writeExpiredAlertIds(nextReadIds);
     setExpiredAlertReadIds(nextReadIds);
+    window.dispatchEvent(new Event('expired-alerts:read'));
     setIsExpiredAlertOpen(true);
   };
 

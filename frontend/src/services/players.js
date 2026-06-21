@@ -28,6 +28,7 @@ const invalidatePlayerRelatedCache = (playerId) => {
 export const createPlayer = async (data) => {
   const response = await api.post('/players', data);
   invalidatePlayerRelatedCache(response.data?._id);
+  window.dispatchEvent(new Event('players:changed'));
   return response.data;
 };
 
@@ -40,12 +41,14 @@ export const updatePlayer = async (id, data) => {
     'attendance:'
   ]);
   setCached(`players:item:${id}`, response.data);
+  window.dispatchEvent(new Event('players:changed'));
   return response.data;
 };
 
 export const deletePlayer = async (id) => {
   const response = await api.delete(`/players/${id}`);
   invalidatePlayerRelatedCache(id);
+  window.dispatchEvent(new Event('players:changed'));
   return response.data;
 };
 

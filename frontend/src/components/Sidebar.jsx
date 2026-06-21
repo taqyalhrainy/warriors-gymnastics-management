@@ -3,13 +3,42 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { fetchUnreadCount } from '../services/notifications.js';
+import { fetchPlayers } from '../services/players.js';
 import warriorsLogo from '../assets/warriors-logo.png';
+
+const EXPIRED_ALERT_READ_KEY = 'warriors-expired-alert-read-ids';
+
+const getExpiredAlertKey = (player) => `${player._id}:${player.endDate ? new Date(player.endDate).toISOString().split('T')[0] : ''}`;
+
+const readExpiredAlertIds = () => {
+  try {
+    const ids = JSON.parse(localStorage.getItem(EXPIRED_ALERT_READ_KEY) || '[]');
+    return Array.isArray(ids) ? ids.map(String) : [];
+  } catch (error) {
+    return [];
+  }
+};
+
+const getUnreadExpiredAlertCount = (players) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const readIds = readExpiredAlertIds();
+
+  return players.filter((player) => {
+    if (player.status !== 'active' || !player.endDate) return false;
+    const endDate = new Date(player.endDate);
+    endDate.setHours(0, 0, 0, 0);
+    const daysLeft = Math.ceil((endDate.getTime() - today.getTime()) / 86400000);
+    return daysLeft >= 0 && daysLeft <= 7 && !readIds.includes(getExpiredAlertKey(player));
+  }).length;
+};
 
 const Sidebar = () => {
   const { user, logout } = useAuth();
   const { language, toggleLanguage, t } = useLanguage();
   const { pathname } = useLocation();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [expiredAlertCount, setExpiredAlertCount] = useState(0);
 
   useEffect(() => {
     if (user?.role !== 'parent') {
@@ -28,6 +57,31 @@ const Sidebar = () => {
 
     return () => window.removeEventListener('notifications:changed', loadUnreadCount);
   }, [user]);
+
+  useEffect(() => {
+    if (!user || user.role === 'parent') {
+      setExpiredAlertCount(0);
+      return undefined;
+    }
+
+    let isMounted = true;
+    const loadExpiredAlertCount = () => {
+      fetchPlayers({ sidebar: 'expired-alert-count' })
+        .then((players) => {
+          if (isMounted) setExpiredAlertCount(getUnreadExpiredAlertCount(players));
+        })
+        .catch(console.error);
+    };
+
+    loadExpiredAlertCount();
+    window.addEventListener('players:changed', loadExpiredAlertCount);
+    window.addEventListener('expired-alerts:read', loadExpiredAlertCount);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('players:changed', loadExpiredAlertCount);
+      window.removeEventListener('expired-alerts:read', loadExpiredAlertCount);
+    };
+  }, [user, pathname]);
 
   const isParentArea = pathname === '/parent' || pathname.startsWith('/parent/');
 
@@ -68,6 +122,9 @@ const Sidebar = () => {
             <span>{t(link.key)}</span>
             {user?.role === 'parent' && link.key === 'notifications' && unreadCount > 0 && (
               <span className="notification-badge">{unreadCount}</span>
+            )}
+            {user?.role !== 'parent' && link.key === 'dashboard' && expiredAlertCount > 0 && (
+              <span className="notification-badge dashboard-alert-badge" title="Expired alert">{expiredAlertCount}</span>
             )}
           </NavLink>
         ))}

@@ -180,6 +180,16 @@ button:disabled {
   color: var(--text);
 }
 
+.dashboard-alert-badge {
+  background: linear-gradient(135deg, #ff3040, #ff7a18);
+  box-shadow: 0 0 0 3px rgba(255, 48, 64, 0.18), 0 0 14px rgba(255, 48, 64, 0.48);
+  animation: dashboard-alert-breathe 1.8s ease-in-out infinite;
+}
+
+@keyframes dashboard-alert-breathe {
+  50% { transform: scale(1.09); }
+}
+
 a.btn-primary,
 a.btn-secondary {
   display: inline-flex;
@@ -1525,6 +1535,8 @@ body.attendance-touch-dragging {
 }
 
 .attendance-player-card {
+  position: relative;
+  overflow: hidden;
   display: grid;
   gap: 8px;
   padding: 10px;
@@ -1575,6 +1587,75 @@ body.attendance-touch-dragging {
   font-size: 0.74rem;
   font-style: normal;
   font-weight: 800;
+}
+
+.attendance-player-card.is-frozen {
+  border: 2px solid rgba(125, 211, 252, 0.92);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.98) 0 2px, transparent 3px),
+    radial-gradient(circle at 86% 34%, rgba(255, 255, 255, 0.9) 0 3px, transparent 4px),
+    repeating-linear-gradient(128deg, transparent 0 20px, rgba(255, 255, 255, 0.32) 21px 23px, transparent 24px 42px),
+    linear-gradient(145deg, #ecfeff 0%, #bae6fd 38%, #e0f2fe 67%, #7dd3fc 100%);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.72),
+    inset 0 0 26px rgba(14, 165, 233, 0.38),
+    inset 8px 0 18px rgba(255, 255, 255, 0.58),
+    0 0 0 3px rgba(186, 230, 253, 0.28),
+    0 10px 25px rgba(2, 132, 199, 0.3);
+}
+
+.attendance-player-card.is-frozen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(52deg, transparent 46%, rgba(255, 255, 255, 0.72) 48% 49%, transparent 51%) 8% 12% / 42px 52px no-repeat,
+    linear-gradient(118deg, transparent 46%, rgba(14, 165, 233, 0.25) 48% 49%, transparent 51%) 88% 72% / 58px 70px no-repeat,
+    linear-gradient(105deg, transparent 0 42%, rgba(255, 255, 255, 0.62) 48%, transparent 54%) -70px 0 / 70px 100%;
+  pointer-events: none;
+  animation: frozen-glint 3.4s ease-in-out infinite;
+}
+
+.attendance-player-card.is-frozen::after {
+  content: '\2744  \00B7  \2745  \00B7  \2744';
+  position: absolute;
+  top: -6px;
+  right: 6px;
+  color: rgba(3, 105, 161, 0.38);
+  text-shadow: 0 0 8px white;
+  font-size: 1.28rem;
+  letter-spacing: 5px;
+  pointer-events: none;
+  animation: frozen-sparkle 2.8s ease-in-out infinite;
+}
+
+.attendance-player-card.is-frozen > * {
+  position: relative;
+  z-index: 1;
+}
+
+.attendance-frozen-badge {
+  width: fit-content;
+  padding: 3px 9px;
+  border: 1px solid rgba(14, 165, 233, 0.42);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(186, 230, 253, 0.9));
+  color: #0369a1;
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 900;
+  box-shadow: inset 0 0 8px white, 0 2px 8px rgba(2, 132, 199, 0.22);
+}
+
+@keyframes frozen-sparkle {
+  0%, 100% { opacity: 0.45; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(7px); }
+}
+
+@keyframes frozen-glint {
+  0%, 30% { background-position: 8% 12%, 88% 72%, -70px 0; }
+  70%, 100% { background-position: 8% 12%, 88% 72%, calc(100% + 70px) 0; }
 }
 
 .attendance-status-pill-present {

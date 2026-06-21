@@ -32,6 +32,12 @@ const getHistorySnapshotIsoForDate = (dateValue) => new Date(`${dateValue}T23:59
 const getEntityId = (value) => String(value?._id || value || '');
 const getAttendanceRecordKey = (playerId, groupId) => `${getEntityId(playerId)}:${getEntityId(groupId)}`;
 
+const isPlayerVisibleInAttendance = (player, dateValue) => {
+  if (player?.isDeleted || ['expired', 'left'].includes(player?.status)) return false;
+  if (player?.status === 'frozen' || !player?.endDate) return true;
+  return player.endDate.split('T')[0] >= dateValue;
+};
+
 const getSnapshotGroups = (player) => {
   if (Array.isArray(player?.groupIds) && player.groupIds.length) {
     return player.groupIds
@@ -170,7 +176,7 @@ const AttendancePage = () => {
     playerSnapshots
       .filter((player) => {
         const createdAtTime = player.createdAt ? new Date(player.createdAt).getTime() : null;
-        return !player.isDeleted && (!createdAtTime || createdAtTime <= snapshotTime);
+        return isPlayerVisibleInAttendance(player, snapshotDate) && (!createdAtTime || createdAtTime <= snapshotTime);
       })
       .forEach((player) => {
         const playerGroups = getSnapshotGroups(player);
@@ -242,7 +248,8 @@ const AttendancePage = () => {
       const groupsWithPlayers = viewingToday
         ? await Promise.all(
           groups.map(async (group) => {
-            const players = await fetchGroupPlayers(group._id);
+            const players = (await fetchGroupPlayers(group._id))
+              .filter((player) => isPlayerVisibleInAttendance(player, date));
 
             return {
               ...group,
@@ -1046,10 +1053,13 @@ const AttendancePage = () => {
 
                 <div className="attendance-player-list">
                   {group.players.length ? group.players.map((player) => (
-                    <article className="attendance-player-card" key={player._id}>
+                    <article className={`attendance-player-card${player.status === 'frozen' ? ' is-frozen' : ''}`} key={player._id}>
                       <button type="button" className="attendance-player-main" onClick={() => handleSelectPlayer(player)}>
                         <strong>{player.fullName}</strong>
                         <span>{player.parentId?.name || t('noParent')} | {player.status}</span>
+                        {player.status === 'frozen' && (
+                          <em className="attendance-frozen-badge">❄ {t('frozenStatus')}</em>
+                        )}
                         {player.todayAttendance && (
                           <em className={`attendance-status-pill attendance-status-pill-${player.todayAttendance.status}`}>
                             {player.todayAttendance.status}
