@@ -54,6 +54,7 @@ const AdminDashboard = () => {
   const [waitingList, setWaitingList] = useState([]);
   const [expiredAlertPlayers, setExpiredAlertPlayers] = useState([]);
   const [expiredAlertReadIds, setExpiredAlertReadIds] = useState(() => readExpiredAlertIds());
+  const [highlightedExpiredAlertIds, setHighlightedExpiredAlertIds] = useState([]);
   const [isExpiredAlertOpen, setIsExpiredAlertOpen] = useState(false);
   const [waitingForm, setWaitingForm] = useState(initialWaitingForm);
   const [isWaitingFormOpen, setIsWaitingFormOpen] = useState(false);
@@ -213,11 +214,18 @@ const AdminDashboard = () => {
 
   const openExpiredAlert = () => {
     const currentIds = expiredAlertPlayers.map(getExpiredAlertKey);
+    const unreadIds = currentIds.filter((id) => !expiredAlertReadIds.includes(id));
     const nextReadIds = [...new Set([...expiredAlertReadIds, ...currentIds])];
+    setHighlightedExpiredAlertIds(unreadIds);
     writeExpiredAlertIds(nextReadIds);
     setExpiredAlertReadIds(nextReadIds);
     window.dispatchEvent(new Event('expired-alerts:read'));
     setIsExpiredAlertOpen(true);
+  };
+
+  const closeExpiredAlert = () => {
+    setIsExpiredAlertOpen(false);
+    setHighlightedExpiredAlertIds([]);
   };
 
   const handleExpiredPlayerNotification = (player) => {
@@ -366,7 +374,7 @@ const AdminDashboard = () => {
         )}
 
         {isExpiredAlertOpen && (
-          <div className="student-modal-backdrop" role="presentation" onClick={() => setIsExpiredAlertOpen(false)}>
+          <div className="student-modal-backdrop" role="presentation" onClick={closeExpiredAlert}>
             <section className="student-modal expired-alert-modal" role="dialog" aria-modal="true" aria-label={expiredCopy.title} onClick={(event) => event.stopPropagation()}>
               <div className="student-modal-header">
                 <div className="expired-alert-heading">
@@ -376,7 +384,7 @@ const AdminDashboard = () => {
                   </div>
                   <strong>{expiredAlertPlayers.length}</strong>
                 </div>
-                <button type="button" className="btn-secondary" onClick={() => setIsExpiredAlertOpen(false)}>{t('close')}</button>
+                <button type="button" className="btn-secondary" onClick={closeExpiredAlert}>{t('close')}</button>
               </div>
 
               <div className="waiting-list-table-wrap">
@@ -394,7 +402,11 @@ const AdminDashboard = () => {
                     {expiredAlertPlayers.length ? expiredAlertPlayers.map((player) => (
                       <tr key={player._id}>
                         <td>
-                          <button className="expired-alert-player-link" type="button" onClick={() => handleExpiredPlayerNotification(player)}>
+                          <button
+                            className={`expired-alert-player-link${highlightedExpiredAlertIds.includes(getExpiredAlertKey(player)) ? ' is-new-alert' : ''}`}
+                            type="button"
+                            onClick={() => handleExpiredPlayerNotification(player)}
+                          >
                             {player.fullName}
                           </button>
                         </td>

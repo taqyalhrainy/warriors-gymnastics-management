@@ -932,6 +932,39 @@ body.theme-light .new-subscription-warning {
   box-shadow: none;
 }
 
+.expired-alert-player-link.is-new-alert {
+  position: relative;
+  border-radius: 8px;
+  padding: 5px 10px;
+  color: #991b1b;
+  background: #fef08a;
+  animation: new-expired-player-glow 1.05s ease-in-out infinite;
+}
+
+.expired-alert-player-link.is-new-alert::after {
+  content: 'NEW';
+  display: inline-block;
+  margin-inline-start: 7px;
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 0.58rem;
+  font-weight: 950;
+  vertical-align: middle;
+}
+
+@keyframes new-expired-player-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.25), 0 0 5px rgba(250, 204, 21, 0.4);
+    filter: brightness(0.94);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.5), 0 0 18px rgba(250, 204, 21, 0.95);
+    filter: brightness(1.12);
+  }
+}
+
 .stat-card,
 .form-card,
 .table-card,
