@@ -29,7 +29,7 @@ const getUnreadExpiredAlertCount = (players) => {
     const endDate = new Date(player.endDate);
     endDate.setHours(0, 0, 0, 0);
     const daysLeft = Math.ceil((endDate.getTime() - today.getTime()) / 86400000);
-    return daysLeft >= 0 && daysLeft <= 7 && !readIds.includes(getExpiredAlertKey(player));
+    return daysLeft === 0 && !readIds.includes(getExpiredAlertKey(player));
   }).length;
 };
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import StatsCard from '../components/StatsCard.jsx';
-import { fetchDashboard } from '../services/reports.js';
+import { downloadPlayersBackup, fetchDashboard } from '../services/reports.js';
 import { fetchGroups } from '../services/groups.js';
 import { fetchPlayers, getPlayer } from '../services/players.js';
 import { fetchAttendanceByPlayer } from '../services/attendance.js';
@@ -27,6 +27,14 @@ const getLocalDateOnly = (date = new Date()) => {
   const currentDate = new Date(date);
   currentDate.setHours(0, 0, 0, 0);
   return currentDate;
+};
+
+const getLocalDateValue = (date = new Date()) => {
+  const value = new Date(date);
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 const getDaysUntil = (dateValue) => {
@@ -56,20 +64,24 @@ const AdminDashboard = () => {
   const [groups, setGroups] = useState([]);
   const [waitingList, setWaitingList] = useState([]);
   const [expiredAlertPlayers, setExpiredAlertPlayers] = useState([]);
+  const [dashboardPlayers, setDashboardPlayers] = useState([]);
   const [expiredAlertReadIds, setExpiredAlertReadIds] = useState(() => readExpiredAlertIds());
   const [highlightedExpiredAlertIds, setHighlightedExpiredAlertIds] = useState([]);
   const [isExpiredAlertOpen, setIsExpiredAlertOpen] = useState(false);
+  const [isExpiredTimeOpen, setIsExpiredTimeOpen] = useState(false);
+  const [expiredTimeDate, setExpiredTimeDate] = useState(() => getLocalDateValue());
   const [viewedPlayer, setViewedPlayer] = useState(null);
   const [viewedPlayerAttendance, setViewedPlayerAttendance] = useState([]);
   const [viewedPlayerPayments, setViewedPlayerPayments] = useState([]);
   const [isPlayerViewLoading, setIsPlayerViewLoading] = useState(false);
   const [playerViewError, setPlayerViewError] = useState('');
+  const [isBackupDownloading, setIsBackupDownloading] = useState(false);
   const [waitingForm, setWaitingForm] = useState(initialWaitingForm);
   const [isWaitingFormOpen, setIsWaitingFormOpen] = useState(false);
   const [error, setError] = useState('');
   const [waitingMessage, setWaitingMessage] = useState('');
   const { language, t } = useLanguage();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const copy = language === 'ar'
     ? {
       waitingList: 'قائمة الانتظار',
@@ -126,8 +138,8 @@ const AdminDashboard = () => {
     }
     : {
       title: 'Expired Alert',
-      subtitle: 'Players with one week or less before their end date.',
-      empty: 'No players are close to their end date.',
+      subtitle: 'Players whose subscriptions end today.',
+      empty: 'No player subscriptions end today.',
       daysLeft: 'Days left',
       endDate: 'End date',
       parent: 'Parent',
@@ -167,6 +179,7 @@ const AdminDashboard = () => {
       ]);
       setGroups(groupRows);
       setWaitingList(waitingRows);
+      setDashboardPlayers(playerRows);
       setExpiredAlertPlayers(getExpiredAlertPlayers(playerRows));
     } catch (err) {
       setWaitingMessage(err.response?.data?.message || copy.unableLoad);
@@ -213,7 +226,7 @@ const AdminDashboard = () => {
       ...player,
       daysUntilEnd: player.endDate ? getDaysUntil(player.endDate) : null
     }))
-    .filter((player) => player.status === 'active' && player.endDate && player.daysUntilEnd >= 0 && player.daysUntilEnd <= 7)
+    .filter((player) => player.status === 'active' && player.endDate && player.daysUntilEnd === 0)
     .sort((first, second) => first.daysUntilEnd - second.daysUntilEnd || first.fullName.localeCompare(second.fullName));
 
   const formatDate = (dateValue) => dateValue ? new Date(dateValue).toLocaleDateString() : '-';
@@ -273,6 +286,26 @@ const AdminDashboard = () => {
     setPlayerViewError('');
   };
 
+  const handlePlayersBackup = async () => {
+    setError('');
+    setIsBackupDownloading(true);
+    try {
+      const { blob, filename } = await downloadPlayersBackup();
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Unable to create players backup.');
+    } finally {
+      setIsBackupDownloading(false);
+    }
+  };
+
   const handleExpiredPlayerNotification = (player) => {
     navigate('/notifications', {
       state: {
@@ -297,6 +330,9 @@ const AdminDashboard = () => {
     return new Date(payment.paymentDate || 0) >= new Date(viewedPlayer.startDate);
   });
   const viewedPlayerTotalPaid = currentViewedPlayerPayments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
+  const expiredTimePlayers = dashboardPlayers
+    .filter((player) => player.endDate?.split?.('T')?.[0] === expiredTimeDate)
+    .sort((first, second) => first.fullName.localeCompare(second.fullName));
 
   return (
     <div className="dashboard-layout">
@@ -304,13 +340,20 @@ const AdminDashboard = () => {
       <main className="page-content">
         <div className="page-header">
           <h1>{t('adminDashboard')}</h1>
-          <button
-            className="waiting-list-button"
-            type="button"
-            onClick={() => setIsWaitingFormOpen(true)}
-          >
-            <span>{copy.addWaiting}</span>
-          </button>
+          <div className="page-header-actions">
+            {user?.role === 'admin' && (
+              <button className="backup-button" type="button" onClick={handlePlayersBackup} disabled={isBackupDownloading}>
+                <span>{isBackupDownloading ? 'Creating...' : 'Backup'}</span>
+              </button>
+            )}
+            <button
+              className="waiting-list-button"
+              type="button"
+              onClick={() => setIsWaitingFormOpen(true)}
+            >
+              <span>{copy.addWaiting}</span>
+            </button>
+          </div>
         </div>
         {error && <p className="alert-error">{error}</p>}
         <div className="stats-grid">
@@ -326,6 +369,9 @@ const AdminDashboard = () => {
           <button className="expired-alert-button" type="button" onClick={openExpiredAlert}>
             <span>{expiredCopy.openAlert}</span>
             {unreadExpiredAlertCount > 0 && <strong>{unreadExpiredAlertCount}</strong>}
+          </button>
+          <button className="expired-time-button" type="button" onClick={() => setIsExpiredTimeOpen(true)}>
+            <span>Expired Time</span>
           </button>
         </div>
 
@@ -482,6 +528,57 @@ const AdminDashboard = () => {
                       <tr>
                         <td colSpan="5">{expiredCopy.empty}</td>
                       </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {isExpiredTimeOpen && (
+          <div className="student-modal-backdrop" role="presentation" onClick={() => setIsExpiredTimeOpen(false)}>
+            <section className="student-modal expired-time-modal" role="dialog" aria-modal="true" aria-label="Expired Time" onClick={(event) => event.stopPropagation()}>
+              <div className="student-modal-header">
+                <div>
+                  <h2>Expired Time</h2>
+                  <p>Choose an end date to see every player whose subscription ends on that day.</p>
+                </div>
+                <button className="btn-secondary" type="button" onClick={() => setIsExpiredTimeOpen(false)}>{t('close')}</button>
+              </div>
+
+              <div className="expired-time-toolbar">
+                <label>
+                  <span>End date</span>
+                  <input type="date" value={expiredTimeDate} onChange={(event) => setExpiredTimeDate(event.target.value)} />
+                </label>
+                <strong>{expiredTimePlayers.length}</strong>
+              </div>
+
+              <div className="waiting-list-table-wrap">
+                <table className="data-table expired-time-table">
+                  <thead>
+                    <tr>
+                      <th>{t('player')}</th>
+                      <th>{t('parent')}</th>
+                      <th>{t('status')}</th>
+                      <th>{t('endDate')}</th>
+                      <th>{t('actions')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {expiredTimePlayers.length ? expiredTimePlayers.map((player) => (
+                      <tr key={player._id}>
+                        <td><strong>{player.fullName}</strong></td>
+                        <td>{player.parentId?.name || t('notSet')}</td>
+                        <td><span className={`expired-time-status status-${player.status || 'active'}`}>{player.status || 'active'}</span></td>
+                        <td>{formatDate(player.endDate)}</td>
+                        <td>
+                          <button className="btn-secondary" type="button" onClick={() => openPlayerView(player)}>{t('view')}</button>
+                        </td>
+                      </tr>
+                    )) : (
+                      <tr><td colSpan="5">No subscriptions end on this date.</td></tr>
                     )}
                   </tbody>
                 </table>
