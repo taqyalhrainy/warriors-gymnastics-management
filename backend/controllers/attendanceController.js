@@ -193,15 +193,22 @@ const updateTodayAttendance = async (req, res, next) => {
 
 const cancelTodayAttendance = async (req, res, next) => {
   try {
-    const { playerId, date } = sanitizeObject(req.body);
+    const { playerId, groupId, date } = sanitizeObject(req.body);
     if (!validateObjectId(playerId)) {
       return res.status(400).json({ message: 'Valid player ID is required.' });
+    }
+    if (groupId && !validateObjectId(groupId)) {
+      return res.status(400).json({ message: 'Valid group ID is required.' });
     }
 
     const today = new Date();
     const dateOnly = getAttendanceDateOnly(date);
     validateAttendanceDateInRange(dateOnly);
-    const attendance = await Attendance.findOne({ playerId, date: dateOnly });
+    const attendanceQuery = { playerId, date: dateOnly };
+    if (groupId) {
+      attendanceQuery.groupId = groupId;
+    }
+    const attendance = await Attendance.findOne(attendanceQuery);
     if (!attendance) {
       return res.status(404).json({ message: 'No attendance record to cancel today.' });
     }

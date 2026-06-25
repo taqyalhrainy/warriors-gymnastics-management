@@ -1,9 +1,10 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import api from '../services/api.js';
+import api, { waitForApiHealth } from '../services/api.js';
 import { clearCache } from '../services/cache.js';
 import { warmAdminAppCache, resetPrefetchState } from '../services/prefetch.js';
 
 const AuthContext = createContext(null);
+let verifiedServerToken = '';
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
@@ -11,6 +12,8 @@ export const AuthProvider = ({ children }) => {
     return stored ? JSON.parse(stored) : null;
   });
   const [token, setToken] = useState(() => localStorage.getItem('warriors-token'));
+  const [isServerReady, setIsServerReady] = useState(() => !localStorage.getItem('warriors-token'));
+  const [isServerChecking, setIsServerChecking] = useState(() => Boolean(localStorage.getItem('warriors-token')));
 
   useEffect(() => {
     if (token) {
@@ -24,13 +27,54 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (!token || !user) {
+      setIsServerReady(true);
+      setIsServerChecking(false);
       return;
     }
 
-    if (['admin', 'coach', 'receptionist'].includes(user.role)) {
+    if (verifiedServerToken === token) {
+      setIsServerReady(true);
+      setIsServerChecking(false);
+      return;
+    }
+
+    let isMounted = true;
+    setIsServerReady(false);
+    setIsServerChecking(true);
+
+    waitForApiHealth({ timeout: 10000, maxRetries: 30 })
+      .then(() => {
+        verifiedServerToken = token;
+        if (isMounted) {
+          setIsServerReady(true);
+        }
+      })
+      .catch((error) => {
+        console.error(error);
+        if (isMounted) {
+          setIsServerReady(false);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsServerChecking(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [token, user]);
+
+  useEffect(() => {
+    if (!token || !user) {
+      return;
+    }
+
+    if (isServerReady && ['admin', 'coach', 'receptionist'].includes(user.role)) {
       warmAdminAppCache(user).catch(console.error);
     }
-  }, [token, user]);
+  }, [token, user, isServerReady]);
 
   const login = (data) => {
     clearCache();
@@ -40,6 +84,9 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('warriors-user', JSON.stringify(data.user));
     setToken(data.token);
     setUser(data.user);
+    verifiedServerToken = data.token;
+    setIsServerReady(true);
+    setIsServerChecking(false);
   };
 
   const logout = () => {
@@ -50,9 +97,16 @@ export const AuthProvider = ({ children }) => {
     delete api.defaults.headers.common.Authorization;
     clearCache();
     resetPrefetchState();
+    verifiedServerToken = '';
+    setIsServerReady(true);
+    setIsServerChecking(false);
   };
 
-  return <AuthContext.Provider value={{ user, token, login, logout }}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ user, token, login, logout, isServerReady, isServerChecking }}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = () => useContext(AuthContext);

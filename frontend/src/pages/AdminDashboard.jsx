@@ -22,6 +22,7 @@ const initialWaitingForm = {
 };
 
 const EXPIRED_ALERT_READ_KEY = 'warriors-expired-alert-read-ids';
+let dashboardStatsCache = null;
 
 const getLocalDateOnly = (date = new Date()) => {
   const currentDate = new Date(date);
@@ -60,7 +61,7 @@ const writeExpiredAlertIds = (ids) => {
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
-  const [stats, setStats] = useState(null);
+  const [stats, setStats] = useState(() => dashboardStatsCache);
   const [groups, setGroups] = useState([]);
   const [waitingList, setWaitingList] = useState([]);
   const [expiredAlertPlayers, setExpiredAlertPlayers] = useState([]);
@@ -76,6 +77,7 @@ const AdminDashboard = () => {
   const [isPlayerViewLoading, setIsPlayerViewLoading] = useState(false);
   const [playerViewError, setPlayerViewError] = useState('');
   const [isBackupDownloading, setIsBackupDownloading] = useState(false);
+  const [isDashboardLoading, setIsDashboardLoading] = useState(false);
   const [waitingForm, setWaitingForm] = useState(initialWaitingForm);
   const [isWaitingFormOpen, setIsWaitingFormOpen] = useState(false);
   const [error, setError] = useState('');
@@ -154,15 +156,19 @@ const AdminDashboard = () => {
 
     let isMounted = true;
     setError('');
-    setStats(null);
+    setIsDashboardLoading(!dashboardStatsCache);
 
     fetchDashboard()
       .then((data) => {
+        dashboardStatsCache = data;
         if (isMounted) setStats(data);
       })
       .catch((err) => {
         console.error(err);
         if (isMounted) setError(err.response?.data?.message || 'Unable to load dashboard data. Please refresh or try again.');
+      })
+      .finally(() => {
+        if (isMounted) setIsDashboardLoading(false);
       });
 
     return () => {
@@ -355,7 +361,12 @@ const AdminDashboard = () => {
             </button>
           </div>
         </div>
-        {error && <p className="alert-error">{error}</p>}
+        {isDashboardLoading && !stats && (
+          <p className="alert-info">
+            Preparing dashboard data...
+          </p>
+        )}
+        {error && !isDashboardLoading && <p className="alert-error">{error}</p>}
         <div className="stats-grid">
           <StatsCard title={t('activePlayers')} value={stats?.activePlayers ?? '...'} description={t('activePlayersDesc')} />
           <StatsCard title={t('expiredSubscriptions')} value={stats?.expiredSubscriptions ?? '...'} description={t('expiredSubscriptionsDesc')} />

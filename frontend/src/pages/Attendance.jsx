@@ -112,6 +112,7 @@ const AttendancePage = () => {
   const [dragOverGroupId, setDragOverGroupId] = useState(null);
   const [touchDragPreview, setTouchDragPreview] = useState(null);
   const [isCoarsePointerDevice, setIsCoarsePointerDevice] = useState(false);
+  const [pendingAttendanceKeys, setPendingAttendanceKeys] = useState([]);
   const attendanceBoardRef = useRef(null);
   const touchHoldTimeoutRef = useRef(null);
   const draggedGroupIdRef = useRef(null);
@@ -122,6 +123,8 @@ const AttendancePage = () => {
   const pointerHoldGroupIdRef = useRef(null);
   const pointerStartPointRef = useRef(null);
   const attendanceDateInputRef = useRef(null);
+  const pendingAttendanceKeysRef = useRef(new Set());
+  const didRunInitialAttendanceLoadRef = useRef(false);
   const { t } = useLanguage();
   const todayDateValue = getLocalDateValue();
   const attendanceRangeStartValue = getAttendanceRangeStartValue();
@@ -280,6 +283,11 @@ const AttendancePage = () => {
     if (isAttendanceDateOutOfRange) {
       setGroupColumns([]);
       setMessage('Out of range (maximum range is 3 months)');
+      return;
+    }
+
+    if (!didRunInitialAttendanceLoadRef.current) {
+      didRunInitialAttendanceLoadRef.current = true;
       return;
     }
 
@@ -607,6 +615,21 @@ const AttendancePage = () => {
     });
   };
 
+  const setAttendanceActionPending = (key, isPending) => {
+    const nextKeys = new Set(pendingAttendanceKeysRef.current);
+    if (isPending) {
+      nextKeys.add(key);
+    } else {
+      nextKeys.delete(key);
+    }
+    pendingAttendanceKeysRef.current = nextKeys;
+    setPendingAttendanceKeys([...nextKeys]);
+  };
+
+  const getAttendanceActionKey = (playerId) => `${getEntityId(playerId)}:${selectedAttendanceDate}`;
+
+  const isAttendanceActionPending = (playerId) => pendingAttendanceKeys.includes(getAttendanceActionKey(playerId));
+
   const restoreBoard = (groups) => {
     setGroupColumns(groups);
     attendanceBoardCache = groups;
@@ -617,6 +640,11 @@ const AttendancePage = () => {
   const handleAction = async (player, groupId, status) => {
     if (isAttendanceDateOutOfRange) {
       setMessage('Out of range (maximum range is 3 months)');
+      return;
+    }
+
+    const actionKey = getAttendanceActionKey(player._id);
+    if (pendingAttendanceKeysRef.current.has(actionKey)) {
       return;
     }
 
@@ -631,6 +659,7 @@ const AttendancePage = () => {
     };
 
     setMessage('');
+    setAttendanceActionPending(actionKey, true);
     setPlayerAttendanceInBoard(player._id, groupId, optimisticAttendance);
 
     if (selectedPlayer?._id === player._id) {
@@ -660,17 +689,25 @@ const AttendancePage = () => {
       }
 
       setMessage(err.response?.data?.message || 'Unable to record attendance');
+    } finally {
+      setAttendanceActionPending(actionKey, false);
     }
   };
 
-  const handleCancelAttendance = async (player) => {
+  const handleCancelAttendance = async (player, groupId) => {
     if (isAttendanceDateOutOfRange) {
       setMessage('Out of range (maximum range is 3 months)');
       return;
     }
 
+    const actionKey = getAttendanceActionKey(player._id);
+    if (pendingAttendanceKeysRef.current.has(actionKey)) {
+      return;
+    }
+
     const previousGroups = groupColumns;
     setMessage('');
+    setAttendanceActionPending(actionKey, true);
     setPlayerAttendanceInBoard(player._id, null, null);
 
     if (selectedPlayer?._id === player._id) {
@@ -681,7 +718,7 @@ const AttendancePage = () => {
     }
 
     try {
-      await cancelTodayAttendance({ playerId: player._id, date: selectedAttendanceDate });
+      await cancelTodayAttendance({ playerId: player._id, groupId, date: selectedAttendanceDate });
       setMessage('Attendance cancelled');
     } catch (err) {
       restoreBoard(previousGroups);
@@ -697,6 +734,8 @@ const AttendancePage = () => {
       }
 
       setMessage(err.response?.data?.message || 'Unable to cancel attendance');
+    } finally {
+      setAttendanceActionPending(actionKey, false);
     }
   };
 
@@ -1067,6 +1106,7 @@ const AttendancePage = () => {
                           type="button"
                           className={`btn-present ${player.todayAttendance?.status === 'present' ? 'active' : ''}`}
                           onClick={() => handleAction(player, group._id, 'present')}
+                          disabled={isAttendanceActionPending(player._id, group._id)}
                         >
                           {t('present')}
                         </button>
@@ -1074,6 +1114,7 @@ const AttendancePage = () => {
                           type="button"
                           className={`btn-absent ${player.todayAttendance?.status === 'absent' ? 'active' : ''}`}
                           onClick={() => handleAction(player, group._id, 'absent')}
+                          disabled={isAttendanceActionPending(player._id, group._id)}
                         >
                           {t('absent')}
                         </button>
@@ -1081,9 +1122,10 @@ const AttendancePage = () => {
                           <button
                             type="button"
                             className="btn-cancel-attendance"
-                            onClick={() => handleCancelAttendance(player)}
+                            onClick={() => handleCancelAttendance(player, group._id)}
+                            disabled={isAttendanceActionPending(player._id, group._id)}
                           >
-                            Cancel
+                            {isAttendanceActionPending(player._id, group._id) ? 'Saving...' : 'Cancel'}
                           </button>
                         )}
                       </div>
