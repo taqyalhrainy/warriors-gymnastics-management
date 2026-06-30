@@ -1,5 +1,6 @@
 const TrainingGroup = require('../models/TrainingGroup');
 const Player = require('../models/Player');
+const Attendance = require('../models/Attendance');
 const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { decrypt } = require('../utils/encryption');
@@ -14,6 +15,12 @@ const decodeGroupName = (value) => String(value || '')
   .replace(/&amp;/g, '&')
   .replace(/\s+/g, ' ')
   .trim();
+
+const getDateOnly = (value) => {
+  const date = value ? new Date(value) : new Date(0);
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
 
 const normalizeGroupPayload = (payload) => {
   const normalized = {
@@ -231,8 +238,45 @@ const getGroupPlayers = async (req, res, next) => {
       .populate('groupId', 'name days startTime endTime')
       .populate('groupIds', 'name days startTime endTime')
       .populate('coachId', 'name')
-      .populate('subscriptionId', 'type status remainingSessions usedSessions startDate endDate price');
-    res.json(players.map(formatPlayerResponse));
+      .populate('subscriptionId', 'type status totalSessions remainingSessions usedSessions startDate endDate price');
+    const playerIds = players.map((player) => player._id);
+    const cycleStartByPlayerId = new Map(players.map((player) => [
+      String(player._id),
+      {
+        start: player.currentSubscriptionStartedAt || player.subscriptionId?.startDate || player.startDate || new Date(0),
+        precise: Boolean(player.currentSubscriptionStartedAt)
+      }
+    ]));
+    const presentRecords = playerIds.length
+      ? await Attendance.find({
+        playerId: { $in: playerIds },
+        status: 'present'
+      }).select('playerId date checkInTime').lean()
+      : [];
+    const presentCountByPlayerId = new Map();
+
+    presentRecords.forEach((record) => {
+      const playerId = String(record.playerId);
+      const cycleInfo = cycleStartByPlayerId.get(playerId);
+      if (!cycleInfo?.start) {
+        presentCountByPlayerId.set(playerId, (presentCountByPlayerId.get(playerId) || 0) + 1);
+        return;
+      }
+
+      const recordTime = record.checkInTime || record.date;
+      const isInCurrentCycle = cycleInfo.precise
+        ? new Date(recordTime) >= new Date(cycleInfo.start)
+        : getDateOnly(record.date) >= getDateOnly(cycleInfo.start);
+
+      if (isInCurrentCycle) {
+        presentCountByPlayerId.set(playerId, (presentCountByPlayerId.get(playerId) || 0) + 1);
+      }
+    });
+
+    res.json(players.map((player) => ({
+      ...formatPlayerResponse(player),
+      attendancePresentCount: presentCountByPlayerId.get(String(player._id)) || 0
+    })));
   } catch (error) {
     next(error);
   }

@@ -1,5 +1,5 @@
 import api from './api.js';
-import { fetchCached, invalidateCache, setCached } from './cache.js';
+import { fetchCached, invalidateCache, setCached, touchCacheVersion, updateCached } from './cache.js';
 
 export const fetchPlayers = async (params) => {
   if (params && Object.keys(params).length) {
@@ -25,10 +25,62 @@ const invalidatePlayerRelatedCache = (playerId) => {
   }
 };
 
+const getPlayerGroupIds = (player) => {
+  if (Array.isArray(player?.groupIds) && player.groupIds.length) {
+    return player.groupIds
+      .map((group) => group?._id || group)
+      .filter(Boolean)
+      .map(String);
+  }
+
+  const groupId = player?.groupId?._id || player?.groupId;
+  return groupId ? [String(groupId)] : [];
+};
+
+const upsertPlayer = (players, player) => {
+  if (!Array.isArray(players)) {
+    return players;
+  }
+
+  return [player, ...players.filter((item) => String(item._id) !== String(player._id))];
+};
+
+const patchCreatedPlayerIntoCache = (player) => {
+  if (!player?._id) {
+    return;
+  }
+
+  const groupIds = getPlayerGroupIds(player);
+  setCached(`players:item:${player._id}`, player);
+  updateCached('players:list', (players) => upsertPlayer(players, player));
+  updateCached('groups:list', (groups) => {
+    if (!Array.isArray(groups)) {
+      return groups;
+    }
+
+    return groups.map((group) => (
+      groupIds.includes(String(group._id))
+        ? { ...group, currentCount: Number(group.currentCount || 0) + 1 }
+        : group
+    ));
+  });
+
+  groupIds.forEach((groupId) => {
+    updateCached(`groups:players:${groupId}`, (players) => upsertPlayer(players, player));
+  });
+
+  touchCacheVersion();
+};
+
 export const createPlayer = async (data) => {
   const response = await api.post('/players', data);
-  invalidatePlayerRelatedCache(response.data?._id);
-  window.dispatchEvent(new Event('players:changed'));
+  patchCreatedPlayerIntoCache(response.data);
+  window.dispatchEvent(new CustomEvent('players:changed', {
+    detail: {
+      action: 'created',
+      player: response.data
+    }
+  }));
   return response.data;
 };
 

@@ -2,6 +2,7 @@ const DEFAULT_TTL_MS = 5 * 60 * 1000;
 
 const cacheStore = new Map();
 const pendingRequests = new Map();
+let cacheVersion = 0;
 
 const isFresh = (entry, ttlMs) => entry && (Date.now() - entry.timestamp) < ttlMs;
 
@@ -42,23 +43,51 @@ export const setCached = (key, value) => {
   });
 };
 
+export const updateCached = (key, updater) => {
+  const cachedEntry = cacheStore.get(key);
+  if (!cachedEntry) {
+    return undefined;
+  }
+
+  const nextValue = updater(cachedEntry.value);
+  cacheStore.set(key, {
+    value: nextValue,
+    timestamp: Date.now()
+  });
+  return nextValue;
+};
+
+export const touchCacheVersion = () => {
+  cacheVersion += 1;
+};
+
 export const invalidateCache = (prefixes = []) => {
   const prefixList = Array.isArray(prefixes) ? prefixes : [prefixes];
+  let didInvalidate = false;
 
   [...cacheStore.keys()].forEach((key) => {
     if (prefixList.some((prefix) => key.startsWith(prefix))) {
       cacheStore.delete(key);
+      didInvalidate = true;
     }
   });
 
   [...pendingRequests.keys()].forEach((key) => {
     if (prefixList.some((prefix) => key.startsWith(prefix))) {
       pendingRequests.delete(key);
+      didInvalidate = true;
     }
   });
+
+  if (didInvalidate) {
+    cacheVersion += 1;
+  }
 };
 
 export const clearCache = () => {
   cacheStore.clear();
   pendingRequests.clear();
+  cacheVersion += 1;
 };
+
+export const getCacheVersion = () => cacheVersion;

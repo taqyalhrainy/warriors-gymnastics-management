@@ -149,7 +149,8 @@ const loadPlayerForHistory = (playerId) => Player.findById(playerId)
   .populate('programId', 'name level')
   .populate('groupId', 'name days startTime endTime')
   .populate('groupIds', 'name days startTime endTime')
-  .populate('coachId', 'name');
+  .populate('coachId', 'name')
+  .populate('subscriptionId', 'type status totalSessions remainingSessions usedSessions startDate endDate price');
 
 const createPlayer = async (req, res, next) => {
   try {
@@ -221,7 +222,8 @@ const getPlayerById = async (req, res, next) => {
       .populate('programId', 'name level')
       .populate('groupId', 'name days startTime endTime')
       .populate('groupIds', 'name days startTime endTime')
-      .populate('coachId', 'name');
+      .populate('coachId', 'name')
+      .populate('subscriptionId', 'type status totalSessions remainingSessions usedSessions startDate endDate price');
     if (!player) {
       return res.status(404).json({ message: 'Player not found.' });
     }

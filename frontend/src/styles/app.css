@@ -619,6 +619,12 @@ body.theme-light .auth-loading-overlay {
     0 18px 36px rgba(14, 165, 233, 0.24);
 }
 
+.new-subscription-button.compact {
+  min-height: 40px;
+  padding: 0 16px;
+  font-size: 0.88rem;
+}
+
 @keyframes subscription-glow-sweep {
   0%,
   100% {
@@ -1802,6 +1808,48 @@ body.attendance-touch-dragging {
   z-index: 1;
 }
 
+.attendance-player-card.is-expired {
+  border: 2px solid rgba(239, 68, 68, 0.95);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 16% 18%, rgba(254, 202, 202, 0.95) 0 3px, transparent 4px),
+    linear-gradient(145deg, #fff1f2 0%, #fecaca 42%, #fee2e2 72%, #f87171 100%);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.58),
+    inset 0 0 24px rgba(220, 38, 38, 0.28),
+    inset 8px 0 18px rgba(254, 202, 202, 0.6),
+    0 0 0 3px rgba(248, 113, 113, 0.2),
+    0 10px 25px rgba(185, 28, 28, 0.28);
+  animation: expired-card-pulse 2.6s ease-in-out infinite;
+}
+
+.attendance-player-card.is-expired::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(52deg, transparent 46%, rgba(255, 255, 255, 0.55) 48% 49%, transparent 51%) 8% 12% / 42px 52px no-repeat,
+    linear-gradient(118deg, transparent 46%, rgba(185, 28, 28, 0.18) 48% 49%, transparent 51%) 88% 72% / 58px 70px no-repeat;
+  pointer-events: none;
+}
+
+.attendance-player-card.is-expired::after {
+  content: '!';
+  position: absolute;
+  top: -10px;
+  right: 8px;
+  color: rgba(185, 28, 28, 0.26);
+  font-size: 3rem;
+  font-weight: 1000;
+  pointer-events: none;
+  animation: expired-warning-blink 1.15s ease-in-out infinite;
+}
+
+.attendance-player-card.is-expired > * {
+  position: relative;
+  z-index: 1;
+}
+
 .attendance-frozen-badge {
   width: fit-content;
   padding: 3px 9px;
@@ -1813,6 +1861,62 @@ body.attendance-touch-dragging {
   font-style: normal;
   font-weight: 900;
   box-shadow: inset 0 0 8px white, 0 2px 8px rgba(2, 132, 199, 0.22);
+}
+
+.attendance-expired-badge {
+  width: fit-content;
+  padding: 3px 9px;
+  border: 1px solid rgba(220, 38, 38, 0.38);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(254, 202, 202, 0.92));
+  color: #b91c1c;
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 900;
+  box-shadow: inset 0 0 8px rgba(255, 255, 255, 0.8), 0 2px 8px rgba(185, 28, 28, 0.18);
+}
+
+.attendance-package-counter {
+  width: fit-content;
+  padding: 3px 10px;
+  border: 1px solid rgba(22, 163, 74, 0.38);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(240, 253, 244, 0.98), rgba(187, 247, 208, 0.92));
+  color: #15803d;
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 950;
+  box-shadow: inset 0 0 8px rgba(255, 255, 255, 0.86), 0 2px 8px rgba(22, 163, 74, 0.16);
+}
+
+@keyframes expired-card-pulse {
+  0%, 100% { box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.58),
+    inset 0 0 24px rgba(220, 38, 38, 0.28),
+    inset 8px 0 18px rgba(254, 202, 202, 0.6),
+    0 0 0 3px rgba(248, 113, 113, 0.2),
+    0 10px 25px rgba(185, 28, 28, 0.28);
+  }
+  50% { box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.68),
+    inset 0 0 30px rgba(220, 38, 38, 0.34),
+    inset 8px 0 18px rgba(254, 202, 202, 0.7),
+    0 0 0 4px rgba(248, 113, 113, 0.26),
+    0 12px 30px rgba(185, 28, 28, 0.35);
+  }
+}
+
+@keyframes expired-warning-blink {
+  0%, 100% {
+    opacity: 0.18;
+    transform: scale(0.94);
+    text-shadow: none;
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.08);
+    text-shadow: 0 0 16px rgba(239, 68, 68, 0.65);
+  }
 }
 
 @keyframes frozen-sparkle {
@@ -2020,6 +2124,36 @@ body.attendance-touch-dragging {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface-alt);
+}
+
+.student-history-row.is-current-subscription {
+  border-color: rgba(34, 197, 94, 0.42);
+  background:
+    linear-gradient(135deg, rgba(34, 197, 94, 0.16), rgba(187, 247, 208, 0.08)),
+    var(--surface-alt);
+  box-shadow:
+    inset 4px 0 0 rgba(34, 197, 94, 0.82),
+    0 0 18px rgba(34, 197, 94, 0.16);
+}
+
+.student-history-row.is-current-subscription strong {
+  color: #16a34a;
+  text-shadow: 0 0 10px rgba(34, 197, 94, 0.28);
+}
+
+.student-history-row.is-current-subscription.attendance-history-absent {
+  border-color: rgba(239, 68, 68, 0.42);
+  background:
+    linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(254, 202, 202, 0.08)),
+    var(--surface-alt);
+  box-shadow:
+    inset 4px 0 0 rgba(239, 68, 68, 0.82),
+    0 0 18px rgba(239, 68, 68, 0.14);
+}
+
+.student-history-row.is-current-subscription.attendance-history-absent strong {
+  color: #dc2626;
+  text-shadow: 0 0 10px rgba(239, 68, 68, 0.26);
 }
 
 .group-details-modal {

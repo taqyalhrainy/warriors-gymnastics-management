@@ -8,17 +8,40 @@ import { getPlayer, updatePlayer } from '../services/players.js';
 import { fetchPackageOptions } from '../services/packageOptions.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
+import { getCacheVersion } from '../services/cache.js';
 
 const ATTENDANCE_BOARD_CACHE_TTL_MS = 5 * 60 * 1000;
 let attendanceBoardCache = null;
 let attendanceBoardCacheTimestamp = 0;
 let attendanceBoardCacheDate = '';
+let attendanceBoardCacheVersion = -1;
 
 const getLocalDateValue = (date = new Date()) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+};
+
+const getDateInputValue = (date = new Date()) => {
+  if (!date) return '';
+  const value = new Date(date);
+  if (Number.isNaN(value.getTime())) return '';
+  return getLocalDateValue(value);
+};
+
+const getLocalDateOnly = (date = new Date()) => {
+  const value = new Date(date);
+  value.setHours(0, 0, 0, 0);
+  return value;
+};
+
+const getObjectIdDate = (id) => {
+  const value = String(id || '');
+  if (!/^[a-f\d]{24}$/i.test(value)) {
+    return null;
+  }
+  return new Date(parseInt(value.slice(0, 8), 16) * 1000);
 };
 
 const getAttendanceRangeStartValue = () => {
@@ -33,6 +56,45 @@ const getEntityId = (value) => String(value?._id || value || '');
 const getAttendanceRecordKey = (playerId, groupId) => `${getEntityId(playerId)}:${getEntityId(groupId)}`;
 
 const isPlayerVisibleInAttendance = (player) => !player?.isDeleted && player?.status !== 'left';
+
+const getPlayerPackageCounter = (player) => {
+  const subscription = player?.subscriptionId && typeof player.subscriptionId === 'object'
+    ? player.subscriptionId
+    : null;
+  const total = Number(subscription?.totalSessions || player?.packageClasses || 0);
+  const used = Number(player?.attendancePresentCount ?? subscription?.usedSessions ?? 0);
+
+  return {
+    used: Math.max(0, used),
+    total: Math.max(0, total)
+  };
+};
+
+const isPlayerSubscriptionExpired = (player) => {
+  if (!player) {
+    return false;
+  }
+
+  if (player.status === 'expired') {
+    return true;
+  }
+
+  const subscription = player.subscriptionId && typeof player.subscriptionId === 'object'
+    ? player.subscriptionId
+    : null;
+
+  const endDate = subscription?.endDate || player.endDate;
+  if (endDate && getLocalDateOnly(endDate) <= getLocalDateOnly()) {
+    return true;
+  }
+
+  const { total: packageClasses, used: usedClasses } = getPlayerPackageCounter(player);
+  if (packageClasses > 0 && usedClasses >= packageClasses) {
+    return true;
+  }
+
+  return false;
+};
 
 const getSnapshotGroups = (player) => {
   if (Array.isArray(player?.groupIds) && player.groupIds.length) {
@@ -99,6 +161,10 @@ const AttendancePage = () => {
   const [showSelectedPlayerAttendanceHistory, setShowSelectedPlayerAttendanceHistory] = useState(false);
   const [isEditingSelectedPlayer, setIsEditingSelectedPlayer] = useState(false);
   const [selectedPlayerForm, setSelectedPlayerForm] = useState(null);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [subscriptionForm, setSubscriptionForm] = useState({ startDate: '', endDate: '' });
+  const [subscriptionMessage, setSubscriptionMessage] = useState('');
+  const [isSavingSubscription, setIsSavingSubscription] = useState(false);
   const [editParents, setEditParents] = useState([]);
   const [editGroups, setEditGroups] = useState([]);
   const [packageOptions, setPackageOptions] = useState([]);
@@ -224,14 +290,21 @@ const AttendancePage = () => {
     const date = options.date || selectedAttendanceDate;
     const viewingToday = date === todayDateValue;
 
-    if (!force && attendanceBoardCache && attendanceBoardCacheDate === date && (Date.now() - attendanceBoardCacheTimestamp) < ATTENDANCE_BOARD_CACHE_TTL_MS) {
+    const currentCacheVersion = getCacheVersion();
+    const hasCachedBoardForDate = attendanceBoardCache && attendanceBoardCacheDate === date && (Date.now() - attendanceBoardCacheTimestamp) < ATTENDANCE_BOARD_CACHE_TTL_MS;
+    if (!force && attendanceBoardCache && attendanceBoardCacheDate === date && attendanceBoardCacheVersion === currentCacheVersion && (Date.now() - attendanceBoardCacheTimestamp) < ATTENDANCE_BOARD_CACHE_TTL_MS) {
       setGroupColumns(attendanceBoardCache);
       setIsLoading(false);
       return attendanceBoardCache;
     }
 
+    if (!force && hasCachedBoardForDate) {
+      setGroupColumns(attendanceBoardCache);
+      setIsLoading(false);
+    }
+
     try {
-      if (!silent) {
+      if (!silent && !hasCachedBoardForDate) {
         setIsLoading(true);
       }
       const [groups, todayRecords] = await Promise.all([
@@ -262,6 +335,7 @@ const AttendancePage = () => {
       attendanceBoardCache = groupsWithTodayAttendance;
       attendanceBoardCacheTimestamp = Date.now();
       attendanceBoardCacheDate = date;
+      attendanceBoardCacheVersion = getCacheVersion();
       setGroupColumns(groupsWithTodayAttendance);
       setMessage(`${date === todayDateValue ? 'Today' : new Date(`${date}T00:00:00`).toLocaleDateString()} attendance loaded`);
       return groupsWithTodayAttendance;
@@ -457,9 +531,10 @@ const AttendancePage = () => {
     const previousGroups = groupColumns;
     const reorderedGroups = reorderGroups(groupColumns, fromGroupId, targetGroupId);
     setGroupColumns(reorderedGroups);
-    attendanceBoardCache = reorderedGroups;
-    attendanceBoardCacheTimestamp = Date.now();
-    attendanceBoardCacheDate = selectedAttendanceDate;
+      attendanceBoardCache = reorderedGroups;
+      attendanceBoardCacheTimestamp = Date.now();
+      attendanceBoardCacheDate = selectedAttendanceDate;
+      attendanceBoardCacheVersion = getCacheVersion();
 
     try {
       await reorderGroupsRequest(reorderedGroups.map((group) => group._id));
@@ -469,6 +544,7 @@ const AttendancePage = () => {
       attendanceBoardCache = previousGroups;
       attendanceBoardCacheTimestamp = Date.now();
       attendanceBoardCacheDate = selectedAttendanceDate;
+      attendanceBoardCacheVersion = getCacheVersion();
       setMessage(err.response?.data?.message || 'Unable to update group order');
     }
   };
@@ -579,6 +655,16 @@ const AttendancePage = () => {
 
   const setPlayerAttendanceInBoard = (playerId, targetGroupId, attendance) => {
     setGroupColumns((currentGroups) => {
+      const currentPlayerRecords = currentGroups
+        .flatMap((group) => group.players)
+        .filter((player) => player._id === playerId);
+      const previousPresentRecord = currentPlayerRecords.find((player) => player.todayAttendance?.status === 'present') || null;
+      const previousStatus = previousPresentRecord?.todayAttendance?.status || null;
+      const nextStatus = attendance?.status || null;
+      const presentDelta = (previousStatus === 'present' ? -1 : 0) + (nextStatus === 'present' ? 1 : 0);
+      const basePresentCount = Number((previousPresentRecord || currentPlayerRecords[0])?.attendancePresentCount || 0);
+      const nextPresentCount = Math.max(0, basePresentCount + presentDelta);
+
       const nextGroups = currentGroups.map((group) => {
         let changed = false;
         const nextPlayers = group.players.map((player) => {
@@ -587,9 +673,22 @@ const AttendancePage = () => {
           }
 
           changed = true;
+          const nextAttendance = targetGroupId && group._id === targetGroupId ? attendance : null;
+          const subscription = player.subscriptionId && typeof player.subscriptionId === 'object'
+            ? {
+              ...player.subscriptionId,
+              usedSessions: Math.max(0, Number(player.subscriptionId.usedSessions || 0) + presentDelta),
+              remainingSessions: typeof player.subscriptionId.remainingSessions !== 'undefined'
+                ? Math.max(0, Number(player.subscriptionId.remainingSessions || 0) - presentDelta)
+                : player.subscriptionId.remainingSessions
+            }
+            : player.subscriptionId;
+
           return {
             ...player,
-            todayAttendance: targetGroupId && group._id === targetGroupId ? attendance : null
+            subscriptionId: subscription,
+            attendancePresentCount: nextPresentCount,
+            todayAttendance: nextAttendance
           };
         });
 
@@ -611,6 +710,7 @@ const AttendancePage = () => {
       attendanceBoardCache = nextGroups;
       attendanceBoardCacheTimestamp = Date.now();
       attendanceBoardCacheDate = selectedAttendanceDate;
+      attendanceBoardCacheVersion = getCacheVersion();
       return nextGroups;
     });
   };
@@ -635,6 +735,7 @@ const AttendancePage = () => {
     attendanceBoardCache = groups;
     attendanceBoardCacheTimestamp = Date.now();
     attendanceBoardCacheDate = selectedAttendanceDate;
+    attendanceBoardCacheVersion = getCacheVersion();
   };
 
   const handleAction = async (player, groupId, status) => {
@@ -855,6 +956,52 @@ const AttendancePage = () => {
     setSelectedPlayerForm(selectedPlayer ? createSelectedPlayerForm(selectedPlayer) : null);
   };
 
+  const openSubscriptionModal = () => {
+    setSubscriptionForm({
+      startDate: getDateInputValue(),
+      endDate: getDateInputValue(selectedPlayer?.endDate)
+    });
+    setSubscriptionMessage('');
+    setShowSubscriptionModal(true);
+  };
+
+  const handleSubscriptionSave = async (event) => {
+    event.preventDefault();
+    if (!selectedPlayer?._id) {
+      return;
+    }
+
+    const confirmed = window.confirm('This will start a new subscription cycle and cannot be undone. Continue?');
+    if (!confirmed) return;
+
+    setSubscriptionMessage('');
+    setIsSavingSubscription(true);
+    try {
+      await updatePlayer(selectedPlayer._id, {
+        startDate: subscriptionForm.startDate,
+        endDate: subscriptionForm.endDate,
+        status: selectedPlayer.status === 'expired' ? 'active' : selectedPlayer.status,
+        newSubscription: true
+      });
+
+      const [refreshedPlayer, attendanceRecords] = await Promise.all([
+        getPlayer(selectedPlayer._id),
+        fetchAttendanceByPlayer(selectedPlayer._id)
+      ]);
+
+      setSelectedPlayer(refreshedPlayer);
+      setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
+      setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
+      setShowSubscriptionModal(false);
+      setMessage('New subscription started');
+      await loadAttendanceBoard({ force: true, date: selectedAttendanceDate });
+    } catch (error) {
+      setSubscriptionMessage(error.response?.data?.message || 'Unable to start a new subscription.');
+    } finally {
+      setIsSavingSubscription(false);
+    }
+  };
+
   const handleSaveSelectedPlayerEdit = async (event) => {
     event.preventDefault();
     if (!selectedPlayer?._id || !selectedPlayerForm) {
@@ -890,6 +1037,23 @@ const AttendancePage = () => {
     const threeMonthsAgo = new Date();
     threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
     return records.filter((record) => new Date(record.date) >= threeMonthsAgo);
+  };
+  const isCurrentSubscriptionAttendanceRecord = (record) => {
+    const preciseCycleStart = selectedPlayer?.currentSubscriptionStartedAt;
+    const cycleStart = preciseCycleStart
+      || selectedPlayer?.subscriptionId?.startDate
+      || selectedPlayer?.startDate;
+
+    if (!cycleStart) {
+      return true;
+    }
+
+    if (preciseCycleStart) {
+      const recordTime = record.checkInTime || getObjectIdDate(record._id) || record.date;
+      return new Date(recordTime) >= new Date(preciseCycleStart);
+    }
+
+    return getLocalDateOnly(record.date) >= getLocalDateOnly(cycleStart);
   };
   const getPlayerGroups = (player) => {
     const groups = player?.groupIds?.length ? player.groupIds : [player?.groupId].filter(Boolean);
@@ -1087,50 +1251,60 @@ const AttendancePage = () => {
                 </div>
 
                 <div className="attendance-player-list">
-                  {group.players.length ? group.players.map((player) => (
-                    <article className={`attendance-player-card${player.status === 'frozen' ? ' is-frozen' : ''}`} key={player._id}>
-                      <button type="button" className="attendance-player-main" onClick={() => handleSelectPlayer(player)}>
-                        <strong>{player.fullName}</strong>
-                        <span>{player.parentId?.name || t('noParent')} | {player.status}</span>
-                        {player.status === 'frozen' && (
-                          <em className="attendance-frozen-badge">❄ {t('frozenStatus')}</em>
-                        )}
-                        {player.todayAttendance && (
-                          <em className={`attendance-status-pill attendance-status-pill-${player.todayAttendance.status}`}>
-                            {player.todayAttendance.status}
+                  {group.players.length ? group.players.map((player) => {
+                    const isExpired = isPlayerSubscriptionExpired(player);
+                    const packageCounter = getPlayerPackageCounter(player);
+                    return (
+                      <article className={`attendance-player-card${player.status === 'frozen' ? ' is-frozen' : ''}${isExpired ? ' is-expired' : ''}`} key={player._id}>
+                        <button type="button" className="attendance-player-main" onClick={() => handleSelectPlayer(player)}>
+                          <strong>{player.fullName}</strong>
+                          <span>{player.parentId?.name || t('noParent')} | {player.status}</span>
+                          <em className="attendance-package-counter">
+                            {packageCounter.total > 0 ? `${packageCounter.used}/${packageCounter.total}` : packageCounter.used}
                           </em>
-                        )}
-                      </button>
-                      <div className="attendance-actions">
-                        <button
-                          type="button"
-                          className={`btn-present ${player.todayAttendance?.status === 'present' ? 'active' : ''}`}
-                          onClick={() => handleAction(player, group._id, 'present')}
-                          disabled={isAttendanceActionPending(player._id, group._id)}
-                        >
-                          {t('present')}
+                          {isExpired && (
+                            <em className="attendance-expired-badge">Expired</em>
+                          )}
+                          {player.status === 'frozen' && !isExpired && (
+                            <em className="attendance-frozen-badge">❄ {t('frozenStatus')}</em>
+                          )}
+                          {player.todayAttendance && (
+                            <em className={`attendance-status-pill attendance-status-pill-${player.todayAttendance.status}`}>
+                              {player.todayAttendance.status}
+                            </em>
+                          )}
                         </button>
-                        <button
-                          type="button"
-                          className={`btn-absent ${player.todayAttendance?.status === 'absent' ? 'active' : ''}`}
-                          onClick={() => handleAction(player, group._id, 'absent')}
-                          disabled={isAttendanceActionPending(player._id, group._id)}
-                        >
-                          {t('absent')}
-                        </button>
-                        {player.todayAttendance && (
+                        <div className="attendance-actions">
                           <button
                             type="button"
-                            className="btn-cancel-attendance"
-                            onClick={() => handleCancelAttendance(player, group._id)}
-                            disabled={isAttendanceActionPending(player._id, group._id)}
+                            className={`btn-present ${player.todayAttendance?.status === 'present' ? 'active' : ''}`}
+                            onClick={() => handleAction(player, group._id, 'present')}
+                            disabled={isAttendanceActionPending(player._id)}
                           >
-                            {isAttendanceActionPending(player._id, group._id) ? 'Saving...' : 'Cancel'}
+                            {t('present')}
                           </button>
-                        )}
-                      </div>
-                    </article>
-                  )) : <p className="empty-state">{t('noStudentsInGroup')}</p>}
+                          <button
+                            type="button"
+                            className={`btn-absent ${player.todayAttendance?.status === 'absent' ? 'active' : ''}`}
+                            onClick={() => handleAction(player, group._id, 'absent')}
+                            disabled={isAttendanceActionPending(player._id)}
+                          >
+                            {t('absent')}
+                          </button>
+                          {player.todayAttendance && (
+                            <button
+                              type="button"
+                              className="btn-cancel-attendance"
+                              onClick={() => handleCancelAttendance(player, group._id)}
+                              disabled={isAttendanceActionPending(player._id)}
+                            >
+                              {isAttendanceActionPending(player._id) ? 'Saving...' : 'Cancel'}
+                            </button>
+                          )}
+                        </div>
+                      </article>
+                    );
+                  }) : <p className="empty-state">{t('noStudentsInGroup')}</p>}
                 </div>
               </section>
             ))}
@@ -1147,7 +1321,12 @@ const AttendancePage = () => {
                 </div>
                 <div className="student-modal-header-actions">
                   {!isEditingSelectedPlayer && (
-                    <button type="button" className="btn-primary" onClick={handleStartEditSelectedPlayer}>{t('edit')}</button>
+                    <>
+                      <button type="button" className="new-subscription-button compact" onClick={openSubscriptionModal}>
+                        <span>New Subscription</span>
+                      </button>
+                      <button type="button" className="btn-primary" onClick={handleStartEditSelectedPlayer}>{t('edit')}</button>
+                    </>
                   )}
                   <button type="button" className="btn-secondary" onClick={() => setSelectedPlayer(null)}>{t('close')}</button>
                 </div>
@@ -1272,7 +1451,7 @@ const AttendancePage = () => {
                     {showSelectedPlayerAttendanceHistory && (
                       <div className="student-history-list">
                         {selectedPlayerAttendanceHistory.length ? selectedPlayerAttendanceHistory.map((record) => (
-                          <div className="student-history-row" key={record._id}>
+                          <div className={`student-history-row${isCurrentSubscriptionAttendanceRecord(record) ? ' is-current-subscription' : ''} attendance-history-${record.status}`} key={record._id}>
                             <span>{new Date(record.date).toLocaleDateString()}</span>
                             <strong>{record.status}</strong>
                             <span>{record.checkInTime ? new Date(record.checkInTime).toLocaleTimeString() : '-'}</span>
@@ -1284,6 +1463,50 @@ const AttendancePage = () => {
                 </>
               )}
             </section>
+          </div>
+        )}
+
+        {showSubscriptionModal && selectedPlayer && (
+          <div className="student-modal-backdrop" role="presentation" onClick={() => setShowSubscriptionModal(false)}>
+            <div className="student-modal new-subscription-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+              <div className="student-modal-header">
+                <div>
+                  <h2>New Subscription</h2>
+                  <p>{selectedPlayer.fullName} - choose the new subscription dates.</p>
+                </div>
+                <button className="btn-secondary" type="button" onClick={() => setShowSubscriptionModal(false)}>Close</button>
+              </div>
+              <p className="new-subscription-warning">Warning: this starts a fresh subscription counter for this player.</p>
+              {subscriptionMessage && <p className="alert-error">{subscriptionMessage}</p>}
+              <form className="student-modal-edit-form" onSubmit={handleSubscriptionSave}>
+                <div className="student-modal-edit-grid">
+                  <label>
+                    <span>{t('startDate')}</span>
+                    <input
+                      type="date"
+                      value={subscriptionForm.startDate}
+                      onChange={(event) => setSubscriptionForm({ ...subscriptionForm, startDate: event.target.value })}
+                      required
+                    />
+                  </label>
+                  <label>
+                    <span>{t('endDate')}</span>
+                    <input
+                      type="date"
+                      value={subscriptionForm.endDate}
+                      onChange={(event) => setSubscriptionForm({ ...subscriptionForm, endDate: event.target.value })}
+                      required
+                    />
+                  </label>
+                </div>
+                <div className="student-modal-edit-actions">
+                  <button className="btn-primary" type="submit" disabled={isSavingSubscription}>
+                    {isSavingSubscription ? 'Saving...' : 'Start Subscription'}
+                  </button>
+                  <button className="btn-secondary" type="button" onClick={() => setShowSubscriptionModal(false)}>Cancel</button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
 
