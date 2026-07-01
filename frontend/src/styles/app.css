@@ -2081,6 +2081,25 @@ body.attendance-touch-dragging {
   grid-column: 1 / -1;
 }
 
+.student-info-grid .subscription-attention-box {
+  border-color: rgba(148, 163, 184, 0.38);
+  background:
+    linear-gradient(135deg, rgba(148, 163, 184, 0.1), rgba(226, 232, 240, 0.06)),
+    var(--surface-alt);
+}
+
+.student-info-grid .subscription-attention-box.is-active {
+  border-color: rgba(239, 68, 68, 0.42);
+  background:
+    linear-gradient(135deg, rgba(239, 68, 68, 0.14), rgba(254, 202, 202, 0.08)),
+    var(--surface-alt);
+}
+
+.subscription-attention-box button {
+  width: fit-content;
+  margin-top: 6px;
+}
+
 .student-info-grid span,
 .student-history-row span {
   color: var(--muted);
@@ -2117,7 +2136,7 @@ body.attendance-touch-dragging {
 
 .student-history-row {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: 1fr auto 1fr auto;
   gap: 10px;
   align-items: center;
   padding: 10px 12px;
@@ -2154,6 +2173,20 @@ body.attendance-touch-dragging {
 .student-history-row.is-current-subscription.attendance-history-absent strong {
   color: #dc2626;
   text-shadow: 0 0 10px rgba(239, 68, 68, 0.26);
+}
+
+.student-history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.student-history-actions .compact {
+  min-height: 30px;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  border-radius: 8px;
 }
 
 .group-details-modal {

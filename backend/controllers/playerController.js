@@ -300,7 +300,7 @@ const updatePlayer = async (req, res, next) => {
     }
     Object.assign(player, updates);
     await player.save();
-    if (startsNewSubscription || typeof updates.payment !== 'undefined' || typeof updates.startDate !== 'undefined') {
+    if (startsNewSubscription || typeof updates.payment !== 'undefined' || typeof updates.startDate !== 'undefined' || typeof updates.currentSubscriptionStartedAt !== 'undefined') {
       await recalculatePlayerPayments(player);
     }
     const afterPlayer = await loadPlayerForHistory(id);

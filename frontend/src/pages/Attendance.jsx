@@ -75,6 +75,10 @@ const isPlayerSubscriptionExpired = (player) => {
     return false;
   }
 
+  if (player.subscriptionNeedsAttention) {
+    return true;
+  }
+
   if (player.status === 'expired') {
     return true;
   }
@@ -159,6 +163,8 @@ const AttendancePage = () => {
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [selectedPlayerAttendanceHistory, setSelectedPlayerAttendanceHistory] = useState([]);
   const [showSelectedPlayerAttendanceHistory, setShowSelectedPlayerAttendanceHistory] = useState(false);
+  const [editingAttendanceHistoryId, setEditingAttendanceHistoryId] = useState(null);
+  const [pendingAttendanceHistoryId, setPendingAttendanceHistoryId] = useState(null);
   const [isEditingSelectedPlayer, setIsEditingSelectedPlayer] = useState(false);
   const [selectedPlayerForm, setSelectedPlayerForm] = useState(null);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
@@ -190,6 +196,7 @@ const AttendancePage = () => {
   const pointerStartPointRef = useRef(null);
   const attendanceDateInputRef = useRef(null);
   const pendingAttendanceKeysRef = useRef(new Set());
+  const pendingAttendanceHistoryIdRef = useRef(null);
   const didRunInitialAttendanceLoadRef = useRef(false);
   const { t } = useLanguage();
   const todayDateValue = getLocalDateValue();
@@ -730,6 +737,11 @@ const AttendancePage = () => {
 
   const isAttendanceActionPending = (playerId) => pendingAttendanceKeys.includes(getAttendanceActionKey(playerId));
 
+  const setAttendanceHistoryPending = (recordId) => {
+    pendingAttendanceHistoryIdRef.current = recordId;
+    setPendingAttendanceHistoryId(recordId);
+  };
+
   const restoreBoard = (groups) => {
     setGroupColumns(groups);
     attendanceBoardCache = groups;
@@ -847,6 +859,7 @@ const AttendancePage = () => {
       setSelectedPlayerForm(createSelectedPlayerForm(player));
       setSelectedPlayerAttendanceHistory([]);
       setShowSelectedPlayerAttendanceHistory(false);
+      setEditingAttendanceHistoryId(null);
       setIsEditingSelectedPlayer(false);
 
       const [latestPlayer, attendanceRecords] = await Promise.all([
@@ -965,7 +978,7 @@ const AttendancePage = () => {
     setShowSubscriptionModal(true);
   };
 
-  const handleSubscriptionSave = async (event) => {
+  const handleSubscriptionSave = async (event, keepWarning = false) => {
     event.preventDefault();
     if (!selectedPlayer?._id) {
       return;
@@ -981,6 +994,7 @@ const AttendancePage = () => {
         startDate: subscriptionForm.startDate,
         endDate: subscriptionForm.endDate,
         status: selectedPlayer.status === 'expired' ? 'active' : selectedPlayer.status,
+        subscriptionNeedsAttention: keepWarning,
         newSubscription: true
       });
 
@@ -999,6 +1013,224 @@ const AttendancePage = () => {
       setSubscriptionMessage(error.response?.data?.message || 'Unable to start a new subscription.');
     } finally {
       setIsSavingSubscription(false);
+    }
+  };
+
+  const handleClearSubscriptionAttention = async () => {
+    if (!selectedPlayer?._id) {
+      return;
+    }
+
+    try {
+      setMessage('');
+      await updatePlayer(selectedPlayer._id, { subscriptionNeedsAttention: false });
+      const refreshedPlayer = await getPlayer(selectedPlayer._id);
+      setSelectedPlayer(refreshedPlayer);
+      setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
+      setMessage('Subscription warning cleared');
+      await loadAttendanceBoard({ force: true, date: selectedAttendanceDate });
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Unable to clear subscription warning');
+    }
+  };
+
+  const handleSetSubscriptionAttention = async () => {
+    if (!selectedPlayer?._id) {
+      return;
+    }
+
+    try {
+      setMessage('');
+      await updatePlayer(selectedPlayer._id, { subscriptionNeedsAttention: true });
+      const refreshedPlayer = await getPlayer(selectedPlayer._id);
+      setSelectedPlayer(refreshedPlayer);
+      setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
+      setMessage('Subscription warning enabled');
+      await loadAttendanceBoard({ force: true, date: selectedAttendanceDate });
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Unable to mark subscription warning');
+    }
+  };
+
+  const handleAttendanceHistoryStatusChange = async (record, status) => {
+    if (!selectedPlayer?._id || !record?._id || !['present', 'absent'].includes(status)) {
+      return;
+    }
+    if (pendingAttendanceHistoryIdRef.current) {
+      return;
+    }
+
+    const groupId = getEntityId(record.groupId) || getEntityId(selectedPlayer.groupId) || getEntityId(selectedPlayer.groupIds?.[0]);
+    if (!groupId) {
+      setMessage('Unable to edit attendance record without a group.');
+      return;
+    }
+
+    try {
+      setMessage('');
+      setAttendanceHistoryPending(record._id);
+      setSelectedPlayerAttendanceHistory((records) => records.map((item) => (
+        item._id === record._id
+          ? {
+            ...item,
+            status,
+            checkInTime: status === 'present' ? (item.checkInTime || new Date().toISOString()) : undefined
+          }
+          : item
+      )));
+      await updateTodayAttendance({
+        playerId: selectedPlayer._id,
+        groupId,
+        status,
+        date: getDateInputValue(record.date)
+      });
+
+      const [refreshedPlayer, attendanceRecords] = await Promise.all([
+        getPlayer(selectedPlayer._id),
+        fetchAttendanceByPlayer(selectedPlayer._id)
+      ]);
+
+      setSelectedPlayer(refreshedPlayer);
+      setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
+      setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
+      setMessage('Attendance history updated');
+      await loadAttendanceBoard({ force: true, date: selectedAttendanceDate });
+      setEditingAttendanceHistoryId(null);
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Unable to update attendance history');
+    } finally {
+      setAttendanceHistoryPending(null);
+    }
+  };
+
+  const handleAttendanceHistoryCancel = async (record) => {
+    if (!selectedPlayer?._id || !record?._id) {
+      return;
+    }
+    if (pendingAttendanceHistoryIdRef.current) {
+      return;
+    }
+
+    const groupId = getEntityId(record.groupId) || getEntityId(selectedPlayer.groupId) || getEntityId(selectedPlayer.groupIds?.[0]);
+    const confirmed = window.confirm('Remove this attendance record?');
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setMessage('');
+      setAttendanceHistoryPending(record._id);
+      setSelectedPlayerAttendanceHistory((records) => records.filter((item) => item._id !== record._id));
+      await cancelTodayAttendance({
+        playerId: selectedPlayer._id,
+        groupId,
+        date: getDateInputValue(record.date)
+      });
+
+      const [refreshedPlayer, attendanceRecords] = await Promise.all([
+        getPlayer(selectedPlayer._id),
+        fetchAttendanceByPlayer(selectedPlayer._id)
+      ]);
+
+      setSelectedPlayer(refreshedPlayer);
+      setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
+      setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
+      setMessage('Attendance history record removed');
+      await loadAttendanceBoard({ force: true, date: selectedAttendanceDate });
+      setEditingAttendanceHistoryId(null);
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Unable to remove attendance history record');
+    } finally {
+      setAttendanceHistoryPending(null);
+    }
+  };
+
+  const handleCountAttendanceInCurrentSubscription = async (record) => {
+    if (!selectedPlayer?._id || !record?._id) {
+      return;
+    }
+    if (pendingAttendanceHistoryIdRef.current) {
+      return;
+    }
+
+    const confirmed = window.confirm('Count this attendance record as part of the current subscription?');
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setMessage('');
+      setAttendanceHistoryPending(record._id);
+      const nextSubscriptionStart = getDateInputValue(record.date);
+      setSelectedPlayer((currentPlayer) => currentPlayer ? {
+        ...currentPlayer,
+        currentSubscriptionStartedAt: nextSubscriptionStart
+      } : currentPlayer);
+      await updatePlayer(selectedPlayer._id, {
+        currentSubscriptionStartedAt: nextSubscriptionStart
+      });
+
+      const [refreshedPlayer, attendanceRecords] = await Promise.all([
+        getPlayer(selectedPlayer._id),
+        fetchAttendanceByPlayer(selectedPlayer._id)
+      ]);
+
+      setSelectedPlayer(refreshedPlayer);
+      setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
+      setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
+      setMessage('Attendance record counted in current subscription');
+      await loadAttendanceBoard({ force: true, date: selectedAttendanceDate });
+      setEditingAttendanceHistoryId(null);
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Unable to count this attendance in current subscription');
+    } finally {
+      setAttendanceHistoryPending(null);
+    }
+  };
+
+  const handleRemoveAttendanceFromCurrentSubscription = async (record) => {
+    if (!selectedPlayer?._id || !record?._id) {
+      return;
+    }
+    if (pendingAttendanceHistoryIdRef.current) {
+      return;
+    }
+
+    const confirmed = window.confirm('Remove this attendance record from the current subscription counter?');
+    if (!confirmed) {
+      return;
+    }
+
+    const recordDate = new Date(record.checkInTime || record.date);
+    recordDate.setDate(recordDate.getDate() + 1);
+
+    try {
+      setMessage('');
+      setAttendanceHistoryPending(record._id);
+      const nextSubscriptionStart = getDateInputValue(recordDate);
+      setSelectedPlayer((currentPlayer) => currentPlayer ? {
+        ...currentPlayer,
+        currentSubscriptionStartedAt: nextSubscriptionStart
+      } : currentPlayer);
+      await updatePlayer(selectedPlayer._id, {
+        currentSubscriptionStartedAt: nextSubscriptionStart
+      });
+
+      const [refreshedPlayer, attendanceRecords] = await Promise.all([
+        getPlayer(selectedPlayer._id),
+        fetchAttendanceByPlayer(selectedPlayer._id)
+      ]);
+
+      setSelectedPlayer(refreshedPlayer);
+      setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
+      setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
+      setMessage('Attendance record removed from current subscription');
+      await loadAttendanceBoard({ force: true, date: selectedAttendanceDate });
+      setEditingAttendanceHistoryId(null);
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Unable to remove this attendance from current subscription');
+    } finally {
+      setAttendanceHistoryPending(null);
     }
   };
 
@@ -1263,7 +1495,7 @@ const AttendancePage = () => {
                             {packageCounter.total > 0 ? `${packageCounter.used}/${packageCounter.total}` : packageCounter.used}
                           </em>
                           {isExpired && (
-                            <em className="attendance-expired-badge">Expired</em>
+                            <em className="attendance-expired-badge">{player.subscriptionNeedsAttention ? 'Review' : 'Expired'}</em>
                           )}
                           {player.status === 'frozen' && !isExpired && (
                             <em className="attendance-frozen-badge">❄ {t('frozenStatus')}</em>
@@ -1360,6 +1592,7 @@ const AttendancePage = () => {
                         <option value="active">{t('activeStatus')}</option>
                         <option value="expired">{t('expiredStatus')}</option>
                         <option value="frozen">{t('frozenStatus')}</option>
+                        <option value="tryout">{t('tryoutStatus')}</option>
                         <option value="left">{t('leftStatus')}</option>
                       </select>
                     </label>
@@ -1436,6 +1669,19 @@ const AttendancePage = () => {
                     <div><span>{t('payment')}</span><strong>{selectedPlayer.payment ?? 0}</strong></div>
                     <div><span>{t('classes')}</span><strong>{selectedPlayer.packageClasses ?? 0}</strong></div>
                     <div><span>{t('hours')}</span><strong>{selectedPlayer.packageHours ?? 0}</strong></div>
+                    <div className={`student-info-grid-full subscription-attention-box${selectedPlayer.subscriptionNeedsAttention ? ' is-active' : ''}`}>
+                      <span>Subscription highlight</span>
+                      <strong>
+                        {selectedPlayer.subscriptionNeedsAttention
+                          ? 'This player is intentionally highlighted.'
+                          : 'Mark this player red for admin review.'}
+                      </strong>
+                      {selectedPlayer.subscriptionNeedsAttention ? (
+                        <button type="button" className="btn-secondary" onClick={handleClearSubscriptionAttention}>Clear red highlight</button>
+                      ) : (
+                        <button type="button" className="btn-secondary" onClick={handleSetSubscriptionAttention}>Set highlight</button>
+                      )}
+                    </div>
                     {selectedPlayer.note && (
                       <div className="student-info-grid-full"><span>{t('note')}</span><strong>{selectedPlayer.note}</strong></div>
                     )}
@@ -1455,6 +1701,73 @@ const AttendancePage = () => {
                             <span>{new Date(record.date).toLocaleDateString()}</span>
                             <strong>{record.status}</strong>
                             <span>{record.checkInTime ? new Date(record.checkInTime).toLocaleTimeString() : '-'}</span>
+                            <div className="student-history-actions">
+                              {editingAttendanceHistoryId === record._id ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="btn-present compact"
+                                    onClick={() => handleAttendanceHistoryStatusChange(record, 'present')}
+                                    disabled={pendingAttendanceHistoryId === record._id}
+                                  >
+                                    {pendingAttendanceHistoryId === record._id ? 'Saving...' : 'Present'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn-absent compact"
+                                    onClick={() => handleAttendanceHistoryStatusChange(record, 'absent')}
+                                    disabled={pendingAttendanceHistoryId === record._id}
+                                  >
+                                    Absent
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn-secondary compact"
+                                    onClick={() => handleAttendanceHistoryCancel(record)}
+                                    disabled={pendingAttendanceHistoryId === record._id}
+                                  >
+                                    Remove
+                                  </button>
+                                  {record.status === 'present' && !isCurrentSubscriptionAttendanceRecord(record) && (
+                                    <button
+                                      type="button"
+                                      className="btn-secondary compact"
+                                      onClick={() => handleCountAttendanceInCurrentSubscription(record)}
+                                      disabled={pendingAttendanceHistoryId === record._id}
+                                    >
+                                      Count in current sub
+                                    </button>
+                                  )}
+                                  {record.status === 'present' && isCurrentSubscriptionAttendanceRecord(record) && (
+                                    <button
+                                      type="button"
+                                      className="btn-secondary compact"
+                                      onClick={() => handleRemoveAttendanceFromCurrentSubscription(record)}
+                                      disabled={pendingAttendanceHistoryId === record._id}
+                                    >
+                                      Remove from current sub
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    className="btn-secondary compact"
+                                    onClick={() => setEditingAttendanceHistoryId(null)}
+                                    disabled={pendingAttendanceHistoryId === record._id}
+                                  >
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="btn-secondary compact"
+                                  onClick={() => setEditingAttendanceHistoryId(record._id)}
+                                  disabled={Boolean(pendingAttendanceHistoryId)}
+                                >
+                                  Edit
+                                </button>
+                              )}
+                            </div>
                           </div>
                         )) : <p className="empty-state">No attendance history found for the last 3 months.</p>}
                       </div>
@@ -1478,7 +1791,7 @@ const AttendancePage = () => {
               </div>
               <p className="new-subscription-warning">Warning: this starts a fresh subscription counter for this player.</p>
               {subscriptionMessage && <p className="alert-error">{subscriptionMessage}</p>}
-              <form className="student-modal-edit-form" onSubmit={handleSubscriptionSave}>
+              <form className="student-modal-edit-form" onSubmit={(event) => handleSubscriptionSave(event, false)}>
                 <div className="student-modal-edit-grid">
                   <label>
                     <span>{t('startDate')}</span>
@@ -1501,7 +1814,15 @@ const AttendancePage = () => {
                 </div>
                 <div className="student-modal-edit-actions">
                   <button className="btn-primary" type="submit" disabled={isSavingSubscription}>
-                    {isSavingSubscription ? 'Saving...' : 'Start Subscription'}
+                    {isSavingSubscription ? 'Saving...' : 'Start normally'}
+                  </button>
+                  <button
+                    className="new-subscription-button compact"
+                    type="button"
+                    disabled={isSavingSubscription}
+                    onClick={(event) => handleSubscriptionSave(event, true)}
+                  >
+                    <span>{isSavingSubscription ? 'Saving...' : 'Start and keep warning'}</span>
                   </button>
                   <button className="btn-secondary" type="button" onClick={() => setShowSubscriptionModal(false)}>Cancel</button>
                 </div>

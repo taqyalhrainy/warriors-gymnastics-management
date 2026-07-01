@@ -35,8 +35,8 @@ const PlayersPage = () => {
   const statusTabs = [
     { key: 'active', label: 'Active Players' },
     { key: 'left', label: 'Left Players' },
-    { key: 'expired', label: 'Expired' },
-    { key: 'frozen', label: 'Frozen' }
+    { key: 'frozen', label: 'Frozen' },
+    { key: 'tryout', label: 'Tryout' }
   ];
 
   const filteredPlayers = players

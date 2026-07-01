@@ -228,6 +228,7 @@ const PlayerFormPage = () => {
               <option value="active">{t('activeStatus')}</option>
               <option value="expired">{t('expiredStatus')}</option>
               <option value="frozen">{t('frozenStatus')}</option>
+              <option value="tryout">{t('tryoutStatus')}</option>
               <option value="left">{t('leftStatus')}</option>
             </select>
 
