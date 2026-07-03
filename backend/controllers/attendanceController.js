@@ -208,7 +208,10 @@ const cancelTodayAttendance = async (req, res, next) => {
     if (groupId) {
       attendanceQuery.groupId = groupId;
     }
-    const attendance = await Attendance.findOne(attendanceQuery);
+    let attendance = await Attendance.findOne(attendanceQuery);
+    if (!attendance && groupId) {
+      attendance = await Attendance.findOne({ playerId, date: dateOnly });
+    }
     if (!attendance) {
       return res.status(404).json({ message: 'No attendance record to cancel today.' });
     }

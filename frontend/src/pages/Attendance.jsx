@@ -186,6 +186,8 @@ const AttendancePage = () => {
   const [isCoarsePointerDevice, setIsCoarsePointerDevice] = useState(false);
   const [pendingAttendanceKeys, setPendingAttendanceKeys] = useState([]);
   const attendanceBoardRef = useRef(null);
+  const attendanceLoadRequestIdRef = useRef(0);
+  const groupColumnsRef = useRef([]);
   const touchHoldTimeoutRef = useRef(null);
   const draggedGroupIdRef = useRef(null);
   const dragOverGroupIdRef = useRef(null);
@@ -208,14 +210,23 @@ const AttendancePage = () => {
     : new Date(`${selectedAttendanceDate}T00:00:00`).toLocaleDateString();
 
   const applyTodayRecordsToGroups = (groups, todayRecords) => {
-    const recordsByPlayerAndGroupId = new Map(
-      todayRecords.map((record) => [getAttendanceRecordKey(record.playerId, record.groupId), record])
-    );
+    const recordsByPlayerAndGroupId = new Map();
+    const recordsByPlayerId = new Map();
+
+    todayRecords.forEach((record) => {
+      recordsByPlayerAndGroupId.set(getAttendanceRecordKey(record.playerId, record.groupId), record);
+      const playerId = getEntityId(record.playerId);
+      if (playerId && !recordsByPlayerId.has(playerId)) {
+        recordsByPlayerId.set(playerId, record);
+      }
+    });
 
     return groups.map((group) => {
       const players = group.players.map((player) => ({
         ...player,
-        todayAttendance: recordsByPlayerAndGroupId.get(getAttendanceRecordKey(player._id, group._id)) || null
+        todayAttendance: recordsByPlayerAndGroupId.get(getAttendanceRecordKey(player._id, group._id))
+          || recordsByPlayerId.get(getEntityId(player._id))
+          || null
       }));
       const markedCount = players.filter((player) => Boolean(player.todayAttendance)).length;
       const presentCount = players.filter((player) => player.todayAttendance?.status === 'present').length;
@@ -296,8 +307,10 @@ const AttendancePage = () => {
     const silent = Boolean(options.silent);
     const date = options.date || selectedAttendanceDate;
     const viewingToday = date === todayDateValue;
+    const requestId = ++attendanceLoadRequestIdRef.current;
+    const startedCacheVersion = getCacheVersion();
 
-    const currentCacheVersion = getCacheVersion();
+    const currentCacheVersion = startedCacheVersion;
     const hasCachedBoardForDate = attendanceBoardCache && attendanceBoardCacheDate === date && (Date.now() - attendanceBoardCacheTimestamp) < ATTENDANCE_BOARD_CACHE_TTL_MS;
     if (!force && attendanceBoardCache && attendanceBoardCacheDate === date && attendanceBoardCacheVersion === currentCacheVersion && (Date.now() - attendanceBoardCacheTimestamp) < ATTENDANCE_BOARD_CACHE_TTL_MS) {
       setGroupColumns(attendanceBoardCache);
@@ -339,6 +352,10 @@ const AttendancePage = () => {
         )
         : buildHistoricalGroups(groups, playerSnapshotResult?.rows || [], date);
       const groupsWithTodayAttendance = applyTodayRecordsToGroups(groupsWithPlayers, todayRecords);
+      if (requestId !== attendanceLoadRequestIdRef.current || getCacheVersion() !== startedCacheVersion) {
+        return groupColumnsRef.current;
+      }
+
       attendanceBoardCache = groupsWithTodayAttendance;
       attendanceBoardCacheTimestamp = Date.now();
       attendanceBoardCacheDate = date;
@@ -359,6 +376,10 @@ const AttendancePage = () => {
   useEffect(() => {
     loadAttendanceBoard({ date: selectedAttendanceDate });
   }, []);
+
+  useEffect(() => {
+    groupColumnsRef.current = groupColumns;
+  }, [groupColumns]);
 
   useEffect(() => {
     if (isAttendanceDateOutOfRange) {
@@ -680,7 +701,9 @@ const AttendancePage = () => {
           }
 
           changed = true;
-          const nextAttendance = targetGroupId && group._id === targetGroupId ? attendance : null;
+          const nextAttendance = attendance
+            ? { ...attendance, groupId: targetGroupId || attendance.groupId }
+            : null;
           const subscription = player.subscriptionId && typeof player.subscriptionId === 'object'
             ? {
               ...player.subscriptionId,
@@ -778,15 +801,19 @@ const AttendancePage = () => {
     if (selectedPlayer?._id === player._id) {
       setSelectedPlayer((currentPlayer) => currentPlayer ? {
         ...currentPlayer,
-        todayAttendance: getEntityId(currentPlayer.todayAttendance?.groupId) === groupId || getEntityId(currentPlayer.groupId) === groupId
-          ? optimisticAttendance
-          : currentPlayer.todayAttendance
+        todayAttendance: optimisticAttendance
       } : currentPlayer);
     }
 
     try {
       const savedAttendance = await updateTodayAttendance({ playerId: player._id, groupId, status, date: selectedAttendanceDate });
       setPlayerAttendanceInBoard(player._id, groupId, savedAttendance);
+      if (selectedPlayer?._id === player._id) {
+        setSelectedPlayer((currentPlayer) => currentPlayer ? {
+          ...currentPlayer,
+          todayAttendance: savedAttendance
+        } : currentPlayer);
+      }
       setMessage('Attendance recorded');
     } catch (err) {
       restoreBoard(previousGroups);
@@ -831,7 +858,8 @@ const AttendancePage = () => {
     }
 
     try {
-      await cancelTodayAttendance({ playerId: player._id, groupId, date: selectedAttendanceDate });
+      const attendanceGroupId = getEntityId(player.todayAttendance?.groupId) || groupId;
+      await cancelTodayAttendance({ playerId: player._id, groupId: attendanceGroupId, date: selectedAttendanceDate });
       setMessage('Attendance cancelled');
     } catch (err) {
       restoreBoard(previousGroups);

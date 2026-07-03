@@ -3,6 +3,7 @@ const DEFAULT_TTL_MS = 5 * 60 * 1000;
 const cacheStore = new Map();
 const pendingRequests = new Map();
 let cacheVersion = 0;
+let requestVersion = 0;
 
 const isFresh = (entry, ttlMs) => entry && (Date.now() - entry.timestamp) < ttlMs;
 
@@ -14,21 +15,29 @@ export const fetchCached = async (key, loader, options = {}) => {
     return cachedEntry.value;
   }
 
-  if (pendingRequests.has(key)) {
+  if (!options.force && pendingRequests.has(key)) {
     return pendingRequests.get(key);
   }
 
-  const request = loader()
+  const startedAtVersion = requestVersion;
+  let request;
+  request = loader()
     .then((value) => {
-      cacheStore.set(key, {
-        value,
-        timestamp: Date.now()
-      });
-      pendingRequests.delete(key);
+      if (pendingRequests.get(key) === request && startedAtVersion === requestVersion) {
+        cacheStore.set(key, {
+          value,
+          timestamp: Date.now()
+        });
+      }
+      if (pendingRequests.get(key) === request) {
+        pendingRequests.delete(key);
+      }
       return value;
     })
     .catch((error) => {
-      pendingRequests.delete(key);
+      if (pendingRequests.get(key) === request) {
+        pendingRequests.delete(key);
+      }
       throw error;
     });
 
@@ -59,28 +68,28 @@ export const updateCached = (key, updater) => {
 
 export const touchCacheVersion = () => {
   cacheVersion += 1;
+  requestVersion += 1;
 };
 
 export const invalidateCache = (prefixes = []) => {
   const prefixList = Array.isArray(prefixes) ? prefixes : [prefixes];
-  let didInvalidate = false;
+  const shouldBumpVersion = prefixList.some(Boolean);
 
   [...cacheStore.keys()].forEach((key) => {
     if (prefixList.some((prefix) => key.startsWith(prefix))) {
       cacheStore.delete(key);
-      didInvalidate = true;
     }
   });
 
   [...pendingRequests.keys()].forEach((key) => {
     if (prefixList.some((prefix) => key.startsWith(prefix))) {
       pendingRequests.delete(key);
-      didInvalidate = true;
     }
   });
 
-  if (didInvalidate) {
+  if (shouldBumpVersion) {
     cacheVersion += 1;
+    requestVersion += 1;
   }
 };
 
@@ -88,6 +97,7 @@ export const clearCache = () => {
   cacheStore.clear();
   pendingRequests.clear();
   cacheVersion += 1;
+  requestVersion += 1;
 };
 
 export const getCacheVersion = () => cacheVersion;

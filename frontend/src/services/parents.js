@@ -10,7 +10,7 @@ export const fetchParents = async () => {
 
 export const createParent = async (data) => {
   const response = await api.post('/parents', data);
-  invalidateCache(['parents:', 'players:']);
+  invalidateCache(['parents:', 'players:', 'reports:']);
   return response.data;
 };
 
@@ -21,13 +21,13 @@ export const fetchParent = async (id) => {
 
 export const updateParent = async (id, data) => {
   const response = await api.put(`/parents/${id}`, data);
-  invalidateCache(['parents:', 'players:']);
+  invalidateCache(['parents:', 'players:', 'reports:']);
   return response.data;
 };
 
 export const deleteParent = async (id) => {
   const response = await api.delete(`/parents/${id}`);
-  invalidateCache(['parents:', 'players:']);
+  invalidateCache(['parents:', 'players:', 'reports:']);
   return response.data;
 };
 

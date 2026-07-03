@@ -106,6 +106,7 @@ const PlayerProfilePage = () => {
             <div><strong>{t('status')}:</strong> {player.status}</div>
             <div><strong>{t('group')}:</strong> {getPlayerGroups(player) || t('unassigned')}</div>
             <div><strong>{t('parent')}:</strong> {player.parentId?.name || t('unknown')}</div>
+            <div><strong>{t('parentPhone')}:</strong> {player.parentPhone || t('notSet')}</div>
             <div><strong>{t('startDate')}:</strong> {player.startDate?.split('T')[0] || t('notSet')}</div>
             <div><strong>{t('endDate')}:</strong> {player.endDate?.split('T')[0] || t('notSet')}</div>
             <div><strong>{t('package')}:</strong> {player.packageName ? (player.packageName === 'custom' ? t('customPackage') : player.packageName) : t('notSet')}</div>

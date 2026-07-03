@@ -10,18 +10,18 @@ export const fetchPackageOptions = async () => {
 
 export const createPackageOption = async (data) => {
   const response = await api.post('/package-options', data);
-  invalidateCache(['package-options:']);
+  invalidateCache(['package-options:', 'players:', 'reports:']);
   return response.data;
 };
 
 export const updatePackageOption = async (id, data) => {
   const response = await api.put(`/package-options/${id}`, data);
-  invalidateCache(['package-options:']);
+  invalidateCache(['package-options:', 'players:', 'reports:']);
   return response.data;
 };
 
 export const deletePackageOption = async (id) => {
   const response = await api.delete(`/package-options/${id}`);
-  invalidateCache(['package-options:']);
+  invalidateCache(['package-options:', 'players:', 'reports:']);
   return response.data;
 };

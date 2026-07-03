@@ -1,0 +1,6 @@
+{
+  "watch": ["server.js", "config", "controllers", "middleware", "models", "routes", "utils"],
+  "ext": "js,json",
+  "ignore": ["node_modules", "logs", "coverage"],
+  "legacyWatch": true
+}
