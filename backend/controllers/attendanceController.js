@@ -37,7 +37,7 @@ const markPresent = async (req, res, next) => {
     }
     const today = new Date();
     const dateOnly = new Date(today.toISOString().split('T')[0]);
-    const existing = await Attendance.findOne({ playerId, date: dateOnly });
+    const existing = await Attendance.findOne({ playerId, groupId, date: dateOnly });
     if (existing) {
       return res.status(400).json({ message: 'Attendance already marked for this player today.' });
     }
@@ -93,7 +93,7 @@ const markAbsent = async (req, res, next) => {
     }
     const today = new Date();
     const dateOnly = new Date(today.toISOString().split('T')[0]);
-    const existing = await Attendance.findOne({ playerId, date: dateOnly });
+    const existing = await Attendance.findOne({ playerId, groupId, date: dateOnly });
     if (existing) {
       return res.status(400).json({ message: 'Attendance already marked for this player today.' });
     }
@@ -131,7 +131,7 @@ const updateTodayAttendance = async (req, res, next) => {
       return res.status(404).json({ message: 'Player not found.' });
     }
 
-    let attendance = await Attendance.findOne({ playerId, date: dateOnly });
+    let attendance = await Attendance.findOne({ playerId, groupId, date: dateOnly });
     const previousStatus = attendance?.status;
 
     if (!attendance) {
@@ -208,10 +208,7 @@ const cancelTodayAttendance = async (req, res, next) => {
     if (groupId) {
       attendanceQuery.groupId = groupId;
     }
-    let attendance = await Attendance.findOne(attendanceQuery);
-    if (!attendance && groupId) {
-      attendance = await Attendance.findOne({ playerId, date: dateOnly });
-    }
+    const attendance = await Attendance.findOne(attendanceQuery);
     if (!attendance) {
       return res.status(404).json({ message: 'No attendance record to cancel today.' });
     }

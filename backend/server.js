@@ -25,6 +25,7 @@ const errorHandler = require('./middleware/errorHandler');
 const User = require('./models/User');
 const Program = require('./models/Program');
 const TrainingGroup = require('./models/TrainingGroup');
+const Attendance = require('./models/Attendance');
 const { ensureHistoryBaselines } = require('./utils/history');
 const { cleanupOldAttendanceData } = require('./utils/retention');
 const bcrypt = require('bcryptjs');
@@ -152,6 +153,7 @@ const initializeDefaultData = async () => {
 
 const startServer = async () => {
   await connectDB();
+  await Attendance.syncIndexes();
   await initializeDefaultData();
   await ensureHistoryBaselines();
   const cleanupResult = await cleanupOldAttendanceData();

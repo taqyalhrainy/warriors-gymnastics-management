@@ -38,6 +38,14 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const config = error.config || {};
+    const status = error.response?.status;
+
+    if (status === 401 && !config.__skipAuthInvalidation && !config.url?.includes('/auth/login')) {
+      localStorage.removeItem('warriors-token');
+      localStorage.removeItem('warriors-user');
+      delete api.defaults.headers.common.Authorization;
+      window.dispatchEvent(new Event('auth:invalid'));
+    }
 
     if (!shouldRetryRequest(error)) {
       return Promise.reject(error);

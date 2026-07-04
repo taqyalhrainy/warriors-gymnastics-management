@@ -9,6 +9,6 @@ const attendanceSchema = new mongoose.Schema({
   markedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
 });
 
-attendanceSchema.index({ playerId: 1, date: 1 }, { unique: true });
+attendanceSchema.index({ playerId: 1, groupId: 1, date: 1 }, { unique: true });
 
 module.exports = mongoose.model('Attendance', attendanceSchema);

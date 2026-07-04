@@ -211,22 +211,15 @@ const AttendancePage = () => {
 
   const applyTodayRecordsToGroups = (groups, todayRecords) => {
     const recordsByPlayerAndGroupId = new Map();
-    const recordsByPlayerId = new Map();
 
     todayRecords.forEach((record) => {
       recordsByPlayerAndGroupId.set(getAttendanceRecordKey(record.playerId, record.groupId), record);
-      const playerId = getEntityId(record.playerId);
-      if (playerId && !recordsByPlayerId.has(playerId)) {
-        recordsByPlayerId.set(playerId, record);
-      }
     });
 
     return groups.map((group) => {
       const players = group.players.map((player) => ({
         ...player,
-        todayAttendance: recordsByPlayerAndGroupId.get(getAttendanceRecordKey(player._id, group._id))
-          || recordsByPlayerId.get(getEntityId(player._id))
-          || null
+        todayAttendance: recordsByPlayerAndGroupId.get(getAttendanceRecordKey(player._id, group._id)) || null
       }));
       const markedCount = players.filter((player) => Boolean(player.todayAttendance)).length;
       const presentCount = players.filter((player) => player.todayAttendance?.status === 'present').length;
@@ -686,11 +679,13 @@ const AttendancePage = () => {
       const currentPlayerRecords = currentGroups
         .flatMap((group) => group.players)
         .filter((player) => player._id === playerId);
-      const previousPresentRecord = currentPlayerRecords.find((player) => player.todayAttendance?.status === 'present') || null;
-      const previousStatus = previousPresentRecord?.todayAttendance?.status || null;
+      const targetPlayerRecord = currentGroups
+        .find((group) => getEntityId(group._id) === getEntityId(targetGroupId))
+        ?.players.find((player) => player._id === playerId) || null;
+      const previousStatus = targetPlayerRecord?.todayAttendance?.status || null;
       const nextStatus = attendance?.status || null;
       const presentDelta = (previousStatus === 'present' ? -1 : 0) + (nextStatus === 'present' ? 1 : 0);
-      const basePresentCount = Number((previousPresentRecord || currentPlayerRecords[0])?.attendancePresentCount || 0);
+      const basePresentCount = Number((targetPlayerRecord || currentPlayerRecords[0])?.attendancePresentCount || 0);
       const nextPresentCount = Math.max(0, basePresentCount + presentDelta);
 
       const nextGroups = currentGroups.map((group) => {
@@ -701,9 +696,9 @@ const AttendancePage = () => {
           }
 
           changed = true;
-          const nextAttendance = attendance
-            ? { ...attendance, groupId: targetGroupId || attendance.groupId }
-            : null;
+          const isTargetGroup = getEntityId(group._id) === getEntityId(targetGroupId);
+          const nextAttendance = targetGroupId && isTargetGroup ? attendance : player.todayAttendance;
+          const clearedAttendance = !attendance && (!targetGroupId || isTargetGroup) ? null : nextAttendance;
           const subscription = player.subscriptionId && typeof player.subscriptionId === 'object'
             ? {
               ...player.subscriptionId,
@@ -718,7 +713,7 @@ const AttendancePage = () => {
             ...player,
             subscriptionId: subscription,
             attendancePresentCount: nextPresentCount,
-            todayAttendance: nextAttendance
+            todayAttendance: clearedAttendance
           };
         });
 
@@ -756,9 +751,9 @@ const AttendancePage = () => {
     setPendingAttendanceKeys([...nextKeys]);
   };
 
-  const getAttendanceActionKey = (playerId) => `${getEntityId(playerId)}:${selectedAttendanceDate}`;
+  const getAttendanceActionKey = (playerId, groupId) => `${getEntityId(playerId)}:${getEntityId(groupId)}:${selectedAttendanceDate}`;
 
-  const isAttendanceActionPending = (playerId) => pendingAttendanceKeys.includes(getAttendanceActionKey(playerId));
+  const isAttendanceActionPending = (playerId, groupId) => pendingAttendanceKeys.includes(getAttendanceActionKey(playerId, groupId));
 
   const setAttendanceHistoryPending = (recordId) => {
     pendingAttendanceHistoryIdRef.current = recordId;
@@ -779,7 +774,7 @@ const AttendancePage = () => {
       return;
     }
 
-    const actionKey = getAttendanceActionKey(player._id);
+    const actionKey = getAttendanceActionKey(player._id, groupId);
     if (pendingAttendanceKeysRef.current.has(actionKey)) {
       return;
     }
@@ -840,7 +835,7 @@ const AttendancePage = () => {
       return;
     }
 
-    const actionKey = getAttendanceActionKey(player._id);
+    const actionKey = getAttendanceActionKey(player._id, groupId);
     if (pendingAttendanceKeysRef.current.has(actionKey)) {
       return;
     }
@@ -848,7 +843,7 @@ const AttendancePage = () => {
     const previousGroups = groupColumns;
     setMessage('');
     setAttendanceActionPending(actionKey, true);
-    setPlayerAttendanceInBoard(player._id, null, null);
+    setPlayerAttendanceInBoard(player._id, groupId, null);
 
     if (selectedPlayer?._id === player._id) {
       setSelectedPlayer((currentPlayer) => currentPlayer ? {
@@ -1539,7 +1534,7 @@ const AttendancePage = () => {
                             type="button"
                             className={`btn-present ${player.todayAttendance?.status === 'present' ? 'active' : ''}`}
                             onClick={() => handleAction(player, group._id, 'present')}
-                            disabled={isAttendanceActionPending(player._id)}
+                            disabled={isAttendanceActionPending(player._id, group._id)}
                           >
                             {t('present')}
                           </button>
@@ -1547,7 +1542,7 @@ const AttendancePage = () => {
                             type="button"
                             className={`btn-absent ${player.todayAttendance?.status === 'absent' ? 'active' : ''}`}
                             onClick={() => handleAction(player, group._id, 'absent')}
-                            disabled={isAttendanceActionPending(player._id)}
+                            disabled={isAttendanceActionPending(player._id, group._id)}
                           >
                             {t('absent')}
                           </button>
@@ -1556,9 +1551,9 @@ const AttendancePage = () => {
                               type="button"
                               className="btn-cancel-attendance"
                               onClick={() => handleCancelAttendance(player, group._id)}
-                              disabled={isAttendanceActionPending(player._id)}
+                              disabled={isAttendanceActionPending(player._id, group._id)}
                             >
-                              {isAttendanceActionPending(player._id) ? 'Saving...' : 'Cancel'}
+                              {isAttendanceActionPending(player._id, group._id) ? 'Saving...' : 'Cancel'}
                             </button>
                           )}
                         </div>

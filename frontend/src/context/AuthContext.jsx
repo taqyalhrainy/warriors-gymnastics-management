@@ -102,6 +102,15 @@ export const AuthProvider = ({ children }) => {
     setIsServerChecking(false);
   };
 
+  useEffect(() => {
+    const handleInvalidAuth = () => {
+      logout();
+    };
+
+    window.addEventListener('auth:invalid', handleInvalidAuth);
+    return () => window.removeEventListener('auth:invalid', handleInvalidAuth);
+  }, []);
+
   return (
     <AuthContext.Provider value={{ user, token, login, logout, isServerReady, isServerChecking }}>
       {children}
