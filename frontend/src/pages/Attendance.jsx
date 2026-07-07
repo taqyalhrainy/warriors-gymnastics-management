@@ -56,6 +56,7 @@ const getEntityId = (value) => String(value?._id || value || '');
 const getAttendanceRecordKey = (playerId, groupId) => `${getEntityId(playerId)}:${getEntityId(groupId)}`;
 
 const isPlayerVisibleInAttendance = (player) => !player?.isDeleted && player?.status !== 'left';
+const isPlayerFrozen = (player) => player?.status === 'frozen';
 
 const getPlayerPackageCounter = (player) => {
   const subscription = player?.subscriptionId && typeof player.subscriptionId === 'object'
@@ -72,6 +73,10 @@ const getPlayerPackageCounter = (player) => {
 
 const isPlayerSubscriptionExpired = (player) => {
   if (!player) {
+    return false;
+  }
+
+  if (isPlayerFrozen(player)) {
     return false;
   }
 
@@ -1507,10 +1512,11 @@ const AttendancePage = () => {
 
                 <div className="attendance-player-list">
                   {group.players.length ? group.players.map((player) => {
+                    const isFrozen = isPlayerFrozen(player);
                     const isExpired = isPlayerSubscriptionExpired(player);
                     const packageCounter = getPlayerPackageCounter(player);
                     return (
-                      <article className={`attendance-player-card${player.status === 'frozen' ? ' is-frozen' : ''}${isExpired ? ' is-expired' : ''}`} key={player._id}>
+                      <article className={`attendance-player-card${isFrozen ? ' is-frozen' : ''}${isExpired ? ' is-expired' : ''}`} key={player._id}>
                         <button type="button" className="attendance-player-main" onClick={() => handleSelectPlayer(player)}>
                           <strong>{player.fullName}</strong>
                           <span>{player.parentId?.name || t('noParent')} | {player.status}</span>
@@ -1520,7 +1526,7 @@ const AttendancePage = () => {
                           {isExpired && (
                             <em className="attendance-expired-badge">{player.subscriptionNeedsAttention ? 'Review' : 'Expired'}</em>
                           )}
-                          {player.status === 'frozen' && !isExpired && (
+                          {isFrozen && (
                             <em className="attendance-frozen-badge">❄ {t('frozenStatus')}</em>
                           )}
                           {player.todayAttendance && (
