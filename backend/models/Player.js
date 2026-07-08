@@ -19,7 +19,7 @@ const playerSchema = new mongoose.Schema({
   packageHours: { type: Number, min: 0, default: 0 },
   payment: { type: Number, default: 0, min: 0 },
   note: { type: String, trim: true, default: '' },
-  status: { type: String, enum: ['active', 'expired', 'frozen', 'left', 'tryout', 'old_player'], default: 'active' },
+  status: { type: String, enum: ['active', 'expired', 'frozen', 'left', 'tryout'], default: 'active' },
   subscriptionNeedsAttention: { type: Boolean, default: false },
   isDeleted: { type: Boolean, default: false },
   deletedAt: { type: Date },

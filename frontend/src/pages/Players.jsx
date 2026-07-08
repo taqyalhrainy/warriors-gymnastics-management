@@ -8,7 +8,7 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 const PlayersPage = () => {
   const [players, setPlayers] = useState([]);
   const [search, setSearch] = useState('');
-  const [statusView, setStatusView] = useState('active');
+  const [statusView, setStatusView] = useState('all');
   const { t } = useLanguage();
 
   useEffect(() => {
@@ -33,15 +33,15 @@ const PlayersPage = () => {
   };
 
   const statusTabs = [
+    { key: 'all', label: 'All Players' },
     { key: 'active', label: 'Active Players' },
     { key: 'left', label: 'Left Players' },
     { key: 'frozen', label: 'Frozen' },
-    { key: 'tryout', label: 'Tryout' },
-    { key: 'old_player', label: 'Old Player' }
+    { key: 'tryout', label: 'Tryout' }
   ];
 
   const filteredPlayers = players
-    .filter((player) => (player.status || 'active') === statusView)
+    .filter((player) => statusView === 'all' || (player.status || 'active') === statusView)
     .filter((player) => [
       player.fullName,
       getPlayerGroups(player),

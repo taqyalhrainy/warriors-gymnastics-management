@@ -1651,7 +1651,6 @@ const AttendancePage = () => {
                         <option value="expired">{t('expiredStatus')}</option>
                         <option value="frozen">{t('frozenStatus')}</option>
                         <option value="tryout">{t('tryoutStatus')}</option>
-                        <option value="old_player">{t('oldPlayerStatus')}</option>
                         <option value="left">{t('leftStatus')}</option>
                       </select>
                     </label>
