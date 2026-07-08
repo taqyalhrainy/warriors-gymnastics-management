@@ -22,7 +22,28 @@ const initialWaitingForm = {
 };
 
 const EXPIRED_ALERT_READ_KEY = 'warriors-expired-alert-read-ids';
-let dashboardStatsCache = null;
+const DASHBOARD_STATS_CACHE_KEY = 'warriors-dashboard-stats-cache';
+
+const readDashboardStatsCache = () => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(DASHBOARD_STATS_CACHE_KEY) || 'null');
+    if (!parsed?.data) {
+      return null;
+    }
+    return parsed.data;
+  } catch (error) {
+    return null;
+  }
+};
+
+const writeDashboardStatsCache = (data) => {
+  localStorage.setItem(DASHBOARD_STATS_CACHE_KEY, JSON.stringify({
+    data,
+    savedAt: Date.now()
+  }));
+};
+
+let dashboardStatsCache = readDashboardStatsCache();
 
 const getLocalDateOnly = (date = new Date()) => {
   const currentDate = new Date(date);
@@ -161,6 +182,7 @@ const AdminDashboard = () => {
     fetchDashboard()
       .then((data) => {
         dashboardStatsCache = data;
+        writeDashboardStatsCache(data);
         if (isMounted) setStats(data);
       })
       .catch((err) => {
@@ -194,7 +216,11 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     if (!token) return;
-    loadWaitingListData();
+    const timer = setTimeout(() => {
+      loadWaitingListData();
+    }, 3000);
+
+    return () => clearTimeout(timer);
   }, [token]);
 
   const handleWaitingFormChange = (event) => {

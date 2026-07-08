@@ -73,11 +73,12 @@ const Sidebar = () => {
         .catch(console.error);
     };
 
-    loadExpiredAlertCount();
+    const initialTimer = setTimeout(loadExpiredAlertCount, 4000);
     window.addEventListener('players:changed', loadExpiredAlertCount);
     window.addEventListener('expired-alerts:read', loadExpiredAlertCount);
     return () => {
       isMounted = false;
+      clearTimeout(initialTimer);
       window.removeEventListener('players:changed', loadExpiredAlertCount);
       window.removeEventListener('expired-alerts:read', loadExpiredAlertCount);
     };

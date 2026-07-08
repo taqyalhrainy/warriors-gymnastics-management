@@ -3,28 +3,54 @@ const Subscription = require('../models/Subscription');
 const Attendance = require('../models/Attendance');
 const Payment = require('../models/Payment');
 
+const DASHBOARD_CACHE_TTL_MS = 15 * 1000;
+let dashboardReportCache = {
+  timestamp: 0,
+  data: null
+};
+
 const getDashboardReport = async (req, res, next) => {
   try {
-    const activePlayers = await Player.countDocuments({ status: 'active' });
+    if (dashboardReportCache.data && (Date.now() - dashboardReportCache.timestamp) < DASHBOARD_CACHE_TTL_MS) {
+      return res.json(dashboardReportCache.data);
+    }
+
     const today = new Date();
     const todayOnly = new Date(today.toISOString().split('T')[0]);
-    const presentCount = await Attendance.countDocuments({ date: todayOnly, status: 'present' });
-    const absentCount = await Attendance.countDocuments({ date: todayOnly, status: 'absent' });
     const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const monthlyRevenue = await Payment.aggregate([
-      { $match: { paymentDate: { $gte: firstOfMonth } } },
-      { $group: { _id: null, totalPaid: { $sum: '$paidAmount' } } }
+
+    const [
+      activePlayers,
+      attendanceCounts,
+      monthlyRevenue,
+      paymentTotals,
+      subscriptions
+    ] = await Promise.all([
+      Player.countDocuments({ status: 'active' }),
+      Attendance.aggregate([
+        { $match: { date: todayOnly, status: { $in: ['present', 'absent'] } } },
+        { $group: { _id: '$status', count: { $sum: 1 } } }
+      ]),
+      Payment.aggregate([
+        { $match: { paymentDate: { $gte: firstOfMonth } } },
+        { $group: { _id: null, totalPaid: { $sum: '$paidAmount' } } }
+      ]),
+      Payment.aggregate([
+        { $group: { _id: '$subscriptionId', totalPaid: { $sum: '$paidAmount' } } }
+      ]),
+      Subscription.find({}, 'type status endDate price').lean()
     ]);
-    const paymentTotals = await Payment.aggregate([
-      { $group: { _id: '$subscriptionId', totalPaid: { $sum: '$paidAmount' } } }
-    ]);
+
+    const attendanceMap = attendanceCounts.reduce((map, item) => {
+      map[item._id] = item.count;
+      return map;
+    }, {});
     const paidMap = paymentTotals.reduce((map, item) => {
       if (item._id) map[item._id.toString()] = item.totalPaid;
       return map;
     }, {});
-    const subscriptions = await Subscription.find();
     const normalized = subscriptions.map((subscription) => {
-      const sub = subscription.toObject();
+      const sub = { ...subscription };
       if (sub.type === 'time' && sub.endDate) {
         const endDate = new Date(sub.endDate);
         const daysRemaining = Math.max(0, Math.ceil((endDate - today) / (1000 * 60 * 60 * 24)));
@@ -46,15 +72,23 @@ const getDashboardReport = async (req, res, next) => {
       const remaining = Math.max(0, subscription.price - paid);
       return total + remaining;
     }, 0);
-    res.json({
+
+    const data = {
       activePlayers,
       expiredSubscriptions,
       soonSubscriptions,
-      presentCount,
-      absentCount,
+      presentCount: attendanceMap.present || 0,
+      absentCount: attendanceMap.absent || 0,
       monthlyRevenue: monthlyRevenue[0]?.totalPaid || 0,
       pendingAmounts
-    });
+    };
+
+    dashboardReportCache = {
+      timestamp: Date.now(),
+      data
+    };
+
+    res.json(data);
   } catch (error) {
     next(error);
   }
