@@ -248,10 +248,46 @@ const AttendancePage = () => {
     });
   };
 
-  const buildHistoricalGroups = (groups, playerSnapshots, snapshotDate) => {
+  const buildHistoricalGroups = (groups, playerSnapshots, snapshotDate, currentGroupsWithPlayers = []) => {
     const groupsById = new Map();
     const fallbackGroupIds = [];
+    const historicalPlayerIds = new Set();
     const snapshotTime = new Date(`${snapshotDate}T23:59:59.999`).getTime();
+
+    const ensureHistoricalGroup = (groupId, groupName = 'Historical group') => {
+      if (!groupsById.has(groupId)) {
+        fallbackGroupIds.push(groupId);
+        groupsById.set(groupId, {
+          _id: groupId,
+          name: groupName,
+          days: [],
+          startTime: '',
+          endTime: '',
+          maxCapacity: '-',
+          currentCount: 0,
+          color: '#64748b',
+          players: [],
+          markedCount: 0,
+          presentCount: 0
+        });
+      }
+
+      return groupsById.get(groupId);
+    };
+
+    const addPlayerToGroup = (groupId, groupName, player) => {
+      const targetGroup = ensureHistoricalGroup(groupId, groupName);
+      const playerId = getEntityId(player);
+      if (targetGroup.players.some((groupPlayer) => getEntityId(groupPlayer) === playerId)) {
+        return;
+      }
+
+      targetGroup.players.push({
+        ...player,
+        groupId: { _id: groupId, name: targetGroup.name }
+      });
+      targetGroup.currentCount = targetGroup.players.length;
+    };
 
     groups.forEach((group) => {
       groupsById.set(String(group._id), {
@@ -276,33 +312,26 @@ const AttendancePage = () => {
         }
 
         const attendancePlayer = mapSnapshotPlayerToAttendancePlayer(player);
+        historicalPlayerIds.add(getEntityId(attendancePlayer));
         playerGroups.forEach((snapshotGroup) => {
           const groupId = String(snapshotGroup._id);
-          if (!groupsById.has(groupId)) {
-            fallbackGroupIds.push(groupId);
-            groupsById.set(groupId, {
-              _id: groupId,
-              name: snapshotGroup.name || 'Historical group',
-              days: [],
-              startTime: '',
-              endTime: '',
-              maxCapacity: '-',
-              currentCount: 0,
-              color: '#64748b',
-              players: [],
-              markedCount: 0,
-              presentCount: 0
-            });
-          }
-
-          const targetGroup = groupsById.get(groupId);
-          targetGroup.players.push({
-            ...attendancePlayer,
-            groupId: { _id: groupId, name: targetGroup.name }
-          });
-          targetGroup.currentCount = targetGroup.players.length;
+          addPlayerToGroup(groupId, snapshotGroup.name || 'Historical group', attendancePlayer);
         });
       });
+
+    currentGroupsWithPlayers.forEach((group) => {
+      group.players
+        .filter((player) => {
+          const attendanceStartTime = getPlayerAttendanceStartTime(player);
+          return !historicalPlayerIds.has(getEntityId(player))
+            && isPlayerVisibleInAttendance(player, snapshotDate)
+            && attendanceStartTime
+            && attendanceStartTime <= snapshotTime;
+        })
+        .forEach((player) => {
+          addPlayerToGroup(String(group._id), group.name || 'Historical group', player);
+        });
+    });
 
     return [
       ...groups.map((group) => groupsById.get(String(group._id))),
@@ -345,20 +374,21 @@ const AttendancePage = () => {
           entityType: 'player',
           at: getHistorySnapshotIsoForDate(date)
         });
-      const groupsWithPlayers = viewingToday
-        ? await Promise.all(
-          groups.map(async (group) => {
-            const players = (await fetchGroupPlayers(group._id))
-              .filter((player) => isPlayerVisibleInAttendance(player, date));
+      const currentGroupsWithPlayers = await Promise.all(
+        groups.map(async (group) => {
+          const players = (await fetchGroupPlayers(group._id))
+            .filter((player) => isPlayerVisibleInAttendance(player, date));
 
-            return {
-              ...group,
-              players,
-              color: group.color
-            };
-          })
-        )
-        : buildHistoricalGroups(groups, playerSnapshotResult?.rows || [], date);
+          return {
+            ...group,
+            players,
+            color: group.color
+          };
+        })
+      );
+      const groupsWithPlayers = viewingToday
+        ? currentGroupsWithPlayers
+        : buildHistoricalGroups(groups, playerSnapshotResult?.rows || [], date, currentGroupsWithPlayers);
       const groupsWithTodayAttendance = applyTodayRecordsToGroups(groupsWithPlayers, todayRecords);
       if (requestId !== attendanceLoadRequestIdRef.current || getCacheVersion() !== startedCacheVersion) {
         return groupColumnsRef.current;

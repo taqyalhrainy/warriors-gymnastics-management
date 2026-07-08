@@ -20,20 +20,6 @@ const normalizeId = (value) => {
   return String(value);
 };
 
-const getPlayerAttendanceStart = (player) => {
-  const startSource = player?.startDate || player?.createdAt;
-  if (!startSource) return null;
-  const startDate = new Date(startSource);
-  if (Number.isNaN(startDate.getTime())) return null;
-  startDate.setHours(0, 0, 0, 0);
-  return startDate;
-};
-
-const playerExistsForAttendanceDate = (player, asOf) => {
-  const attendanceStart = getPlayerAttendanceStart(player);
-  return !attendanceStart || attendanceStart <= asOf;
-};
-
 const buildGroupSnapshots = (player) => {
   const groups = Array.isArray(player.groupIds) && player.groupIds.length
     ? player.groupIds
@@ -251,11 +237,7 @@ const restoreStateAt = async (entityType, asOf) => {
     const entityKey = String(event.entityId);
 
     if (event.action === 'create') {
-      if (entityType === 'player' && event.after && playerExistsForAttendanceDate(event.after, asOf)) {
-        stateMap.set(entityKey, event.after);
-      } else {
-        stateMap.delete(entityKey);
-      }
+      stateMap.delete(entityKey);
       return;
     }
 
@@ -273,7 +255,8 @@ const restoreStateAt = async (entityType, asOf) => {
   if (entityType === 'player') {
     return rows
       .filter((player) => {
-        return !player.isDeleted && playerExistsForAttendanceDate(player, asOf);
+        const createdAt = player.createdAt ? new Date(player.createdAt) : null;
+        return !player.isDeleted && (!createdAt || createdAt <= asOf);
       })
       .sort((a, b) => {
         const createdAtDiff = new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
