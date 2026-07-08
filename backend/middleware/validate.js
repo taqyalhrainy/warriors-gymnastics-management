@@ -3,7 +3,18 @@ const validator = require('validator');
 
 const sanitizeText = (value) => {
   if (typeof value !== 'string') return value;
-  return validator.escape(value.trim());
+  return validator.unescape(value.trim());
+};
+
+const decodeText = (value) => {
+  if (typeof value !== 'string') return value;
+  let decoded = value;
+  for (let index = 0; index < 3; index += 1) {
+    const nextDecoded = validator.unescape(decoded);
+    if (nextDecoded === decoded) break;
+    decoded = nextDecoded;
+  }
+  return decoded;
 };
 
 const validateObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
@@ -26,4 +37,4 @@ const sanitizeObject = (obj) => {
   return sanitized;
 };
 
-module.exports = { sanitizeText, validateObjectId, validateEmail, sanitizeObject };
+module.exports = { sanitizeText, decodeText, validateObjectId, validateEmail, sanitizeObject };

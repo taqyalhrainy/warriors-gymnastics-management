@@ -2,7 +2,7 @@ const Player = require('../models/Player');
 const Parent = require('../models/Parent');
 const TrainingGroup = require('../models/TrainingGroup');
 const Payment = require('../models/Payment');
-const { sanitizeObject, validateObjectId } = require('../middleware/validate');
+const { sanitizeObject, decodeText, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { encrypt, decrypt } = require('../utils/encryption');
 const { parseLocalizedNumber } = require('../utils/numberInput');
@@ -20,6 +20,7 @@ const formatPlayerResponse = (player) => {
   if ((!obj.groupIds || obj.groupIds.length === 0) && obj.groupId) {
     obj.groupIds = [obj.groupId];
   }
+  obj.note = decodeText(obj.note || '');
   delete obj.parentPhoneEncrypted;
   return obj;
 };
