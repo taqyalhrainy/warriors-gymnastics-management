@@ -1755,7 +1755,7 @@ const AttendancePage = () => {
                                     onClick={() => handleAttendanceHistoryCancel(record)}
                                     disabled={pendingAttendanceHistoryId === record._id}
                                   >
-                                    Remove
+                                    Delete
                                   </button>
                                   {['present', 'absent'].includes(record.status) && !isCurrentSubscriptionAttendanceRecord(record) && (
                                     <button
