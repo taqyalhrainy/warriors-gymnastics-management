@@ -1757,17 +1757,17 @@ const AttendancePage = () => {
                                   >
                                     Remove
                                   </button>
-                                  {record.status === 'present' && !isCurrentSubscriptionAttendanceRecord(record) && (
+                                  {['present', 'absent'].includes(record.status) && !isCurrentSubscriptionAttendanceRecord(record) && (
                                     <button
                                       type="button"
                                       className="btn-secondary compact"
                                       onClick={() => handleCountAttendanceInCurrentSubscription(record)}
                                       disabled={pendingAttendanceHistoryId === record._id}
                                     >
-                                      Count in current sub
+                                      {record.status === 'absent' ? 'Move to current sub' : 'Count in current sub'}
                                     </button>
                                   )}
-                                  {record.status === 'present' && isCurrentSubscriptionAttendanceRecord(record) && (
+                                  {['present', 'absent'].includes(record.status) && isCurrentSubscriptionAttendanceRecord(record) && (
                                     <button
                                       type="button"
                                       className="btn-secondary compact"
