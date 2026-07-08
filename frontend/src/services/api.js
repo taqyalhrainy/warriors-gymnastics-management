@@ -59,7 +59,7 @@ api.interceptors.response.use(
     }
 
     config.__retryCount += 1;
-    const delay = Math.min(2500 + (config.__retryCount - 1) * 750, 7000);
+    const delay = Math.min(500 + (config.__retryCount - 1) * 500, 3000);
     await sleep(delay);
 
     return api(config);

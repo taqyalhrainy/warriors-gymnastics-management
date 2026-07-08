@@ -1,5 +1,4 @@
 const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
 const dns = require('dns');
 
 const connectDB = async () => {
@@ -9,6 +8,7 @@ const connectDB = async () => {
       dns.setServers((process.env.MONGO_DNS_SERVERS || '1.1.1.1,8.8.8.8').split(',').map((server) => server.trim()).filter(Boolean));
     }
     if (!uri) {
+      const { MongoMemoryServer } = require('mongodb-memory-server');
       const mongod = await MongoMemoryServer.create();
       uri = mongod.getUri();
       console.log('Using in-memory MongoDB for local testing');

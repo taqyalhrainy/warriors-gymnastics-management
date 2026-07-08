@@ -12,8 +12,8 @@ export const AuthProvider = ({ children }) => {
     return stored ? JSON.parse(stored) : null;
   });
   const [token, setToken] = useState(() => localStorage.getItem('warriors-token'));
-  const [isServerReady, setIsServerReady] = useState(() => !localStorage.getItem('warriors-token'));
-  const [isServerChecking, setIsServerChecking] = useState(() => Boolean(localStorage.getItem('warriors-token')));
+  const [isServerReady, setIsServerReady] = useState(true);
+  const [isServerChecking, setIsServerChecking] = useState(false);
 
   useEffect(() => {
     if (token) {
@@ -39,21 +39,15 @@ export const AuthProvider = ({ children }) => {
     }
 
     let isMounted = true;
-    setIsServerReady(false);
+    setIsServerReady(true);
     setIsServerChecking(true);
 
-    waitForApiHealth({ timeout: 10000, maxRetries: 30 })
+    waitForApiHealth({ timeout: 5000, maxRetries: 4 })
       .then(() => {
         verifiedServerToken = token;
-        if (isMounted) {
-          setIsServerReady(true);
-        }
       })
       .catch((error) => {
         console.error(error);
-        if (isMounted) {
-          setIsServerReady(false);
-        }
       })
       .finally(() => {
         if (isMounted) {
@@ -68,13 +62,19 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (!token || !user) {
-      return;
+      return undefined;
     }
 
-    if (isServerReady && ['admin', 'coach', 'receptionist'].includes(user.role)) {
-      warmAdminAppCache(user).catch(console.error);
+    if (isServerReady && !isServerChecking && ['admin', 'coach', 'receptionist'].includes(user.role)) {
+      const warmupTimer = setTimeout(() => {
+        warmAdminAppCache(user).catch(console.error);
+      }, 6000);
+
+      return () => clearTimeout(warmupTimer);
     }
-  }, [token, user, isServerReady]);
+
+    return undefined;
+  }, [token, user, isServerReady, isServerChecking]);
 
   const login = (data) => {
     clearCache();
