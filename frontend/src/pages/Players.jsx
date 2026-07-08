@@ -36,7 +36,8 @@ const PlayersPage = () => {
     { key: 'active', label: 'Active Players' },
     { key: 'left', label: 'Left Players' },
     { key: 'frozen', label: 'Frozen' },
-    { key: 'tryout', label: 'Tryout' }
+    { key: 'tryout', label: 'Tryout' },
+    { key: 'old_player', label: 'Old Player' }
   ];
 
   const filteredPlayers = players

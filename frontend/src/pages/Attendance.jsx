@@ -1173,7 +1173,7 @@ const AttendancePage = () => {
     }
   };
 
-  const handleCountAttendanceInCurrentSubscription = async (record) => {
+  const handleCountAttendanceInCurrentSubscription = async (record, options = {}) => {
     if (!selectedPlayer?._id || !record?._id) {
       return;
     }
@@ -1181,19 +1181,46 @@ const AttendancePage = () => {
       return;
     }
 
-    const confirmed = window.confirm('Count this attendance record as part of the current subscription?');
+    const countAsPresent = Boolean(options.countAsPresent);
+    const confirmed = window.confirm(countAsPresent
+      ? 'Mark this record present and count it as part of the current subscription?'
+      : 'Count this attendance record as part of the current subscription?');
     if (!confirmed) {
+      return;
+    }
+
+    const recordDateValue = getDateInputValue(record.date);
+    const groupId = getEntityId(record.groupId) || getEntityId(selectedPlayer.groupId) || getEntityId(selectedPlayer.groupIds?.[0]);
+    if (countAsPresent && !groupId) {
+      setMessage('Unable to count attendance record without a group.');
       return;
     }
 
     try {
       setMessage('');
       setAttendanceHistoryPending(record._id);
-      const nextSubscriptionStart = getDateInputValue(record.date);
+      const nextSubscriptionStart = recordDateValue;
       setSelectedPlayer((currentPlayer) => currentPlayer ? {
         ...currentPlayer,
         currentSubscriptionStartedAt: nextSubscriptionStart
       } : currentPlayer);
+      if (countAsPresent && record.status !== 'present') {
+        setSelectedPlayerAttendanceHistory((records) => records.map((item) => (
+          item._id === record._id
+            ? {
+              ...item,
+              status: 'present',
+              checkInTime: item.checkInTime || new Date().toISOString()
+            }
+            : item
+        )));
+        await updateTodayAttendance({
+          playerId: selectedPlayer._id,
+          groupId,
+          status: 'present',
+          date: recordDateValue
+        });
+      }
       await updatePlayer(selectedPlayer._id, {
         currentSubscriptionStartedAt: nextSubscriptionStart
       });
@@ -1206,7 +1233,9 @@ const AttendancePage = () => {
       setSelectedPlayer(refreshedPlayer);
       setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
       setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
-      setMessage('Attendance record counted in current subscription');
+      setMessage(countAsPresent
+        ? 'Attendance record marked present and counted in current subscription'
+        : 'Attendance record counted in current subscription');
       await loadAttendanceBoard({ force: true, date: selectedAttendanceDate });
       setEditingAttendanceHistoryId(null);
     } catch (error) {
@@ -1622,6 +1651,7 @@ const AttendancePage = () => {
                         <option value="expired">{t('expiredStatus')}</option>
                         <option value="frozen">{t('frozenStatus')}</option>
                         <option value="tryout">{t('tryoutStatus')}</option>
+                        <option value="old_player">{t('oldPlayerStatus')}</option>
                         <option value="left">{t('leftStatus')}</option>
                       </select>
                     </label>
@@ -1765,6 +1795,16 @@ const AttendancePage = () => {
                                       disabled={pendingAttendanceHistoryId === record._id}
                                     >
                                       Count in current sub
+                                    </button>
+                                  )}
+                                  {record.status === 'absent' && !isCurrentSubscriptionAttendanceRecord(record) && (
+                                    <button
+                                      type="button"
+                                      className="btn-secondary compact"
+                                      onClick={() => handleCountAttendanceInCurrentSubscription(record, { countAsPresent: true })}
+                                      disabled={pendingAttendanceHistoryId === record._id}
+                                    >
+                                      Present + current sub
                                     </button>
                                   )}
                                   {record.status === 'present' && isCurrentSubscriptionAttendanceRecord(record) && (
