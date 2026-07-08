@@ -65,6 +65,28 @@ const getHistorySnapshotIsoForDate = (dateValue) => new Date(`${dateValue}T23:59
 const getEntityId = (value) => String(value?._id || value || '');
 const getAttendanceRecordKey = (playerId, groupId) => `${getEntityId(playerId)}:${getEntityId(groupId)}`;
 
+const decodeDisplayText = (value) => {
+  if (typeof value !== 'string') {
+    return value || '';
+  }
+
+  if (typeof document === 'undefined') {
+    return value
+      .replace(/&amp;/g, '&')
+      .replace(/&#x2F;/g, '/')
+      .replace(/&#47;/g, '/');
+  }
+
+  const textarea = document.createElement('textarea');
+  let decoded = value;
+  for (let index = 0; index < 3; index += 1) {
+    textarea.innerHTML = decoded;
+    if (textarea.value === decoded) break;
+    decoded = textarea.value;
+  }
+  return decoded;
+};
+
 const isPlayerVisibleInAttendance = (player) => !player?.isDeleted && player?.status !== 'left';
 const isPlayerFrozen = (player) => player?.status === 'frozen';
 
@@ -166,7 +188,7 @@ const mapSnapshotPlayerToAttendancePlayer = (player) => {
     packageClasses: Number(player.packageClasses || 0),
     packageHours: Number(player.packageHours || 0),
     payment: Number(player.payment || 0),
-    note: player.note || '',
+    note: decodeDisplayText(player.note),
     status: player.status || '',
     profileImage: player.profileImage || '',
     createdAt: player.createdAt || null
@@ -954,7 +976,7 @@ const AttendancePage = () => {
     packageClasses: player?.packageClasses ?? '',
     packageHours: player?.packageHours ?? '',
     payment: player?.payment ?? '',
-    note: player?.note || '',
+    note: decodeDisplayText(player?.note),
     status: player?.status || 'active'
   });
 
@@ -1752,7 +1774,7 @@ const AttendancePage = () => {
                       )}
                     </div>
                     {selectedPlayer.note && (
-                      <div className="student-info-grid-full"><span>{t('note')}</span><strong>{selectedPlayer.note}</strong></div>
+                      <div className="student-info-grid-full"><span>{t('note')}</span><strong>{decodeDisplayText(selectedPlayer.note)}</strong></div>
                     )}
                   </div>
                   <div className="student-modal-history-panel">

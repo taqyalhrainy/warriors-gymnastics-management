@@ -1,7 +1,7 @@
 const TrainingGroup = require('../models/TrainingGroup');
 const Player = require('../models/Player');
 const Attendance = require('../models/Attendance');
-const { sanitizeObject, validateObjectId } = require('../middleware/validate');
+const { sanitizeObject, decodeText, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { decrypt } = require('../utils/encryption');
 const { parseLocalizedNumber } = require('../utils/numberInput');
@@ -119,6 +119,7 @@ const formatPlayerResponse = (player) => {
       obj.parentPhone = '';
     }
   }
+  obj.note = decodeText(obj.note || '');
   delete obj.parentPhoneEncrypted;
   return obj;
 };
