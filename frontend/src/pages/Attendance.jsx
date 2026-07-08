@@ -36,6 +36,16 @@ const getLocalDateOnly = (date = new Date()) => {
   return value;
 };
 
+const getPlayerAttendanceStartTime = (player) => {
+  const startSource = player?.startDate || player?.createdAt;
+  if (!startSource) {
+    return null;
+  }
+  const startDate = getLocalDateOnly(startSource);
+  const startTime = startDate.getTime();
+  return Number.isNaN(startTime) ? null : startTime;
+};
+
 const getObjectIdDate = (id) => {
   const value = String(id || '');
   if (!/^[a-f\d]{24}$/i.test(value)) {
@@ -256,8 +266,8 @@ const AttendancePage = () => {
 
     playerSnapshots
       .filter((player) => {
-        const createdAtTime = player.createdAt ? new Date(player.createdAt).getTime() : null;
-        return isPlayerVisibleInAttendance(player, snapshotDate) && (!createdAtTime || createdAtTime <= snapshotTime);
+        const attendanceStartTime = getPlayerAttendanceStartTime(player);
+        return isPlayerVisibleInAttendance(player, snapshotDate) && (!attendanceStartTime || attendanceStartTime <= snapshotTime);
       })
       .forEach((player) => {
         const playerGroups = getSnapshotGroups(player);
