@@ -8,6 +8,10 @@ const { parseLocalizedNumber } = require('../utils/numberInput');
 
 const defaultGroupColors = ['#2563eb', '#f2c94c', '#16a34a', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16', '#ec4899'];
 const hexColorPattern = /^#[0-9a-fA-F]{6}$/;
+const groupMaintenanceIntervalMs = 60 * 1000;
+let groupMaintenancePromise = null;
+let lastGroupMaintenanceAt = 0;
+
 const decodeGroupName = (value) => String(value || '')
   .replace(/&amp;amp;#x2F;/g, '/')
   .replace(/&amp;#x2F;/g, '/')
@@ -110,6 +114,24 @@ const synchronizeGroupCounts = async () => {
   }
 };
 
+const scheduleGroupMaintenance = () => {
+  const now = Date.now();
+  if (groupMaintenancePromise || (now - lastGroupMaintenanceAt) < groupMaintenanceIntervalMs) {
+    return;
+  }
+
+  groupMaintenancePromise = new Promise((resolve) => setTimeout(resolve, 1000))
+    .then(async () => {
+      await ensureGroupPresentationFields();
+      await synchronizeGroupCounts();
+      lastGroupMaintenanceAt = Date.now();
+    })
+    .catch((error) => console.error('Group maintenance failed:', error))
+    .finally(() => {
+      groupMaintenancePromise = null;
+    });
+};
+
 const formatPlayerResponse = (player) => {
   const obj = player.toObject({ virtuals: true });
   if (obj.parentPhoneEncrypted) {
@@ -126,8 +148,7 @@ const formatPlayerResponse = (player) => {
 
 const getGroups = async (req, res, next) => {
   try {
-    await ensureGroupPresentationFields();
-    await synchronizeGroupCounts();
+    scheduleGroupMaintenance();
     const groups = await TrainingGroup.find().sort({ displayOrder: 1, _id: -1 }).populate('coachId', 'name');
     res.json(groups);
   } catch (error) {

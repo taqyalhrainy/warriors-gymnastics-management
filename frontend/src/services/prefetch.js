@@ -14,6 +14,36 @@ import { fetchDashboard } from './reports.js';
 
 let warmedForUserId = '';
 let warmupPromise = null;
+let backgroundWarmupForUserId = '';
+
+const startBackgroundWarmup = (userId, groups = []) => {
+  if (!userId || backgroundWarmupForUserId === userId) {
+    return;
+  }
+
+  backgroundWarmupForUserId = userId;
+
+  setTimeout(() => {
+    const groupPlayersPromise = (async () => {
+      const availableGroups = groups.length ? groups : await fetchGroups();
+      await Promise.allSettled(availableGroups.map((group) => fetchGroupPlayers(group._id)));
+    })();
+
+    Promise.allSettled([
+      fetchPayments(),
+      fetchSubscriptions(),
+      fetchPrograms(),
+      fetchCoaches(),
+      fetchPackageOptions(),
+      fetchNotifications(),
+      groupPlayersPromise
+    ]).then((results) => {
+      results
+        .filter((result) => result.status === 'rejected')
+        .forEach((result) => console.warn('Background prefetch failed:', result.reason));
+    });
+  }, 0);
+};
 
 export const warmAdminAppCache = async (user) => {
   const userId = user?.id || user?._id || '';
@@ -26,27 +56,18 @@ export const warmAdminAppCache = async (user) => {
   }
 
   warmupPromise = (async () => {
-    const groupsPromise = fetchGroups();
-    const playersPromise = fetchPlayers();
-
     const results = await Promise.all([
       fetchDashboard(),
-      playersPromise,
+      fetchPlayers(),
       fetchParents(),
-      groupsPromise,
-      fetchPayments(),
-      fetchSubscriptions(),
-      fetchPrograms(),
-      fetchCoaches(),
-      fetchPackageOptions(),
       fetchWaitingList(),
-      fetchNotifications(),
+      fetchGroups(),
       fetchTodayAttendance()
     ]);
 
-    const groups = results[3] || [];
-    await Promise.all(groups.map((group) => fetchGroupPlayers(group._id)));
+    const groups = results[4] || [];
     warmedForUserId = userId;
+    startBackgroundWarmup(userId, groups);
   })();
 
   try {
@@ -59,4 +80,5 @@ export const warmAdminAppCache = async (user) => {
 export const resetPrefetchState = () => {
   warmedForUserId = '';
   warmupPromise = null;
+  backgroundWarmupForUserId = '';
 };
