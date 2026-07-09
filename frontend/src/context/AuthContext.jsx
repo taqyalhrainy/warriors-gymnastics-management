@@ -5,6 +5,7 @@ import { warmAdminAppCache, resetPrefetchState } from '../services/prefetch.js';
 
 const AuthContext = createContext(null);
 let verifiedServerToken = '';
+const adminDataRoles = ['admin', 'coach', 'receptionist'];
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
@@ -33,21 +34,40 @@ export const AuthProvider = ({ children }) => {
     }
 
     if (verifiedServerToken === token) {
-      setIsServerReady(true);
-      setIsServerChecking(false);
-      return;
+      if (!adminDataRoles.includes(user.role)) {
+        setIsServerReady(true);
+        setIsServerChecking(false);
+        return;
+      }
     }
 
     let isMounted = true;
-    setIsServerReady(true);
+    const needsAdminData = adminDataRoles.includes(user.role);
+    setIsServerReady(!needsAdminData);
     setIsServerChecking(true);
 
-    waitForApiHealth({ timeout: 5000, maxRetries: 4 })
-      .then(() => {
+    const prepareApp = async () => {
+      if (verifiedServerToken !== token) {
+        await waitForApiHealth({ timeout: 10000, maxRetries: 30 });
         verifiedServerToken = token;
+      }
+
+      if (needsAdminData) {
+        await warmAdminAppCache(user);
+      }
+    };
+
+    prepareApp()
+      .then(() => {
+        if (isMounted) {
+          setIsServerReady(true);
+        }
       })
       .catch((error) => {
         console.error(error);
+        if (isMounted) {
+          setIsServerReady(false);
+        }
       })
       .finally(() => {
         if (isMounted) {
@@ -60,22 +80,6 @@ export const AuthProvider = ({ children }) => {
     };
   }, [token, user]);
 
-  useEffect(() => {
-    if (!token || !user) {
-      return undefined;
-    }
-
-    if (isServerReady && !isServerChecking && ['admin', 'coach', 'receptionist'].includes(user.role)) {
-      const warmupTimer = setTimeout(() => {
-        warmAdminAppCache(user).catch(console.error);
-      }, 800);
-
-      return () => clearTimeout(warmupTimer);
-    }
-
-    return undefined;
-  }, [token, user, isServerReady, isServerChecking]);
-
   const login = (data) => {
     clearCache();
     resetPrefetchState();
@@ -84,9 +88,9 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('warriors-user', JSON.stringify(data.user));
     setToken(data.token);
     setUser(data.user);
-    verifiedServerToken = data.token;
-    setIsServerReady(true);
-    setIsServerChecking(false);
+    verifiedServerToken = '';
+    setIsServerReady(!adminDataRoles.includes(data.user?.role));
+    setIsServerChecking(adminDataRoles.includes(data.user?.role));
   };
 
   const logout = () => {

@@ -13,6 +13,7 @@ import { fetchWaitingList } from './waitingList.js';
 import { fetchDashboard } from './reports.js';
 
 let warmedForUserId = '';
+let warmupPromise = null;
 
 export const warmAdminAppCache = async (user) => {
   const userId = user?.id || user?._id || '';
@@ -20,31 +21,42 @@ export const warmAdminAppCache = async (user) => {
     return;
   }
 
-  warmedForUserId = userId;
+  if (warmupPromise) {
+    return warmupPromise;
+  }
 
-  const groupsPromise = fetchGroups();
-  const playersPromise = fetchPlayers();
+  warmupPromise = (async () => {
+    const groupsPromise = fetchGroups();
+    const playersPromise = fetchPlayers();
 
-  await Promise.allSettled([
-    fetchDashboard(),
-    playersPromise,
-    fetchParents(),
-    groupsPromise,
-    fetchPayments(),
-    fetchSubscriptions(),
-    fetchPrograms(),
-    fetchCoaches(),
-    fetchPackageOptions(),
-    fetchWaitingList(),
-    fetchNotifications(),
-    fetchTodayAttendance()
-  ]);
+    const results = await Promise.all([
+      fetchDashboard(),
+      playersPromise,
+      fetchParents(),
+      groupsPromise,
+      fetchPayments(),
+      fetchSubscriptions(),
+      fetchPrograms(),
+      fetchCoaches(),
+      fetchPackageOptions(),
+      fetchWaitingList(),
+      fetchNotifications(),
+      fetchTodayAttendance()
+    ]);
 
-  groupsPromise
-    .then((groups) => Promise.allSettled(groups.map((group) => fetchGroupPlayers(group._id))))
-    .catch(() => {});
+    const groups = results[3] || [];
+    await Promise.all(groups.map((group) => fetchGroupPlayers(group._id)));
+    warmedForUserId = userId;
+  })();
+
+  try {
+    await warmupPromise;
+  } finally {
+    warmupPromise = null;
+  }
 };
 
 export const resetPrefetchState = () => {
   warmedForUserId = '';
+  warmupPromise = null;
 };
