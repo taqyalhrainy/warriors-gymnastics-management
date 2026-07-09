@@ -1,11 +1,18 @@
 import api from './api.js';
-import { invalidateCache } from './cache.js';
+import { fetchCached, invalidateCache } from './cache.js';
 
 const invalidateSubscriptionRelatedCache = () => {
   invalidateCache(['subscriptions:', 'players:', 'payments:', 'attendance:', 'reports:']);
 };
 
 export const fetchSubscriptions = async (params) => {
+  if (!params || !Object.keys(params).length) {
+    return fetchCached('subscriptions:list', async () => {
+      const response = await api.get('/subscriptions');
+      return response.data;
+    });
+  }
+
   const response = await api.get('/subscriptions', { params });
   return response.data;
 };

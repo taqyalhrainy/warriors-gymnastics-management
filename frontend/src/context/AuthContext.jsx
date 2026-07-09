@@ -68,7 +68,7 @@ export const AuthProvider = ({ children }) => {
     if (isServerReady && !isServerChecking && ['admin', 'coach', 'receptionist'].includes(user.role)) {
       const warmupTimer = setTimeout(() => {
         warmAdminAppCache(user).catch(console.error);
-      }, 6000);
+      }, 800);
 
       return () => clearTimeout(warmupTimer);
     }

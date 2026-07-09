@@ -3,6 +3,15 @@ import { fetchCached, invalidateCache, setCached, touchCacheVersion, updateCache
 
 export const fetchPlayers = async (params) => {
   if (params && Object.keys(params).length) {
+    const paramKeys = Object.keys(params);
+    const cacheHintOnly = paramKeys.every((key) => ['dashboard', 'sidebar'].includes(key));
+    if (cacheHintOnly) {
+      return fetchCached('players:list', async () => {
+        const response = await api.get('/players');
+        return response.data;
+      });
+    }
+
     const response = await api.get('/players', { params });
     return response.data;
   }

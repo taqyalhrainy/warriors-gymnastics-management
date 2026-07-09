@@ -218,7 +218,7 @@ const AdminDashboard = () => {
     if (!token) return;
     const timer = setTimeout(() => {
       loadWaitingListData();
-    }, 3000);
+    }, 1000);
 
     return () => clearTimeout(timer);
   }, [token]);

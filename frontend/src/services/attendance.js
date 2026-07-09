@@ -1,5 +1,5 @@
 import api from './api.js';
-import { invalidateCache } from './cache.js';
+import { fetchCached, invalidateCache } from './cache.js';
 
 const invalidateAttendanceRelatedCache = () => {
   invalidateCache(['attendance:', 'players:', 'reports:', 'notifications:']);
@@ -35,6 +35,14 @@ export const fetchAttendanceByPlayer = async (playerId) => {
 };
 
 export const fetchTodayAttendance = async (params) => {
+  const cacheKey = `attendance:today:${params?.date || 'current'}`;
+  if (!params || !Object.keys(params).length || params.date) {
+    return fetchCached(cacheKey, async () => {
+      const response = await api.get('/attendance/today', { params });
+      return response.data;
+    });
+  }
+
   const response = await api.get('/attendance/today', { params });
   return response.data;
 };

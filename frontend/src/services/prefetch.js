@@ -7,6 +7,10 @@ import { fetchPrograms } from './programs.js';
 import { fetchCoaches } from './coaches.js';
 import { fetchNotifications } from './notifications.js';
 import { fetchTodayAttendance } from './attendance.js';
+import { fetchPackageOptions } from './packageOptions.js';
+import { fetchSubscriptions } from './subscriptions.js';
+import { fetchWaitingList } from './waitingList.js';
+import { fetchDashboard } from './reports.js';
 
 let warmedForUserId = '';
 
@@ -19,14 +23,19 @@ export const warmAdminAppCache = async (user) => {
   warmedForUserId = userId;
 
   const groupsPromise = fetchGroups();
+  const playersPromise = fetchPlayers();
 
   await Promise.allSettled([
-    fetchPlayers(),
+    fetchDashboard(),
+    playersPromise,
     fetchParents(),
     groupsPromise,
     fetchPayments(),
+    fetchSubscriptions(),
     fetchPrograms(),
     fetchCoaches(),
+    fetchPackageOptions(),
+    fetchWaitingList(),
     fetchNotifications(),
     fetchTodayAttendance()
   ]);
