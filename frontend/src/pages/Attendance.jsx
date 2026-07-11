@@ -204,6 +204,7 @@ const AttendancePage = () => {
   const [pendingAttendanceHistoryId, setPendingAttendanceHistoryId] = useState(null);
   const [isEditingSelectedPlayer, setIsEditingSelectedPlayer] = useState(false);
   const [selectedPlayerForm, setSelectedPlayerForm] = useState(null);
+  const [showUnsavedExitConfirm, setShowUnsavedExitConfirm] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [subscriptionForm, setSubscriptionForm] = useState({ startDate: '', endDate: '' });
   const [subscriptionMessage, setSubscriptionMessage] = useState('');
@@ -1056,6 +1057,42 @@ const AttendancePage = () => {
   const handleCancelSelectedPlayerEdit = () => {
     setIsEditingSelectedPlayer(false);
     setSelectedPlayerForm(selectedPlayer ? createSelectedPlayerForm(selectedPlayer) : null);
+    setShowUnsavedExitConfirm(false);
+  };
+
+  const normalizeSelectedPlayerForm = (form) => {
+    if (!form) {
+      return null;
+    }
+
+    return {
+      ...form,
+      groupIds: [...(form.groupIds || [])].map(String).sort(),
+      payment: String(form.payment ?? ''),
+      packageClasses: String(form.packageClasses ?? ''),
+      packageHours: String(form.packageHours ?? '')
+    };
+  };
+
+  const hasUnsavedSelectedPlayerChanges = () => {
+    if (!isEditingSelectedPlayer || !selectedPlayer || !selectedPlayerForm) {
+      return false;
+    }
+
+    return JSON.stringify(normalizeSelectedPlayerForm(selectedPlayerForm))
+      !== JSON.stringify(normalizeSelectedPlayerForm(createSelectedPlayerForm(selectedPlayer)));
+  };
+
+  const closeSelectedPlayer = ({ force = false } = {}) => {
+    if (!force && hasUnsavedSelectedPlayerChanges()) {
+      setShowUnsavedExitConfirm(true);
+      return;
+    }
+
+    setShowUnsavedExitConfirm(false);
+    setIsEditingSelectedPlayer(false);
+    setSelectedPlayerForm(null);
+    setSelectedPlayer(null);
   };
 
   const openSubscriptionModal = () => {
@@ -1323,14 +1360,15 @@ const AttendancePage = () => {
     }
   };
 
-  const handleSaveSelectedPlayerEdit = async (event) => {
-    event.preventDefault();
+  const handleSaveSelectedPlayerEdit = async (event, options = {}) => {
+    event?.preventDefault();
     if (!selectedPlayer?._id || !selectedPlayerForm) {
       return;
     }
 
     try {
       setMessage('');
+      setShowUnsavedExitConfirm(false);
       await updatePlayer(selectedPlayer._id, {
         ...selectedPlayerForm,
         groupId: selectedPlayerForm.groupIds[0] || '',
@@ -1347,6 +1385,9 @@ const AttendancePage = () => {
       setIsEditingSelectedPlayer(false);
       setMessage('Player updated successfully');
       await loadAttendanceBoard({ force: true, date: selectedAttendanceDate });
+      if (options.closeAfterSave) {
+        closeSelectedPlayer({ force: true });
+      }
     } catch (err) {
       setMessage(err.response?.data?.message || 'Unable to update player');
     }
@@ -1634,7 +1675,7 @@ const AttendancePage = () => {
         )}
 
         {selectedPlayer && (
-          <div className="student-modal-backdrop" role="presentation" onClick={() => setSelectedPlayer(null)}>
+          <div className="student-modal-backdrop" role="presentation" onClick={() => closeSelectedPlayer()}>
             <section className="student-modal" role="dialog" aria-modal="true" aria-label={t('studentDetails')} onClick={(event) => event.stopPropagation()}>
               <div className="student-modal-header">
                 <div>
@@ -1650,7 +1691,7 @@ const AttendancePage = () => {
                       <button type="button" className="btn-primary" onClick={handleStartEditSelectedPlayer}>{t('edit')}</button>
                     </>
                   )}
-                  <button type="button" className="btn-secondary" onClick={() => setSelectedPlayer(null)}>{t('close')}</button>
+                  <button type="button" className="btn-secondary" onClick={() => closeSelectedPlayer()}>{t('close')}</button>
                 </div>
               </div>
 
@@ -1865,6 +1906,22 @@ const AttendancePage = () => {
                   </div>
                 </>
               )}
+            </section>
+          </div>
+        )}
+
+        {showUnsavedExitConfirm && (
+          <div className="student-modal-backdrop unsaved-exit-backdrop" role="presentation" onClick={() => setShowUnsavedExitConfirm(false)}>
+            <section className="unsaved-exit-dialog" role="dialog" aria-modal="true" aria-label="Unsaved changes" onClick={(event) => event.stopPropagation()}>
+              <div>
+                <h2>Unsaved changes</h2>
+                <p>You have edits that have not been saved yet. Choose how you would like to continue.</p>
+              </div>
+              <div className="unsaved-exit-actions">
+                <button type="button" className="btn-secondary" onClick={() => setShowUnsavedExitConfirm(false)}>Keep editing</button>
+                <button type="button" className="btn-secondary" onClick={() => closeSelectedPlayer({ force: true })}>Exit without saving</button>
+                <button type="button" className="btn-primary" onClick={() => handleSaveSelectedPlayerEdit(null, { closeAfterSave: true })}>Save and exit</button>
+              </div>
             </section>
           </div>
         )}
