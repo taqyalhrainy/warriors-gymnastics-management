@@ -58,8 +58,6 @@ const getPaymentDayKey = (date) => {
   return getDateInputValue(date);
 };
 
-const getPlayerSubscriptionDate = (player) => player?.startDate || player?.currentSubscriptionStartedAt || null;
-
 const isPendingPayment = (payment) => String(payment._id || '').startsWith('temp-payment-');
 
 const sortPaymentsNewestFirst = (items) => [...items].sort((first, second) => {
@@ -215,11 +213,10 @@ const PaymentsPage = () => {
 
   const monthOptions = useMemo(() => {
     const paymentMonths = payments.map((payment) => getPaymentMonthKey(payment.paymentDate));
-    const subscriptionMonths = players.map((player) => getPaymentMonthKey(getPlayerSubscriptionDate(player)));
-    const months = [...new Set([...paymentMonths, ...subscriptionMonths].filter((key) => key !== 'undated'))];
+    const months = [...new Set(paymentMonths.filter((key) => key !== 'undated'))];
     if (!months.includes(selectedMonth)) months.push(selectedMonth);
     return months.sort().reverse();
-  }, [payments, players, selectedMonth]);
+  }, [payments, selectedMonth]);
 
   const dayOptions = useMemo(() => {
     const days = [...new Set(payments.map((payment) => getPaymentDayKey(payment.paymentDate)).filter((key) => key !== 'undated'))];
@@ -276,50 +273,6 @@ const PaymentsPage = () => {
       return searchable.includes(query);
     });
   }, [visiblePayments, searchQuery]);
-
-  const newSubscriptionRows = useMemo(() => {
-    return players
-      .filter((player) => getPaymentMonthKey(getPlayerSubscriptionDate(player)) === selectedMonth)
-      .map((player) => {
-        const subscriptionStart = getPlayerSubscriptionDate(player);
-        const expectedAmount = Number(player.payment || 0);
-        const paidAmount = payments
-          .filter((payment) => String(payment.playerId?._id || payment.playerId) === String(player._id))
-          .filter((payment) => {
-            if (!subscriptionStart) return true;
-            const paymentTime = new Date(payment.createdAt || payment.paymentDate || 0).getTime();
-            const subscriptionTime = new Date(subscriptionStart).getTime();
-            return !Number.isNaN(paymentTime) && !Number.isNaN(subscriptionTime) && paymentTime >= subscriptionTime;
-          })
-          .reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
-
-        return {
-          player,
-          subscriptionStart,
-          expectedAmount,
-          paidAmount,
-          remainingAmount: Math.max(0, expectedAmount - paidAmount)
-        };
-      })
-      .sort((first, second) => new Date(second.subscriptionStart || 0) - new Date(first.subscriptionStart || 0));
-  }, [players, payments, selectedMonth]);
-
-  const newSubscriptionSummary = useMemo(() => {
-    return newSubscriptionRows.reduce((summary, row) => ({
-      count: summary.count + 1,
-      expectedAmount: summary.expectedAmount + row.expectedAmount,
-      paidAmount: summary.paidAmount + row.paidAmount,
-      remainingAmount: summary.remainingAmount + row.remainingAmount
-    }), {
-      count: 0,
-      expectedAmount: 0,
-      paidAmount: 0,
-      remainingAmount: 0
-    });
-  }, [newSubscriptionRows]);
-  const newSubscriptionCollectionRate = newSubscriptionSummary.expectedAmount
-    ? Math.min(100, Math.round((newSubscriptionSummary.paidAmount / newSubscriptionSummary.expectedAmount) * 100))
-    : 0;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -419,11 +372,10 @@ const PaymentsPage = () => {
   const viewTabs = [
     { id: 'month', label: 'By Month' },
     { id: 'day', label: 'By Day' },
-    { id: 'thisMonth', label: 'This Month' },
-    { id: 'newSubscriptions', label: 'New Subscriptions' }
+    { id: 'thisMonth', label: 'This Month' }
   ];
   const activeViewLabel = viewTabs.find((tab) => tab.id === activeView)?.label || 'payments';
-  const activeRecordCount = activeView === 'newSubscriptions' ? newSubscriptionSummary.count : searchedPayments.length;
+  const activeRecordCount = searchedPayments.length;
 
   return (
     <div className="dashboard-layout payments-admin-layout">
@@ -451,24 +403,22 @@ const PaymentsPage = () => {
             ))}
           </div>
 
-          {activeView !== 'newSubscriptions' && (
-            <>
-              <div className="payment-metrics">
-                <div>
-                  <span>Remaining Amount</span>
-                  <strong>{formatMoney(totals.remaining)}</strong>
-                </div>
-                <div>
-                  <span>Full Payments</span>
-                  <strong>{totals.fullPayments}</strong>
-                </div>
-                <div>
-                  <span>Records</span>
-                  <strong>{payments.length}</strong>
-                </div>
-              </div>
+          <div className="payment-metrics">
+            <div>
+              <span>Remaining Amount</span>
+              <strong>{formatMoney(totals.remaining)}</strong>
+            </div>
+            <div>
+              <span>Full Payments</span>
+              <strong>{totals.fullPayments}</strong>
+            </div>
+            <div>
+              <span>Records</span>
+              <strong>{payments.length}</strong>
+            </div>
+          </div>
 
-              <form className="payment-entry-panel" onSubmit={handleSubmit}>
+          <form className="payment-entry-panel" onSubmit={handleSubmit}>
                 <div className="payment-entry-heading">
                   <h2>{editingPaymentId ? 'Edit Payment' : t('addPayment')}</h2>
                   <p>{editingPaymentId ? 'Update the selected payment record.' : 'Record a payment without leaving the table.'}</p>
@@ -564,27 +514,23 @@ const PaymentsPage = () => {
                     <button className="btn-primary" type="submit">{isSubmitting ? 'Saving...' : (editingPaymentId ? 'Update Payment' : t('recordPayment'))}</button>
                   </div>
                 </div>
-              </form>
-            </>
-          )}
+          </form>
 
           <div className="payment-database-card">
             <div className="payment-table-tools">
               <div className="payment-tool-icons">
                 <span>{activeViewLabel}</span>
-                <span>{activeView === 'newSubscriptions' ? `${activeRecordCount} this month` : `${activeRecordCount} records`}</span>
-                {activeView !== 'newSubscriptions' && (
-                  <label className="payment-search">
-                    <span>Search</span>
-                    <input
-                      type="search"
-                      value={searchQuery}
-                      onChange={(event) => setSearchQuery(event.target.value)}
-                      placeholder={`Search ${activeViewLabel}`}
-                    />
-                  </label>
-                )}
-                {(activeView === 'month' || activeView === 'newSubscriptions') && (
+                <span>{activeRecordCount} records</span>
+                <label className="payment-search">
+                  <span>Search</span>
+                  <input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder={`Search ${activeViewLabel}`}
+                  />
+                </label>
+                {activeView === 'month' && (
                   <select value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}>
                     {monthOptions.map((month) => <option key={month} value={month}>{month}</option>)}
                   </select>
@@ -595,55 +541,16 @@ const PaymentsPage = () => {
                   </select>
                 )}
               </div>
-              <strong>{activeView === 'newSubscriptions' ? 'Monthly subscription summary' : t('paymentHistory')}</strong>
+              <strong>{t('paymentHistory')}</strong>
             </div>
 
-            {(activeView === 'month' || activeView === 'day' || activeView === 'thisMonth') && (
-              <div className="payment-view-panel payment-month-banner">
-                <span>{activeView === 'thisMonth' ? 'Showing this month' : activeView === 'day' ? `Showing ${selectedDay}` : `Showing ${selectedMonth}`}</span>
-                <strong>{searchedPayments.length} records / {formatMoney(searchedPayments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0))}</strong>
-              </div>
-            )}
+            <div className="payment-view-panel payment-month-banner">
+              <span>{activeView === 'thisMonth' ? 'Showing this month' : activeView === 'day' ? `Showing ${selectedDay}` : `Showing ${selectedMonth}`}</span>
+              <strong>{searchedPayments.length} records / {formatMoney(searchedPayments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0))}</strong>
+            </div>
 
-            {activeView === 'newSubscriptions' && (
-              <div className="new-subscription-dashboard">
-                <div className="new-subscription-hero-card">
-                  <div>
-                    <span>Expected to collect</span>
-                    <strong>{formatMoney(newSubscriptionSummary.expectedAmount)}</strong>
-                    <small>{selectedMonth} subscription pipeline</small>
-                  </div>
-                  <div className="new-subscription-progress">
-                    <div>
-                      <span>Collected</span>
-                      <strong>{newSubscriptionCollectionRate}%</strong>
-                    </div>
-                    <i>
-                      <b style={{ width: `${newSubscriptionCollectionRate}%` }} />
-                    </i>
-                  </div>
-                </div>
-
-                <div className="new-subscription-side-grid">
-                  <div className="new-subscription-summary-card">
-                    <span>New subscriptions</span>
-                    <strong>{newSubscriptionSummary.count}</strong>
-                  </div>
-                  <div className="new-subscription-summary-card is-collected">
-                    <span>Collected</span>
-                    <strong>{formatMoney(newSubscriptionSummary.paidAmount)}</strong>
-                  </div>
-                  <div className="new-subscription-summary-card is-remaining">
-                    <span>Remaining</span>
-                    <strong>{formatMoney(newSubscriptionSummary.remainingAmount)}</strong>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeView !== 'newSubscriptions' && (
-              <div className="payment-table-wrap">
-                <table className="payment-database-table">
+            <div className="payment-table-wrap">
+              <table className="payment-database-table">
                 <thead>
                   <tr>
                     <th>Receipt no</th>
@@ -693,8 +600,7 @@ const PaymentsPage = () => {
                   )}
                 </tbody>
               </table>
-              </div>
-            )}
+            </div>
           </div>
         </section>
       </main>

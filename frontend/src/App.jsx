@@ -12,6 +12,7 @@ const PlayerProfilePage = lazy(() => import('./pages/PlayerProfile.jsx'));
 const GroupsPage = lazy(() => import('./pages/Groups.jsx'));
 const AttendancePage = lazy(() => import('./pages/Attendance.jsx'));
 const PaymentsPage = lazy(() => import('./pages/Payments.jsx'));
+const OwnerDashboardPage = lazy(() => import('./pages/OwnerDashboard.jsx'));
 const NotificationsPage = lazy(() => import('./pages/Notifications.jsx'));
 const ReportsPage = lazy(() => import('./pages/Reports.jsx'));
 const HistoryPage = lazy(() => import('./pages/History.jsx'));
@@ -67,6 +68,9 @@ function App() {
               <Route path="/reports" element={<ReportsPage />} />
               <Route path="/history" element={<HistoryPage />} />
               <Route path="/audit-logs" element={<AuditLogsPage />} />
+            </Route>
+            <Route element={<ProtectedRoute roles={['admin']} />}>
+              <Route path="/owner-summary" element={<OwnerDashboardPage />} />
             </Route>
             <Route element={<ProtectedRoute roles={parentRoles} />}>
               <Route path="/parent" element={<ParentDashboard />} />

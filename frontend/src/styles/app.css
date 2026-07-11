@@ -2511,8 +2511,178 @@ body.attendance-touch-dragging {
     linear-gradient(145deg, #ed1c24 0%, #c8101a 48%, #7f0d13 100%);
 }
 
+.owner-dashboard-page {
+  min-height: 100vh;
+  padding: 32px clamp(18px, 4vw, 56px);
+  background:
+    linear-gradient(180deg, rgba(237, 28, 36, 0.08), transparent 260px),
+    var(--bg);
+  color: var(--text);
+}
+
+.owner-dashboard-header,
+.owner-panel-header,
+.owner-subscription-footer,
+.owner-subscription-detail-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.owner-dashboard-header {
+  margin-bottom: 18px;
+}
+
+.owner-dashboard-header p,
+.owner-panel-header span,
+.owner-subscription-footer span {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.owner-dashboard-header h1,
+.owner-panel-header h2 {
+  margin: 4px 0 0;
+  letter-spacing: 0;
+}
+
+.owner-dashboard-header h1 {
+  font-size: clamp(2.1rem, 4vw, 3.7rem);
+}
+
+.owner-dashboard-actions,
+.owner-panel-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.owner-dashboard-actions > span,
+.owner-panel-tools strong {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+.owner-dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.75fr) minmax(300px, 0.65fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.owner-panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    var(--surface);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.16);
+}
+
+.owner-subscriptions-panel {
+  padding: 16px;
+}
+
+.owner-attendance-panel {
+  display: grid;
+  gap: 22px;
+  padding: 18px;
+}
+
+.owner-panel-tools select {
+  width: auto;
+  min-height: 36px;
+  padding: 6px 12px;
+}
+
+.owner-new-subscription-dashboard {
+  padding: 18px 0 12px;
+}
+
+.owner-subscription-main-card,
+.owner-subscription-main-card:hover,
+.new-subscription-summary-card[type='button'],
+.new-subscription-summary-card[type='button']:hover {
+  width: 100%;
+  text-align: left;
+  transform: none;
+}
+
+.owner-subscription-main-card,
+.new-subscription-summary-card[type='button'] {
+  cursor: pointer;
+}
+
+.owner-subscription-footer {
+  padding-top: 4px;
+}
+
+.owner-subscription-footer .btn-primary,
+.owner-dashboard-actions .btn-secondary {
+  min-height: 38px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.owner-attendance-summary {
+  justify-content: center;
+  padding: 12px 0 2px;
+}
+
+.owner-subscription-modal {
+  width: min(1120px, calc(100vw - 32px));
+}
+
+.owner-subscription-detail-summary {
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-alt);
+}
+
+.owner-subscription-detail-summary span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.owner-subscription-detail-summary strong {
+  margin-left: 8px;
+  color: var(--text);
+  font-size: 1.1rem;
+}
+
+.owner-table-wrap {
+  max-height: min(58vh, 620px);
+  overflow: auto;
+}
+
+.owner-subscription-table th,
+.owner-subscription-table td {
+  white-space: nowrap;
+}
+
+body.rtl .owner-subscription-main-card,
+body.rtl .new-subscription-summary-card[type='button'] {
+  text-align: right;
+}
+
 @media (max-width: 980px) {
   .new-subscription-dashboard {
+    grid-template-columns: 1fr;
+  }
+
+  .owner-dashboard-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2523,6 +2693,29 @@ body.attendance-touch-dragging {
 }
 
 @media (max-width: 640px) {
+  .owner-dashboard-page {
+    padding: 24px 12px;
+  }
+
+  .owner-dashboard-header,
+  .owner-panel-header,
+  .owner-subscription-footer,
+  .owner-subscription-detail-summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .owner-dashboard-actions,
+  .owner-panel-tools {
+    width: 100%;
+  }
+
+  .owner-panel-tools select,
+  .owner-dashboard-actions .btn-secondary,
+  .owner-subscription-footer .btn-primary {
+    width: 100%;
+  }
+
   .new-subscription-side-grid {
     grid-template-columns: 1fr;
   }
