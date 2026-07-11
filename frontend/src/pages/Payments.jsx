@@ -448,118 +448,122 @@ const PaymentsPage = () => {
             ))}
           </div>
 
-          <div className="payment-metrics">
-            <div>
-              <span>Remaining Amount</span>
-              <strong>{formatMoney(totals.remaining)}</strong>
-            </div>
-            <div>
-              <span>Full Payments</span>
-              <strong>{totals.fullPayments}</strong>
-            </div>
-            <div>
-              <span>Records</span>
-              <strong>{payments.length}</strong>
-            </div>
-          </div>
-
-          <form className="payment-entry-panel" onSubmit={handleSubmit}>
-            <div className="payment-entry-heading">
-              <h2>{editingPaymentId ? 'Edit Payment' : t('addPayment')}</h2>
-              <p>{editingPaymentId ? 'Update the selected payment record.' : 'Record a payment without leaving the table.'}</p>
-            </div>
-            {error && <p className="alert-error">{error}</p>}
-            <div className="payment-entry-grid">
-              <label>
-                <span>{t('player')}</span>
-                <input
-                  className="select-search-input"
-                  value={playerSearch}
-                  onChange={(event) => setPlayerSearch(event.target.value)}
-                  placeholder="Search player..."
-                  type="search"
-                />
-                <select
-                  value={form.playerId}
-                  onChange={(e) => {
-                    setIsTransactionTouched(false);
-                    setForm({ ...form, playerId: e.target.value });
-                  }}
-                  required
-                  disabled={Boolean(editingPaymentId)}
-                >
-                  <option value="">{t('selectPlayer')}</option>
-                  {filteredPlayers.map((player) => <option key={player._id} value={player._id}>{player.fullName}</option>)}
-                </select>
-              </label>
-
-              <label>
-                <span>{t('paidAmount')}</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={form.paidAmount}
-                  onChange={(e) => setForm({ ...form, paidAmount: normalizeDigits(e.target.value) })}
-                  required
-                />
-              </label>
-
-              <label>
-                <span>Transaction</span>
-                <select
-                  value={form.transactionType}
-                  onChange={(e) => {
-                    setIsTransactionTouched(true);
-                    setForm({ ...form, transactionType: e.target.value, customTransactionType: e.target.value === 'custom' ? form.customTransactionType : '' });
-                  }}
-                >
-                  <option>Full payment</option>
-                  <option>Partial payment</option>
-                  <option value="custom">Custom</option>
-                </select>
-                {form.transactionType === 'custom' && (
-                  <input
-                    value={form.customTransactionType}
-                    onChange={(e) => setForm({ ...form, customTransactionType: e.target.value })}
-                    placeholder="Write transaction..."
-                    required
-                  />
-                )}
-              </label>
-
-              <label>
-                <span>{t('paymentMethod')}</span>
-                <select value={form.paymentMethod} onChange={(e) => setForm({ ...form, paymentMethod: e.target.value })}>
-                  <option>Cash</option>
-                  <option>Click</option>
-                  <option>Bank Transfer</option>
-                </select>
-              </label>
-
-              <label>
-                <span>Payment Date</span>
-                <input
-                  type="date"
-                  value={form.paymentDate}
-                  onChange={(e) => setForm({ ...form, paymentDate: e.target.value || getDateInputValue() })}
-                  required
-                />
-              </label>
-
-              <label>
-                <span>{t('notes')}</span>
-                <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-              </label>
-            </div>
-
-            <div className="payment-entry-footer">
-              <span>{form.playerId ? `Package: ${getPackageName({ playerId: players.find((player) => player._id === form.playerId) })}` : 'Select a player to see the package.'}</span>
-              <div className="payment-entry-actions">
-                {editingPaymentId && <button className="btn-secondary" type="button" onClick={handleCancelEdit}>Cancel Edit</button>}
-                <button className="btn-primary" type="submit">{isSubmitting ? 'Saving...' : (editingPaymentId ? 'Update Payment' : t('recordPayment'))}</button>
+          {activeView !== 'newSubscriptions' && (
+            <>
+              <div className="payment-metrics">
+                <div>
+                  <span>Remaining Amount</span>
+                  <strong>{formatMoney(totals.remaining)}</strong>
+                </div>
+                <div>
+                  <span>Full Payments</span>
+                  <strong>{totals.fullPayments}</strong>
+                </div>
+                <div>
+                  <span>Records</span>
+                  <strong>{payments.length}</strong>
+                </div>
               </div>
-            </div>
-          </form>
+
+              <form className="payment-entry-panel" onSubmit={handleSubmit}>
+                <div className="payment-entry-heading">
+                  <h2>{editingPaymentId ? 'Edit Payment' : t('addPayment')}</h2>
+                  <p>{editingPaymentId ? 'Update the selected payment record.' : 'Record a payment without leaving the table.'}</p>
+                </div>
+                {error && <p className="alert-error">{error}</p>}
+                <div className="payment-entry-grid">
+                  <label>
+                    <span>{t('player')}</span>
+                    <input
+                      className="select-search-input"
+                      value={playerSearch}
+                      onChange={(event) => setPlayerSearch(event.target.value)}
+                      placeholder="Search player..."
+                      type="search"
+                    />
+                    <select
+                      value={form.playerId}
+                      onChange={(e) => {
+                        setIsTransactionTouched(false);
+                        setForm({ ...form, playerId: e.target.value });
+                      }}
+                      required
+                      disabled={Boolean(editingPaymentId)}
+                    >
+                      <option value="">{t('selectPlayer')}</option>
+                      {filteredPlayers.map((player) => <option key={player._id} value={player._id}>{player.fullName}</option>)}
+                    </select>
+                  </label>
+
+                  <label>
+                    <span>{t('paidAmount')}</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={form.paidAmount}
+                      onChange={(e) => setForm({ ...form, paidAmount: normalizeDigits(e.target.value) })}
+                      required
+                    />
+                  </label>
+
+                  <label>
+                    <span>Transaction</span>
+                    <select
+                      value={form.transactionType}
+                      onChange={(e) => {
+                        setIsTransactionTouched(true);
+                        setForm({ ...form, transactionType: e.target.value, customTransactionType: e.target.value === 'custom' ? form.customTransactionType : '' });
+                      }}
+                    >
+                      <option>Full payment</option>
+                      <option>Partial payment</option>
+                      <option value="custom">Custom</option>
+                    </select>
+                    {form.transactionType === 'custom' && (
+                      <input
+                        value={form.customTransactionType}
+                        onChange={(e) => setForm({ ...form, customTransactionType: e.target.value })}
+                        placeholder="Write transaction..."
+                        required
+                      />
+                    )}
+                  </label>
+
+                  <label>
+                    <span>{t('paymentMethod')}</span>
+                    <select value={form.paymentMethod} onChange={(e) => setForm({ ...form, paymentMethod: e.target.value })}>
+                      <option>Cash</option>
+                      <option>Click</option>
+                      <option>Bank Transfer</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    <span>Payment Date</span>
+                    <input
+                      type="date"
+                      value={form.paymentDate}
+                      onChange={(e) => setForm({ ...form, paymentDate: e.target.value || getDateInputValue() })}
+                      required
+                    />
+                  </label>
+
+                  <label>
+                    <span>{t('notes')}</span>
+                    <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+                  </label>
+                </div>
+
+                <div className="payment-entry-footer">
+                  <span>{form.playerId ? `Package: ${getPackageName({ playerId: players.find((player) => player._id === form.playerId) })}` : 'Select a player to see the package.'}</span>
+                  <div className="payment-entry-actions">
+                    {editingPaymentId && <button className="btn-secondary" type="button" onClick={handleCancelEdit}>Cancel Edit</button>}
+                    <button className="btn-primary" type="submit">{isSubmitting ? 'Saving...' : (editingPaymentId ? 'Update Payment' : t('recordPayment'))}</button>
+                  </div>
+                </div>
+              </form>
+            </>
+          )}
 
           <div className="payment-database-card">
             <div className="payment-table-tools">
@@ -588,7 +592,7 @@ const PaymentsPage = () => {
                   </select>
                 )}
               </div>
-              <strong>{t('paymentHistory')}</strong>
+              <strong>{activeView === 'newSubscriptions' ? 'Monthly subscription summary' : t('paymentHistory')}</strong>
             </div>
 
             {(activeView === 'month' || activeView === 'day' || activeView === 'thisMonth') && (
