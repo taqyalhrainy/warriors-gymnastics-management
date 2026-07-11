@@ -4,6 +4,8 @@ import { fetchGroups, fetchGroupPlayers } from '../services/groups.js';
 import { fetchPayments } from '../services/payments.js';
 import { fetchPlayers } from '../services/players.js';
 
+const NEW_SUBSCRIPTION_ALERT_READ_KEY = 'warriors-new-subscription-alert-read-ids';
+
 const formatMoney = (value) => Number(value || 0).toLocaleString('en-US');
 
 const getDateInputValue = (date = new Date()) => {
@@ -22,7 +24,15 @@ const getPaymentMonthKey = (date) => {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`;
 };
 
-const getPlayerSubscriptionDate = (player) => player?.startDate || player?.currentSubscriptionStartedAt || null;
+const getPlayerSubscriptionDate = (player) => player?.startDate || player?.currentSubscriptionStartedAt || player?.createdAt || null;
+
+const getSortableDateTime = (...dates) => {
+  for (const date of dates) {
+    const time = new Date(date || 0).getTime();
+    if (!Number.isNaN(time) && time > 0) return time;
+  }
+  return 0;
+};
 
 const getEntityId = (value) => String(value?._id || value || '');
 const getAttendanceRecordKey = (playerId, groupId) => `${getEntityId(playerId)}:${getEntityId(groupId)}`;
@@ -45,6 +55,24 @@ const getParentPhone = (player) => player?.parentId?.phone || player?.parentPhon
 const isPlayerVisibleInAttendance = (player) => !player?.isDeleted && player?.status !== 'left';
 const formatGroupTime = (group) => [group.startTime, group.endTime].filter(Boolean).join(' - ');
 
+const readNewSubscriptionAlertIds = () => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(NEW_SUBSCRIPTION_ALERT_READ_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch (error) {
+    return [];
+  }
+};
+
+const writeNewSubscriptionAlertIds = (ids) => {
+  localStorage.setItem(NEW_SUBSCRIPTION_ALERT_READ_KEY, JSON.stringify([...new Set(ids.map(String))]));
+};
+
+const getNewSubscriptionAlertKey = (row) => {
+  const dateKey = row.subscriptionStart ? getDateInputValue(row.subscriptionStart) : 'undated';
+  return `${row.player._id}:${dateKey}`;
+};
+
 const OwnerDashboard = () => {
   const [players, setPlayers] = useState([]);
   const [payments, setPayments] = useState([]);
@@ -53,6 +81,8 @@ const OwnerDashboard = () => {
   const [selectedSummaryGroup, setSelectedSummaryGroup] = useState(null);
   const [hoveredSummaryGroup, setHoveredSummaryGroup] = useState(null);
   const [showSubscriptionDetails, setShowSubscriptionDetails] = useState(false);
+  const [newSubscriptionAlertReadIds, setNewSubscriptionAlertReadIds] = useState(() => readNewSubscriptionAlertIds());
+  const [highlightedNewSubscriptionIds, setHighlightedNewSubscriptionIds] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const today = getDateInputValue();
@@ -136,7 +166,11 @@ const OwnerDashboard = () => {
           remainingAmount: Math.max(0, expectedAmount - paidAmount)
         };
       })
-      .sort((first, second) => new Date(second.subscriptionStart || 0) - new Date(first.subscriptionStart || 0));
+      .sort((first, second) => {
+        const secondTime = getSortableDateTime(second.subscriptionStart, second.player.createdAt);
+        const firstTime = getSortableDateTime(first.subscriptionStart, first.player.createdAt);
+        return secondTime - firstTime || first.player.fullName.localeCompare(second.player.fullName);
+      });
   }, [players, payments, selectedMonth]);
 
   const newSubscriptionSummary = useMemo(() => {
@@ -156,6 +190,22 @@ const OwnerDashboard = () => {
   const newSubscriptionCollectionRate = newSubscriptionSummary.expectedAmount
     ? Math.min(100, Math.round((newSubscriptionSummary.paidAmount / newSubscriptionSummary.expectedAmount) * 100))
     : 0;
+  const unreadNewSubscriptionCount = newSubscriptionRows.filter((row) => !newSubscriptionAlertReadIds.includes(getNewSubscriptionAlertKey(row))).length;
+
+  const openSubscriptionDetails = () => {
+    const currentIds = newSubscriptionRows.map(getNewSubscriptionAlertKey);
+    const unreadIds = currentIds.filter((id) => !newSubscriptionAlertReadIds.includes(id));
+    const nextReadIds = [...new Set([...newSubscriptionAlertReadIds, ...currentIds])];
+    setHighlightedNewSubscriptionIds(unreadIds);
+    writeNewSubscriptionAlertIds(nextReadIds);
+    setNewSubscriptionAlertReadIds(nextReadIds);
+    setShowSubscriptionDetails(true);
+  };
+
+  const closeSubscriptionDetails = () => {
+    setShowSubscriptionDetails(false);
+    setHighlightedNewSubscriptionIds([]);
+  };
 
   const attendedGroups = groupColumns.filter((group) => group.markedCount > 0);
   const presentGroups = attendedGroups.filter((group) => group.presentCount > 0);
@@ -205,6 +255,14 @@ const OwnerDashboard = () => {
             </div>
             <div className="owner-panel-tools">
               <strong>{newSubscriptionSummary.count} this month</strong>
+              <button
+                type="button"
+                className={`expired-alert-button owner-new-subscription-alert${unreadNewSubscriptionCount ? '' : ' is-read'}`}
+                onClick={openSubscriptionDetails}
+              >
+                <span>New Subscription Alert</span>
+                {unreadNewSubscriptionCount > 0 && <strong>{unreadNewSubscriptionCount}</strong>}
+              </button>
               <select value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}>
                 {monthOptions.map((month) => <option key={month} value={month}>{month}</option>)}
               </select>
@@ -212,7 +270,7 @@ const OwnerDashboard = () => {
           </div>
 
           <div className="new-subscription-dashboard owner-new-subscription-dashboard">
-            <button className="new-subscription-hero-card owner-subscription-main-card" type="button" onClick={() => setShowSubscriptionDetails(true)}>
+            <button className="new-subscription-hero-card owner-subscription-main-card" type="button" onClick={openSubscriptionDetails}>
               <div>
                 <span>Expected to collect</span>
                 <strong>{formatMoney(newSubscriptionSummary.expectedAmount)}</strong>
@@ -230,7 +288,7 @@ const OwnerDashboard = () => {
             </button>
 
             <div className="new-subscription-side-grid">
-              <button className="new-subscription-summary-card" type="button" onClick={() => setShowSubscriptionDetails(true)}>
+              <button className="new-subscription-summary-card" type="button" onClick={openSubscriptionDetails}>
                 <span>New subscriptions</span>
                 <strong>{newSubscriptionSummary.count}</strong>
               </button>
@@ -247,7 +305,7 @@ const OwnerDashboard = () => {
 
           <div className="owner-subscription-footer">
             <span>Click the cards to view the new subscription details.</span>
-            <button type="button" className="btn-primary" onClick={() => setShowSubscriptionDetails(true)}>View Details</button>
+            <button type="button" className="btn-primary" onClick={openSubscriptionDetails}>View Details</button>
           </div>
         </div>
 
@@ -318,14 +376,14 @@ const OwnerDashboard = () => {
       </section>
 
       {showSubscriptionDetails && (
-        <div className="student-modal-backdrop" role="presentation" onClick={() => setShowSubscriptionDetails(false)}>
+        <div className="student-modal-backdrop" role="presentation" onClick={closeSubscriptionDetails}>
           <section className="student-modal owner-subscription-modal" role="dialog" aria-modal="true" aria-label="New subscription details" onClick={(event) => event.stopPropagation()}>
             <div className="student-modal-header">
               <div>
                 <h2>New subscription details</h2>
                 <p>{selectedMonth}: {newSubscriptionSummary.count} records / expected {formatMoney(newSubscriptionSummary.expectedAmount)}</p>
               </div>
-              <button type="button" className="btn-secondary" onClick={() => setShowSubscriptionDetails(false)}>Close</button>
+              <button type="button" className="btn-secondary" onClick={closeSubscriptionDetails}>Close</button>
             </div>
             <div className="owner-subscription-detail-summary">
               <span>Collected <strong>{formatMoney(newSubscriptionSummary.paidAmount)}</strong></span>
@@ -347,9 +405,11 @@ const OwnerDashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {newSubscriptionRows.length ? newSubscriptionRows.map((row) => (
-                    <tr key={row.player._id}>
-                      <td>{row.player.fullName}</td>
+                  {newSubscriptionRows.length ? newSubscriptionRows.map((row) => {
+                    const isNewAlert = highlightedNewSubscriptionIds.includes(getNewSubscriptionAlertKey(row));
+                    return (
+                      <tr className={isNewAlert ? 'owner-new-subscription-row is-new-alert' : 'owner-new-subscription-row'} key={row.player._id}>
+                        <td><span>{row.player.fullName}</span></td>
                       <td>{getParentName(row.player)}</td>
                       <td>{getParentPhone(row.player)}</td>
                       <td>{row.subscriptionStart ? row.subscriptionStart.split('T')[0] : '-'}</td>
@@ -358,8 +418,9 @@ const OwnerDashboard = () => {
                       <td>{formatMoney(row.expectedAmount)}</td>
                       <td>{formatMoney(row.paidAmount)}</td>
                       <td>{formatMoney(row.remainingAmount)}</td>
-                    </tr>
-                  )) : (
+                      </tr>
+                    );
+                  }) : (
                     <tr><td colSpan="9">No new subscriptions in this month.</td></tr>
                   )}
                 </tbody>

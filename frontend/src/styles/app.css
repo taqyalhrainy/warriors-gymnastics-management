@@ -2604,6 +2604,22 @@ body.attendance-touch-dragging {
   padding: 6px 12px;
 }
 
+.owner-new-subscription-alert {
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+}
+
+.owner-new-subscription-alert.is-read {
+  animation: none;
+  filter: none;
+  background: linear-gradient(135deg, #171717 0%, #2a2a2a 58%, #3b1114 100%);
+  border-color: color-mix(in srgb, var(--primary) 34%, var(--border));
+  box-shadow: none;
+}
+
 .owner-new-subscription-dashboard {
   padding: 18px 0 12px;
 }
@@ -2670,6 +2686,28 @@ body.attendance-touch-dragging {
 .owner-subscription-table th,
 .owner-subscription-table td {
   white-space: nowrap;
+}
+
+.owner-new-subscription-row.is-new-alert td:first-child span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 8px;
+  padding: 5px 10px;
+  background: #fef08a;
+  color: #991b1b;
+  font-weight: 950;
+  animation: new-expired-player-glow 1.05s ease-in-out infinite;
+}
+
+.owner-new-subscription-row.is-new-alert td:first-child span::after {
+  content: 'NEW';
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 0.58rem;
+  font-weight: 950;
 }
 
 body.rtl .owner-subscription-main-card,
