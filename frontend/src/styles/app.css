@@ -2359,6 +2359,40 @@ body.attendance-touch-dragging {
   font-size: 1.28rem;
 }
 
+.new-subscription-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.new-subscription-summary-card {
+  min-height: 118px;
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-top: 4px solid #ffffff;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.12), transparent 42%),
+    linear-gradient(145deg, #ed1c24 0%, #c8101a 48%, #7f0d13 100%);
+  color: #ffffff;
+  box-shadow: 0 18px 38px rgba(200, 16, 26, 0.22);
+}
+
+.new-subscription-summary-card span {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.new-subscription-summary-card strong {
+  font-size: clamp(1.9rem, 4vw, 2.75rem);
+  line-height: 1;
+  letter-spacing: 0;
+}
+
 .payment-entry-panel,
 .payment-database-card {
   border: 1px solid #2c2c2c;
