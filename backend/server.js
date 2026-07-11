@@ -6,29 +6,7 @@ const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const connectDB = require('./config/db');
-const authRoutes = require('./routes/auth');
-const playerRoutes = require('./routes/players');
-const groupRoutes = require('./routes/groups');
-const attendanceRoutes = require('./routes/attendance');
-const subscriptionRoutes = require('./routes/subscriptions');
-const paymentRoutes = require('./routes/payments');
-const notificationRoutes = require('./routes/notifications');
-const reportRoutes = require('./routes/reports');
-const auditRoutes = require('./routes/auditLogs');
-const historyRoutes = require('./routes/history');
-const parentRoutes = require('./routes/parents');
-const programRoutes = require('./routes/programs');
-const coachRoutes = require('./routes/coaches');
-const packageOptionRoutes = require('./routes/packageOptions');
-const waitingListRoutes = require('./routes/waitingList');
 const errorHandler = require('./middleware/errorHandler');
-const User = require('./models/User');
-const Program = require('./models/Program');
-const TrainingGroup = require('./models/TrainingGroup');
-const Attendance = require('./models/Attendance');
-const { ensureHistoryBaselines } = require('./utils/history');
-const { cleanupOldAttendanceData } = require('./utils/retention');
-const bcrypt = require('bcryptjs');
 
 const normalizeGroupName = (value) => String(value || '')
   .replace(/&amp;amp;#x2F;/g, '/')
@@ -40,6 +18,16 @@ const normalizeGroupName = (value) => String(value || '')
 
 const app = express();
 let isDatabaseReady = false;
+
+const lazyRouter = (loader) => {
+  let router = null;
+  return (req, res, next) => {
+    if (!router) {
+      router = loader();
+    }
+    return router(req, res, next);
+  };
+};
 
 const allowedOrigins = [
   'http://localhost:5173',
@@ -95,21 +83,21 @@ const authLimiter = rateLimit({
   message: { message: 'Too many requests from this IP, please try again later.' }
 });
 
-app.use('/api/auth', authLimiter, authRoutes);
-app.use('/api/players', playerRoutes);
-app.use('/api/groups', groupRoutes);
-app.use('/api/parents', parentRoutes);
-app.use('/api/programs', programRoutes);
-app.use('/api/coaches', coachRoutes);
-app.use('/api/package-options', packageOptionRoutes);
-app.use('/api/waiting-list', waitingListRoutes);
-app.use('/api/attendance', attendanceRoutes);
-app.use('/api/subscriptions', subscriptionRoutes);
-app.use('/api/payments', paymentRoutes);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/reports', reportRoutes);
-app.use('/api/history', historyRoutes);
-app.use('/api/audit-logs', auditRoutes);
+app.use('/api/auth', authLimiter, lazyRouter(() => require('./routes/auth')));
+app.use('/api/players', lazyRouter(() => require('./routes/players')));
+app.use('/api/groups', lazyRouter(() => require('./routes/groups')));
+app.use('/api/parents', lazyRouter(() => require('./routes/parents')));
+app.use('/api/programs', lazyRouter(() => require('./routes/programs')));
+app.use('/api/coaches', lazyRouter(() => require('./routes/coaches')));
+app.use('/api/package-options', lazyRouter(() => require('./routes/packageOptions')));
+app.use('/api/waiting-list', lazyRouter(() => require('./routes/waitingList')));
+app.use('/api/attendance', lazyRouter(() => require('./routes/attendance')));
+app.use('/api/subscriptions', lazyRouter(() => require('./routes/subscriptions')));
+app.use('/api/payments', lazyRouter(() => require('./routes/payments')));
+app.use('/api/notifications', lazyRouter(() => require('./routes/notifications')));
+app.use('/api/reports', lazyRouter(() => require('./routes/reports')));
+app.use('/api/history', lazyRouter(() => require('./routes/history')));
+app.use('/api/audit-logs', lazyRouter(() => require('./routes/auditLogs')));
 
 app.get('/api/health', (req, res) => {
   res.status(isDatabaseReady ? 200 : 503).json({
@@ -126,6 +114,11 @@ app.use((req, res, next) => {
 app.use(errorHandler);
 
 const initializeDefaultData = async () => {
+  const bcrypt = require('bcryptjs');
+  const User = require('./models/User');
+  const Program = require('./models/Program');
+  const TrainingGroup = require('./models/TrainingGroup');
+
   const existingAdmin = await User.findOne({ email: 'admin@warriorsgym.com' });
   if (!existingAdmin) {
     const passwordHash = await bcrypt.hash('Admin@12345', 12);
@@ -169,6 +162,10 @@ const initializeDefaultData = async () => {
 };
 
 const runStartupMaintenance = async () => {
+  const Attendance = require('./models/Attendance');
+  const { ensureHistoryBaselines } = require('./utils/history');
+  const { cleanupOldAttendanceData } = require('./utils/retention');
+
   await Promise.all([
     Attendance.syncIndexes(),
     initializeDefaultData(),

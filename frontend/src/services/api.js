@@ -18,6 +18,7 @@ const api = axios.create({
 });
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const healthURL = `${baseURL}/health`;
 
 const shouldRetryRequest = (error) => {
   const method = error.config?.method?.toLowerCase();
@@ -47,7 +48,7 @@ api.interceptors.response.use(
       window.dispatchEvent(new Event('auth:invalid'));
     }
 
-    if (!shouldRetryRequest(error)) {
+    if (config.__skipRetry || !shouldRetryRequest(error)) {
       return Promise.reject(error);
     }
 
@@ -67,18 +68,52 @@ api.interceptors.response.use(
 );
 
 export const waitForApiHealth = async (options = {}) => {
-  const timeout = options.timeout ?? 10000;
-  const maxRetries = options.maxRetries ?? 30;
-  const response = await api.get('/health', {
-    timeout,
-    __maxRetries: maxRetries
-  });
-  return response.data;
+  const timeout = options.timeout ?? 4000;
+  const maxWaitMs = options.maxWaitMs ?? 180000;
+  const pollIntervalMs = options.pollIntervalMs ?? 500;
+  const startedAt = Date.now();
+  let lastError = null;
+
+  while (Date.now() - startedAt < maxWaitMs) {
+    try {
+      const response = await api.get('/health', {
+        timeout,
+        validateStatus: () => true,
+        __skipRetry: true
+      });
+
+      if (response.status === 200 && response.data?.status === 'ok') {
+        return response.data;
+      }
+
+      lastError = new Error(response.data?.message || `Health check returned ${response.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+
+    await sleep(pollIntervalMs);
+  }
+
+  throw lastError || new Error('Server health check timed out.');
+};
+
+export const wakeApi = () => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.fetch(healthURL, {
+    cache: 'no-store',
+    credentials: 'omit',
+    mode: 'cors'
+  }).catch(() => {});
 };
 
 const token = localStorage.getItem('warriors-token');
 if (token) {
   api.defaults.headers.common.Authorization = `Bearer ${token}`;
 }
+
+wakeApi();
 
 export default api;

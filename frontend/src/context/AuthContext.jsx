@@ -48,7 +48,7 @@ export const AuthProvider = ({ children }) => {
 
     const prepareApp = async () => {
       if (verifiedServerToken !== token) {
-        await waitForApiHealth({ timeout: 10000, maxRetries: 30 });
+        await waitForApiHealth({ timeout: 4000, maxWaitMs: 180000, pollIntervalMs: 500 });
         verifiedServerToken = token;
       }
 
