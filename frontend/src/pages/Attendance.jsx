@@ -1088,7 +1088,7 @@ const AttendancePage = () => {
       });
 
       const [refreshedPlayer, attendanceRecords] = await Promise.all([
-        getPlayer(selectedPlayer._id),
+        getPlayer(selectedPlayer._id, { force: true }),
         fetchAttendanceByPlayer(selectedPlayer._id)
       ]);
 
@@ -1113,7 +1113,7 @@ const AttendancePage = () => {
     try {
       setMessage('');
       await updatePlayer(selectedPlayer._id, { subscriptionNeedsAttention: false });
-      const refreshedPlayer = await getPlayer(selectedPlayer._id);
+      const refreshedPlayer = await getPlayer(selectedPlayer._id, { force: true });
       setSelectedPlayer(refreshedPlayer);
       setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
       setMessage('Subscription warning cleared');
@@ -1131,7 +1131,7 @@ const AttendancePage = () => {
     try {
       setMessage('');
       await updatePlayer(selectedPlayer._id, { subscriptionNeedsAttention: true });
-      const refreshedPlayer = await getPlayer(selectedPlayer._id);
+      const refreshedPlayer = await getPlayer(selectedPlayer._id, { force: true });
       setSelectedPlayer(refreshedPlayer);
       setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
       setMessage('Subscription warning enabled');
@@ -1175,7 +1175,7 @@ const AttendancePage = () => {
       });
 
       const [refreshedPlayer, attendanceRecords] = await Promise.all([
-        getPlayer(selectedPlayer._id),
+        getPlayer(selectedPlayer._id, { force: true }),
         fetchAttendanceByPlayer(selectedPlayer._id)
       ]);
 
@@ -1217,7 +1217,7 @@ const AttendancePage = () => {
       });
 
       const [refreshedPlayer, attendanceRecords] = await Promise.all([
-        getPlayer(selectedPlayer._id),
+        getPlayer(selectedPlayer._id, { force: true }),
         fetchAttendanceByPlayer(selectedPlayer._id)
       ]);
 
@@ -1260,7 +1260,7 @@ const AttendancePage = () => {
       });
 
       const [refreshedPlayer, attendanceRecords] = await Promise.all([
-        getPlayer(selectedPlayer._id),
+        getPlayer(selectedPlayer._id, { force: true }),
         fetchAttendanceByPlayer(selectedPlayer._id)
       ]);
 
@@ -1306,7 +1306,7 @@ const AttendancePage = () => {
       });
 
       const [refreshedPlayer, attendanceRecords] = await Promise.all([
-        getPlayer(selectedPlayer._id),
+        getPlayer(selectedPlayer._id, { force: true }),
         fetchAttendanceByPlayer(selectedPlayer._id)
       ]);
 
@@ -1340,7 +1340,7 @@ const AttendancePage = () => {
         payment: parseLocalizedNumber(selectedPlayerForm.payment)
       });
 
-      const refreshedPlayer = await getPlayer(selectedPlayer._id);
+      const refreshedPlayer = await getPlayer(selectedPlayer._id, { force: true });
 
       setSelectedPlayer(refreshedPlayer);
       setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));

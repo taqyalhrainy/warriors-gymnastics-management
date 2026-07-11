@@ -119,9 +119,9 @@ export const deletePlayer = async (id) => {
   return response.data;
 };
 
-export const getPlayer = async (id) => {
+export const getPlayer = async (id, options = {}) => {
   return fetchCached(`players:item:${id}`, async () => {
     const response = await api.get(`/players/${id}`);
     return response.data;
-  });
+  }, options);
 };

@@ -1617,6 +1617,8 @@ button[type="submit"],
   overflow-x: auto;
   padding-bottom: 12px;
   -webkit-overflow-scrolling: touch;
+  contain: layout paint;
+  scrollbar-gutter: stable;
 }
 
 .attendance-group {
@@ -1629,6 +1631,9 @@ button[type="submit"],
   box-shadow: 0 12px 28px var(--shadow);
   overflow: hidden;
   transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+  contain: layout paint style;
+  content-visibility: auto;
+  contain-intrinsic-size: 255px 720px;
 }
 
 .attendance-group.is-dragging {
@@ -1705,6 +1710,7 @@ body.attendance-touch-dragging {
   max-height: 68vh;
   overflow-y: auto;
   padding: 10px;
+  contain: content;
 }
 
 .attendance-player-card {
@@ -1724,6 +1730,7 @@ body.attendance-touch-dragging {
   box-shadow:
     inset 4px 0 0 color-mix(in srgb, var(--group-color) 70%, transparent),
     0 8px 18px color-mix(in srgb, var(--group-color) 9%, transparent);
+  contain: layout paint;
 }
 
 .attendance-player-main {
@@ -1787,7 +1794,6 @@ body.attendance-touch-dragging {
     linear-gradient(118deg, transparent 46%, rgba(14, 165, 233, 0.25) 48% 49%, transparent 51%) 88% 72% / 58px 70px no-repeat,
     linear-gradient(105deg, transparent 0 42%, rgba(255, 255, 255, 0.62) 48%, transparent 54%) -70px 0 / 70px 100%;
   pointer-events: none;
-  animation: frozen-glint 3.4s ease-in-out infinite;
 }
 
 .attendance-player-card.is-frozen::after {
@@ -1800,7 +1806,6 @@ body.attendance-touch-dragging {
   font-size: 1.28rem;
   letter-spacing: 5px;
   pointer-events: none;
-  animation: frozen-sparkle 2.8s ease-in-out infinite;
 }
 
 .attendance-player-card.is-frozen > * {
@@ -1820,7 +1825,6 @@ body.attendance-touch-dragging {
     inset 8px 0 18px rgba(254, 202, 202, 0.6),
     0 0 0 3px rgba(248, 113, 113, 0.2),
     0 10px 25px rgba(185, 28, 28, 0.28);
-  animation: expired-card-pulse 2.6s ease-in-out infinite;
 }
 
 .attendance-player-card.is-expired::before {
@@ -1842,7 +1846,6 @@ body.attendance-touch-dragging {
   font-size: 3rem;
   font-weight: 1000;
   pointer-events: none;
-  animation: expired-warning-blink 1.15s ease-in-out infinite;
 }
 
 .attendance-player-card.is-expired > * {
