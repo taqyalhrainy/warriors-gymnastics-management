@@ -238,6 +238,9 @@ const AttendancePage = () => {
   const pendingAttendanceKeysRef = useRef(new Set());
   const pendingAttendanceHistoryIdRef = useRef(null);
   const didRunInitialAttendanceLoadRef = useRef(false);
+  const selectedPlayerFormDirtyRef = useRef(false);
+  const selectedPlayerLoadRequestIdRef = useRef(0);
+  const selectedPlayerEditRequestIdRef = useRef(0);
   const { t } = useLanguage();
   const todayDateValue = getLocalDateValue();
   const attendanceRangeStartValue = getAttendanceRangeStartValue();
@@ -943,6 +946,9 @@ const AttendancePage = () => {
   };
 
   const handleSelectPlayer = async (player) => {
+    const requestId = ++selectedPlayerLoadRequestIdRef.current;
+    selectedPlayerFormDirtyRef.current = false;
+    selectedPlayerEditRequestIdRef.current += 1;
     try {
       setMessage('');
       setSelectedPlayer(player);
@@ -957,8 +963,14 @@ const AttendancePage = () => {
         fetchAttendanceByPlayer(player._id)
       ]);
 
+      if (requestId !== selectedPlayerLoadRequestIdRef.current) {
+        return;
+      }
+
       setSelectedPlayer(latestPlayer);
-      setSelectedPlayerForm(createSelectedPlayerForm(latestPlayer));
+      if (!selectedPlayerFormDirtyRef.current) {
+        setSelectedPlayerForm(createSelectedPlayerForm(latestPlayer));
+      }
       setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
     } catch (err) {
       setMessage(err.response?.data?.message || 'Unable to load student card');
@@ -985,6 +997,10 @@ const AttendancePage = () => {
       return;
     }
 
+    const requestId = ++selectedPlayerEditRequestIdRef.current;
+    const editingPlayerId = selectedPlayer._id;
+    selectedPlayerFormDirtyRef.current = false;
+
     try {
       setMessage('');
       setIsEditingSelectedPlayer(true);
@@ -997,12 +1013,21 @@ const AttendancePage = () => {
         getPlayer(selectedPlayer._id)
       ]);
 
+      if (requestId !== selectedPlayerEditRequestIdRef.current || editingPlayerId !== selectedPlayer?._id) {
+        return;
+      }
+
       setEditParents(parentsData);
       setEditGroups(groupsData);
       setPackageOptions(packageData);
       setSelectedPlayer(latestPlayer);
-      setSelectedPlayerForm(createSelectedPlayerForm(latestPlayer));
+      if (!selectedPlayerFormDirtyRef.current) {
+        setSelectedPlayerForm(createSelectedPlayerForm(latestPlayer));
+      }
     } catch (err) {
+      if (requestId !== selectedPlayerEditRequestIdRef.current) {
+        return;
+      }
       setIsEditingSelectedPlayer(false);
       setSelectedPlayerForm(null);
       setMessage(err.response?.data?.message || 'Unable to open player editor');
@@ -1011,6 +1036,7 @@ const AttendancePage = () => {
 
   const handleSelectedPlayerFormChange = (event) => {
     const { name, value } = event.target;
+    selectedPlayerFormDirtyRef.current = true;
 
     if (name === 'parentId') {
       const selectedParent = editParents.find((parent) => parent._id === value);
@@ -1042,6 +1068,7 @@ const AttendancePage = () => {
   };
 
   const handleSelectedPlayerGroupToggle = (groupId) => {
+    selectedPlayerFormDirtyRef.current = true;
     setSelectedPlayerForm((current) => {
       const nextGroupIds = current.groupIds.includes(groupId)
         ? current.groupIds.filter((id) => id !== groupId)
@@ -1055,6 +1082,8 @@ const AttendancePage = () => {
   };
 
   const handleCancelSelectedPlayerEdit = () => {
+    selectedPlayerFormDirtyRef.current = false;
+    selectedPlayerEditRequestIdRef.current += 1;
     setIsEditingSelectedPlayer(false);
     setSelectedPlayerForm(selectedPlayer ? createSelectedPlayerForm(selectedPlayer) : null);
     setShowUnsavedExitConfirm(false);
@@ -1090,6 +1119,8 @@ const AttendancePage = () => {
     }
 
     setShowUnsavedExitConfirm(false);
+    selectedPlayerFormDirtyRef.current = false;
+    selectedPlayerEditRequestIdRef.current += 1;
     setIsEditingSelectedPlayer(false);
     setSelectedPlayerForm(null);
     setSelectedPlayer(null);
@@ -1382,6 +1413,7 @@ const AttendancePage = () => {
 
       setSelectedPlayer(refreshedPlayer);
       setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
+      selectedPlayerFormDirtyRef.current = false;
       setIsEditingSelectedPlayer(false);
       setMessage('Player updated successfully');
       await loadAttendanceBoard({ force: true, date: selectedAttendanceDate });
