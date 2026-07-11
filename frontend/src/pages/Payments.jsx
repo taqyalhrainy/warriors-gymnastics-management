@@ -317,6 +317,9 @@ const PaymentsPage = () => {
       remainingAmount: 0
     });
   }, [newSubscriptionRows]);
+  const newSubscriptionCollectionRate = newSubscriptionSummary.expectedAmount
+    ? Math.min(100, Math.round((newSubscriptionSummary.paidAmount / newSubscriptionSummary.expectedAmount) * 100))
+    : 0;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -603,22 +606,37 @@ const PaymentsPage = () => {
             )}
 
             {activeView === 'newSubscriptions' && (
-              <div className="new-subscription-summary-grid">
-                <div className="new-subscription-summary-card">
-                  <span>New subscriptions this month</span>
-                  <strong>{newSubscriptionSummary.count}</strong>
+              <div className="new-subscription-dashboard">
+                <div className="new-subscription-hero-card">
+                  <div>
+                    <span>Expected to collect</span>
+                    <strong>{formatMoney(newSubscriptionSummary.expectedAmount)}</strong>
+                    <small>{selectedMonth} subscription pipeline</small>
+                  </div>
+                  <div className="new-subscription-progress">
+                    <div>
+                      <span>Collected</span>
+                      <strong>{newSubscriptionCollectionRate}%</strong>
+                    </div>
+                    <i>
+                      <b style={{ width: `${newSubscriptionCollectionRate}%` }} />
+                    </i>
+                  </div>
                 </div>
-                <div className="new-subscription-summary-card">
-                  <span>Expected to collect</span>
-                  <strong>{formatMoney(newSubscriptionSummary.expectedAmount)}</strong>
-                </div>
-                <div className="new-subscription-summary-card">
-                  <span>Collected</span>
-                  <strong>{formatMoney(newSubscriptionSummary.paidAmount)}</strong>
-                </div>
-                <div className="new-subscription-summary-card">
-                  <span>Remaining</span>
-                  <strong>{formatMoney(newSubscriptionSummary.remainingAmount)}</strong>
+
+                <div className="new-subscription-side-grid">
+                  <div className="new-subscription-summary-card">
+                    <span>New subscriptions</span>
+                    <strong>{newSubscriptionSummary.count}</strong>
+                  </div>
+                  <div className="new-subscription-summary-card is-collected">
+                    <span>Collected</span>
+                    <strong>{formatMoney(newSubscriptionSummary.paidAmount)}</strong>
+                  </div>
+                  <div className="new-subscription-summary-card is-remaining">
+                    <span>Remaining</span>
+                    <strong>{formatMoney(newSubscriptionSummary.remainingAmount)}</strong>
+                  </div>
                 </div>
               </div>
             )}
