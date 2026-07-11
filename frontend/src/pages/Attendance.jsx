@@ -370,16 +370,12 @@ const AttendancePage = () => {
     const startedCacheVersion = getCacheVersion();
 
     const currentCacheVersion = startedCacheVersion;
-    const hasCachedBoardForDate = attendanceBoardCache && attendanceBoardCacheDate === date && (Date.now() - attendanceBoardCacheTimestamp) < ATTENDANCE_BOARD_CACHE_TTL_MS;
-    if (!force && attendanceBoardCache && attendanceBoardCacheDate === date && attendanceBoardCacheVersion === currentCacheVersion && (Date.now() - attendanceBoardCacheTimestamp) < ATTENDANCE_BOARD_CACHE_TTL_MS) {
+    const hasCachedBoardForDate = attendanceBoardCache && attendanceBoardCacheDate === date && attendanceBoardCacheVersion === currentCacheVersion && (Date.now() - attendanceBoardCacheTimestamp) < ATTENDANCE_BOARD_CACHE_TTL_MS;
+    if (!force && hasCachedBoardForDate) {
+      groupColumnsRef.current = attendanceBoardCache;
       setGroupColumns(attendanceBoardCache);
       setIsLoading(false);
       return attendanceBoardCache;
-    }
-
-    if (!force && hasCachedBoardForDate) {
-      setGroupColumns(attendanceBoardCache);
-      setIsLoading(false);
     }
 
     try {
@@ -387,8 +383,8 @@ const AttendancePage = () => {
         setIsLoading(true);
       }
       const [groups, todayRecords] = await Promise.all([
-        fetchGroups(),
-        fetchTodayAttendance({ date })
+        fetchGroups({ force }),
+        fetchTodayAttendance({ date }, { force })
       ]);
       const playerSnapshotResult = viewingToday
         ? null
@@ -398,7 +394,7 @@ const AttendancePage = () => {
         });
       const currentGroupsWithPlayers = await Promise.all(
         groups.map(async (group) => {
-          const players = (await fetchGroupPlayers(group._id))
+          const players = (await fetchGroupPlayers(group._id, { force }))
             .filter((player) => isPlayerVisibleInAttendance(player, date));
 
           return {
@@ -420,6 +416,7 @@ const AttendancePage = () => {
       attendanceBoardCacheTimestamp = Date.now();
       attendanceBoardCacheDate = date;
       attendanceBoardCacheVersion = getCacheVersion();
+      groupColumnsRef.current = groupsWithTodayAttendance;
       setGroupColumns(groupsWithTodayAttendance);
       setMessage(`${date === todayDateValue ? 'Today' : new Date(`${date}T00:00:00`).toLocaleDateString()} attendance loaded`);
       return groupsWithTodayAttendance;
@@ -803,6 +800,7 @@ const AttendancePage = () => {
       attendanceBoardCacheTimestamp = Date.now();
       attendanceBoardCacheDate = selectedAttendanceDate;
       attendanceBoardCacheVersion = getCacheVersion();
+      groupColumnsRef.current = nextGroups;
       return nextGroups;
     });
   };
@@ -829,6 +827,7 @@ const AttendancePage = () => {
 
   const restoreBoard = (groups) => {
     setGroupColumns(groups);
+    groupColumnsRef.current = groups;
     attendanceBoardCache = groups;
     attendanceBoardCacheTimestamp = Date.now();
     attendanceBoardCacheDate = selectedAttendanceDate;
