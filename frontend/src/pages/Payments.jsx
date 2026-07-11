@@ -114,7 +114,7 @@ const PaymentsPage = () => {
   const [editingPaymentId, setEditingPaymentId] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeView, setActiveView] = useState('all');
+  const [activeView, setActiveView] = useState('month');
   const [selectedMonth, setSelectedMonth] = useState(getPaymentMonthKey(new Date()));
   const [selectedDay, setSelectedDay] = useState(getDateInputValue());
   const [searchQuery, setSearchQuery] = useState('');
@@ -273,47 +273,6 @@ const PaymentsPage = () => {
     });
   }, [visiblePayments, searchQuery]);
 
-  const memberSummaries = useMemo(() => {
-    const map = new Map();
-    searchedPayments.forEach((payment) => {
-      const memberName = getMemberName(payment);
-      const current = map.get(memberName) || { memberName, count: 0, paid: 0, remaining: 0, lastDate: payment.paymentDate };
-      current.count += 1;
-      current.paid += Number(payment.paidAmount || 0);
-      current.remaining += Number(payment.remainingAmount || 0);
-      if (new Date(payment.paymentDate) > new Date(current.lastDate || 0)) current.lastDate = payment.paymentDate;
-      map.set(memberName, current);
-    });
-    return [...map.values()].sort((a, b) => b.paid - a.paid);
-  }, [searchedPayments]);
-
-  const calendarGroups = useMemo(() => {
-    const map = new Map();
-    searchedPayments.forEach((payment) => {
-      const key = payment.paymentDate ? new Date(payment.paymentDate).toDateString() : 'No date';
-      const current = map.get(key) || { key, date: payment.paymentDate, count: 0, paid: 0 };
-      current.count += 1;
-      current.paid += Number(payment.paidAmount || 0);
-      map.set(key, current);
-    });
-    return [...map.values()].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
-  }, [searchedPayments]);
-
-  const statusSummary = useMemo(() => {
-    return [
-      {
-        label: 'Full payment',
-        count: searchedPayments.filter((payment) => Number(payment.remainingAmount || 0) <= 0).length,
-        amount: searchedPayments.filter((payment) => Number(payment.remainingAmount || 0) <= 0).reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0)
-      },
-      {
-        label: 'Partial payment',
-        count: searchedPayments.filter((payment) => Number(payment.remainingAmount || 0) > 0).length,
-        amount: searchedPayments.filter((payment) => Number(payment.remainingAmount || 0) > 0).reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0)
-      }
-    ];
-  }, [searchedPayments]);
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -410,10 +369,6 @@ const PaymentsPage = () => {
   };
 
   const viewTabs = [
-    { id: 'all', label: 'All Payments' },
-    { id: 'member', label: 'Member Payment History' },
-    { id: 'calendar', label: 'Payment Calendar' },
-    { id: 'status', label: 'Payment Status' },
     { id: 'month', label: 'By Month' },
     { id: 'day', label: 'By Day' },
     { id: 'thisMonth', label: 'This Month' }
@@ -585,47 +540,6 @@ const PaymentsPage = () => {
               </div>
               <strong>{t('paymentHistory')}</strong>
             </div>
-
-            {activeView === 'member' && (
-              <div className="payment-view-panel payment-member-summary-grid">
-                {memberSummaries.length ? memberSummaries.map((member) => (
-                  <button
-                    type="button"
-                    key={member.memberName}
-                    onClick={() => setActiveView('all')}
-                    className="payment-summary-tile"
-                  >
-                    <span>{member.memberName}</span>
-                    <strong>{formatMoney(member.paid)}</strong>
-                    <small>{member.count} payments / Last {formatDate(member.lastDate)}</small>
-                  </button>
-                )) : <p className="payment-empty-row">{t('noPaymentsRecorded')}</p>}
-              </div>
-            )}
-
-            {activeView === 'calendar' && (
-              <div className="payment-view-panel payment-calendar-grid">
-                {calendarGroups.length ? calendarGroups.map((day) => (
-                  <div className="payment-calendar-day" key={day.key}>
-                    <span>{formatDate(day.date)}</span>
-                    <strong>{formatMoney(day.paid)}</strong>
-                    <small>{day.count} payments</small>
-                  </div>
-                )) : <p className="payment-empty-row">{t('noPaymentsRecorded')}</p>}
-              </div>
-            )}
-
-            {activeView === 'status' && (
-              <div className="payment-view-panel payment-status-grid">
-                {statusSummary.map((status) => (
-                  <div className="payment-status-card" key={status.label}>
-                    <span>{status.label}</span>
-                    <strong>{status.count}</strong>
-                    <small>{formatMoney(status.amount)} total</small>
-                  </div>
-                ))}
-              </div>
-            )}
 
             {(activeView === 'month' || activeView === 'day' || activeView === 'thisMonth') && (
               <div className="payment-view-panel payment-month-banner">
