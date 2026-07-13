@@ -1676,11 +1676,14 @@ const AttendancePage = () => {
                     const isFrozen = isPlayerFrozen(player);
                     const isExpired = isPlayerSubscriptionExpired(player);
                     const packageCounter = getPlayerPackageCounter(player);
+                    const adminStatusLabel = isExpired
+                      ? (player.subscriptionNeedsAttention ? 'Review' : 'Expired')
+                      : (isFrozen ? t('frozenStatus') : (player.status && player.status !== 'active' ? player.status : ''));
                     return (
                       <article className={`attendance-player-card${isFrozen ? ' is-frozen' : ''}${isExpired ? ' is-expired' : ''}`} key={player._id}>
                         <button type="button" className="attendance-player-main" onClick={() => handleSelectPlayer(player)}>
                           <strong>{player.fullName}</strong>
-                          <span>{player.parentId?.name || t('noParent')} | {player.status}</span>
+                          <span>{player.parentId?.name || t('noParent')}</span>
                           <em className="attendance-package-counter">
                             {packageCounter.total > 0 ? `${packageCounter.used}/${packageCounter.total}` : packageCounter.used}
                           </em>
@@ -1689,6 +1692,9 @@ const AttendancePage = () => {
                           )}
                           {isFrozen && (
                             <em className="attendance-frozen-badge">❄ {t('frozenStatus')}</em>
+                          )}
+                          {!isExpired && !isFrozen && adminStatusLabel && (
+                            <em className="attendance-admin-status-badge">{adminStatusLabel}</em>
                           )}
                           {player.todayAttendance && (
                             <em className={`attendance-status-pill attendance-status-pill-${player.todayAttendance.status}`}>
