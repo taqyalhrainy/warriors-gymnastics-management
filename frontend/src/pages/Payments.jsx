@@ -120,7 +120,7 @@ const PaymentsPage = () => {
   const [editingPaymentId, setEditingPaymentId] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeView, setActiveView] = useState('thisDay');
+  const [activeView, setActiveView] = useState('day');
   const [selectedMonth, setSelectedMonth] = useState(getPaymentMonthKey(new Date()));
   const [selectedDay, setSelectedDay] = useState(getDateInputValue());
   const [searchQuery, setSearchQuery] = useState('');
@@ -132,7 +132,7 @@ const PaymentsPage = () => {
       const forceAll = Boolean(options.forceAll);
       const params = isPaymentUnlocked || forceAll
         ? { fresh: Date.now() }
-        : { day: getDateInputValue(), fresh: Date.now() };
+        : { day: selectedDay || getDateInputValue(), fresh: Date.now() };
       setPayments(sortPaymentsNewestFirst(await fetchPayments(params)));
     } catch (err) {
       console.error(err);
@@ -151,6 +151,11 @@ const PaymentsPage = () => {
   useEffect(() => {
     loadPayments({ forceAll: isPaymentUnlocked });
   }, [isPaymentUnlocked]);
+
+  useEffect(() => {
+    if (isPaymentUnlocked || activeView !== 'day') return;
+    loadPayments();
+  }, [selectedDay, activeView, isPaymentUnlocked]);
 
   const handlePaymentUnlock = async (event) => {
     event.preventDefault();
@@ -174,7 +179,7 @@ const PaymentsPage = () => {
   };
 
   const handlePaymentViewClick = (viewId) => {
-    if (viewId !== 'thisDay' && !isPaymentUnlocked) {
+    if (viewId !== 'day' && !isPaymentUnlocked) {
       setPendingPaymentView(viewId);
       setShowPaymentUnlock(true);
       setError('');
@@ -263,12 +268,6 @@ const PaymentsPage = () => {
     return months.sort().reverse();
   }, [payments, selectedMonth]);
 
-  const dayOptions = useMemo(() => {
-    const days = [...new Set(payments.map((payment) => getPaymentDayKey(payment.paymentDate)).filter((key) => key !== 'undated'))];
-    if (!days.includes(selectedDay)) days.push(selectedDay);
-    return days.sort().reverse();
-  }, [payments, selectedDay]);
-
   const filteredPlayers = useMemo(() => {
     const query = playerSearch.trim().toLowerCase();
     if (!query) return players;
@@ -281,9 +280,6 @@ const PaymentsPage = () => {
   }, [players, playerSearch]);
 
   const visiblePayments = useMemo(() => {
-    if (activeView === 'thisDay') {
-      return payments.filter((payment) => getPaymentDayKey(payment.paymentDate) === getDateInputValue());
-    }
     if (activeView === 'thisMonth') {
       const thisMonth = getPaymentMonthKey(new Date());
       return payments.filter((payment) => getPaymentMonthKey(payment.paymentDate) === thisMonth);
@@ -418,10 +414,9 @@ const PaymentsPage = () => {
   };
 
   const viewTabs = [
-    { id: 'thisDay', label: 'This Day' },
+    { id: 'day', label: 'By Day' },
     { id: 'thisMonth', label: 'This Month' },
-    { id: 'month', label: 'By Month' },
-    { id: 'day', label: 'By Day' }
+    { id: 'month', label: 'By Month' }
   ];
   const activeViewLabel = viewTabs.find((tab) => tab.id === activeView)?.label || 'payments';
   const activeRecordCount = searchedPayments.length;
@@ -590,16 +585,19 @@ const PaymentsPage = () => {
                   </select>
                 )}
                 {activeView === 'day' && (
-                  <select value={selectedDay} onChange={(event) => setSelectedDay(event.target.value)}>
-                    {dayOptions.map((day) => <option key={day} value={day}>{day}</option>)}
-                  </select>
+                  <input
+                    className="payment-date-filter"
+                    type="date"
+                    value={selectedDay}
+                    onChange={(event) => setSelectedDay(event.target.value || getDateInputValue())}
+                  />
                 )}
               </div>
               <strong>{t('paymentHistory')}</strong>
             </div>
 
             <div className="payment-view-panel payment-month-banner">
-              <span>{activeView === 'thisDay' ? 'Showing today' : activeView === 'thisMonth' ? 'Showing this month' : activeView === 'day' ? `Showing ${selectedDay}` : `Showing ${selectedMonth}`}</span>
+              <span>{activeView === 'thisMonth' ? 'Showing this month' : activeView === 'day' ? `Showing ${selectedDay}` : `Showing ${selectedMonth}`}</span>
               <strong>{searchedPayments.length} records / {formatMoney(searchedPayments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0))}</strong>
             </div>
 

@@ -466,7 +466,8 @@ body.theme-light .payment-month-banner {
 body.theme-light .payment-entry-grid input,
 body.theme-light .payment-entry-grid select,
 body.theme-light .payment-search input,
-body.theme-light .payment-tool-icons select {
+body.theme-light .payment-tool-icons select,
+body.theme-light .payment-date-filter {
   border-color: #d8d8d8;
   background: #f0f0f0;
   color: #161616;
@@ -3017,7 +3018,8 @@ body.rtl .new-subscription-summary-card[type='button'] {
   border-radius: 999px;
 }
 
-.payment-tool-icons select {
+.payment-tool-icons select,
+.payment-date-filter {
   width: auto;
   min-height: 28px;
   padding: 4px 8px;
