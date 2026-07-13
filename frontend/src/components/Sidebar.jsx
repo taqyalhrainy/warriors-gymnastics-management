@@ -108,7 +108,7 @@ const Sidebar = () => {
       { path: '/payments', key: 'payments' },
       { path: '/notifications', key: 'notifications' },
       { path: '/history', key: 'history' },
-      { path: '/audit-logs', key: 'auditLogs' }
+      { path: '/security', key: 'security' }
     ];
 
   return (

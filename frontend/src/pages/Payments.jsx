@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchPayments, createPayment, updatePayment, deletePayment } from '../services/payments.js';
 import { fetchPlayers } from '../services/players.js';
+import { verifyPaymentPassword } from '../services/security.js';
 import { confirmAction } from '../utils/confirmAction.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
@@ -110,11 +111,14 @@ const PaymentsPage = () => {
   const [payments, setPayments] = useState([]);
   const [players, setPlayers] = useState([]);
   const [form, setForm] = useState(initialPaymentForm);
+  const [isPaymentUnlocked, setIsPaymentUnlocked] = useState(false);
+  const [paymentAccessPassword, setPaymentAccessPassword] = useState('');
+  const [isUnlockingPayment, setIsUnlockingPayment] = useState(false);
   const [isTransactionTouched, setIsTransactionTouched] = useState(false);
   const [editingPaymentId, setEditingPaymentId] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeView, setActiveView] = useState('month');
+  const [activeView, setActiveView] = useState('day');
   const [selectedMonth, setSelectedMonth] = useState(getPaymentMonthKey(new Date()));
   const [selectedDay, setSelectedDay] = useState(getDateInputValue());
   const [searchQuery, setSearchQuery] = useState('');
@@ -122,6 +126,7 @@ const PaymentsPage = () => {
   const { t } = useLanguage();
 
   const loadPayments = async () => {
+    if (!isPaymentUnlocked) return;
     try {
       setPayments(sortPaymentsNewestFirst(await fetchPayments({ fresh: Date.now() })));
     } catch (err) {
@@ -134,9 +139,26 @@ const PaymentsPage = () => {
   };
 
   useEffect(() => {
+    if (!isPaymentUnlocked) return;
     fetchPlayers({ fresh: Date.now() }).then(setPlayers).catch(console.error);
     loadPayments();
-  }, []);
+  }, [isPaymentUnlocked]);
+
+  const handlePaymentUnlock = async (event) => {
+    event.preventDefault();
+    setError('');
+
+    try {
+      setIsUnlockingPayment(true);
+      await verifyPaymentPassword(paymentAccessPassword);
+      setIsPaymentUnlocked(true);
+      setPaymentAccessPassword('');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Unable to unlock payments.');
+    } finally {
+      setIsUnlockingPayment(false);
+    }
+  };
 
   const getAutoTransactionType = (playerId, paidAmount) => {
     const player = players.find((item) => item._id === playerId);
@@ -236,18 +258,8 @@ const PaymentsPage = () => {
   }, [players, playerSearch]);
 
   const visiblePayments = useMemo(() => {
-    if (activeView === 'thisMonth') {
-      const thisMonth = getPaymentMonthKey(new Date());
-      return payments.filter((payment) => getPaymentMonthKey(payment.paymentDate) === thisMonth);
-    }
-    if (activeView === 'month') {
-      return payments.filter((payment) => getPaymentMonthKey(payment.paymentDate) === selectedMonth);
-    }
-    if (activeView === 'day') {
-      return payments.filter((payment) => getPaymentDayKey(payment.paymentDate) === selectedDay);
-    }
-    return payments;
-  }, [payments, activeView, selectedMonth, selectedDay]);
+    return payments.filter((payment) => getPaymentDayKey(payment.paymentDate) === getDateInputValue());
+  }, [payments]);
 
   const searchedPayments = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -335,7 +347,7 @@ const PaymentsPage = () => {
       transactionType: ['Full payment', 'Partial payment'].includes(getTransactionLabel(payment)) ? getTransactionLabel(payment) : 'custom',
       customTransactionType: ['Full payment', 'Partial payment'].includes(getTransactionLabel(payment)) ? '' : getTransactionLabel(payment),
       paymentMethod: payment.paymentMethod || 'Cash',
-      paymentDate: getDateInputValue(payment.paymentDate),
+      paymentDate: getDateInputValue(),
       notes: payment.notes || ''
     });
     setIsTransactionTouched(false);
@@ -370,17 +382,45 @@ const PaymentsPage = () => {
   };
 
   const viewTabs = [
-    { id: 'month', label: 'By Month' },
-    { id: 'day', label: 'By Day' },
-    { id: 'thisMonth', label: 'This Month' }
+    { id: 'day', label: 'This Day' }
   ];
   const activeViewLabel = viewTabs.find((tab) => tab.id === activeView)?.label || 'payments';
   const activeRecordCount = searchedPayments.length;
+  const dayTotals = useMemo(() => ({
+    paid: searchedPayments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0),
+    remaining: searchedPayments.reduce((sum, payment) => sum + Number(payment.remainingAmount || 0), 0),
+    fullPayments: searchedPayments.filter((payment) => Number(payment.remainingAmount || 0) <= 0).length
+  }), [searchedPayments]);
 
   return (
     <div className="dashboard-layout payments-admin-layout">
       <Sidebar />
       <main className="page-content payments-admin-page">
+        {!isPaymentUnlocked ? (
+          <section className="payment-lock-card">
+            <div>
+              <p className="payments-kicker">Warriors Gymnastics</p>
+              <h1>{t('payments')}</h1>
+              <span>Enter the payment password to view today's payment records.</span>
+            </div>
+            {error && <p className="alert-error">{error}</p>}
+            <form onSubmit={handlePaymentUnlock}>
+              <label>
+                <span>Payment Password</span>
+                <input
+                  type="password"
+                  value={paymentAccessPassword}
+                  onChange={(event) => setPaymentAccessPassword(event.target.value)}
+                  autoFocus
+                  required
+                />
+              </label>
+              <button className="btn-primary" type="submit" disabled={isUnlockingPayment}>
+                {isUnlockingPayment ? 'Checking...' : 'Unlock Payments'}
+              </button>
+            </form>
+          </section>
+        ) : (
         <section className="payments-workspace">
           <div className="payments-topbar">
             <div>
@@ -405,16 +445,16 @@ const PaymentsPage = () => {
 
           <div className="payment-metrics">
             <div>
-              <span>Remaining Amount</span>
-              <strong>{formatMoney(totals.remaining)}</strong>
+              <span>Today Paid</span>
+              <strong>{formatMoney(dayTotals.paid)}</strong>
             </div>
             <div>
-              <span>Full Payments</span>
-              <strong>{totals.fullPayments}</strong>
+              <span>Today Remaining</span>
+              <strong>{formatMoney(dayTotals.remaining)}</strong>
             </div>
             <div>
-              <span>Records</span>
-              <strong>{payments.length}</strong>
+              <span>Today Records</span>
+              <strong>{searchedPayments.length}</strong>
             </div>
           </div>
 
@@ -493,12 +533,7 @@ const PaymentsPage = () => {
 
                   <label>
                     <span>Payment Date</span>
-                    <input
-                      type="date"
-                      value={form.paymentDate}
-                      onChange={(e) => setForm({ ...form, paymentDate: e.target.value || getDateInputValue() })}
-                      required
-                    />
+                    <input type="date" value={getDateInputValue()} disabled required />
                   </label>
 
                   <label>
@@ -530,22 +565,12 @@ const PaymentsPage = () => {
                     placeholder={`Search ${activeViewLabel}`}
                   />
                 </label>
-                {activeView === 'month' && (
-                  <select value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}>
-                    {monthOptions.map((month) => <option key={month} value={month}>{month}</option>)}
-                  </select>
-                )}
-                {activeView === 'day' && (
-                  <select value={selectedDay} onChange={(event) => setSelectedDay(event.target.value)}>
-                    {dayOptions.map((day) => <option key={day} value={day}>{day}</option>)}
-                  </select>
-                )}
               </div>
               <strong>{t('paymentHistory')}</strong>
             </div>
 
             <div className="payment-view-panel payment-month-banner">
-              <span>{activeView === 'thisMonth' ? 'Showing this month' : activeView === 'day' ? `Showing ${selectedDay}` : `Showing ${selectedMonth}`}</span>
+              <span>Showing today</span>
               <strong>{searchedPayments.length} records / {formatMoney(searchedPayments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0))}</strong>
             </div>
 
@@ -603,6 +628,7 @@ const PaymentsPage = () => {
             </div>
           </div>
         </section>
+        )}
       </main>
     </div>
   );

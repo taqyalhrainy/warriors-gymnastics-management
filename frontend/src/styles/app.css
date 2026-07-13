@@ -2359,6 +2359,57 @@ body.attendance-touch-dragging {
   font-size: 1.28rem;
 }
 
+.payment-lock-card {
+  width: min(520px, calc(100vw - 32px));
+  margin: 12vh auto 0;
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+  border: 1px solid #2c2c2c;
+  border-top: 3px solid var(--primary);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(237, 28, 36, 0.12), rgba(255, 255, 255, 0.03)),
+    #1a1a1a;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.28);
+}
+
+.payment-lock-card h1,
+.payment-lock-card p {
+  margin: 0;
+}
+
+.payment-lock-card > div > span {
+  display: block;
+  margin-top: 8px;
+  color: #a7a199;
+}
+
+.payment-lock-card form,
+.security-password-form {
+  display: grid;
+  gap: 12px;
+}
+
+.payment-lock-card label,
+.security-password-form label {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.payment-lock-card label span,
+.security-password-form label span {
+  color: #aaa397;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.payment-lock-card input,
+.security-password-form input {
+  min-height: 42px;
+}
+
 .new-subscription-dashboard {
   display: grid;
   grid-template-columns: minmax(320px, 1.35fr) minmax(280px, 1fr);
@@ -2518,6 +2569,67 @@ body.attendance-touch-dragging {
     linear-gradient(180deg, rgba(237, 28, 36, 0.08), transparent 260px),
     var(--bg);
   color: var(--text);
+}
+
+.security-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.security-tabs button {
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 850;
+  box-shadow: none;
+}
+
+.security-tabs button.active,
+.security-tabs button:hover {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  transform: none;
+}
+
+.security-card {
+  display: grid;
+  gap: 16px;
+  max-width: 760px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.security-card-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: start;
+}
+
+.security-card-heading h2,
+.security-card-heading p {
+  margin: 0;
+}
+
+.security-card-heading p {
+  margin-top: 6px;
+  color: var(--muted);
+}
+
+.security-card-heading .btn-secondary,
+.security-password-form .btn-primary {
+  min-height: 38px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  box-shadow: none;
 }
 
 .owner-dashboard-header,

@@ -67,7 +67,8 @@ function App() {
               <Route path="/parents" element={<ParentsPage />} />
               <Route path="/reports" element={<ReportsPage />} />
               <Route path="/history" element={<HistoryPage />} />
-              <Route path="/audit-logs" element={<AuditLogsPage />} />
+              <Route path="/security" element={<AuditLogsPage />} />
+              <Route path="/audit-logs" element={<Navigate to="/security" replace />} />
             </Route>
             <Route element={<ProtectedRoute roles={['admin']} />}>
               <Route path="/owner-summary" element={<OwnerDashboardPage />} />

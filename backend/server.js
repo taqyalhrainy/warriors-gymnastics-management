@@ -98,6 +98,7 @@ app.use('/api/notifications', lazyRouter(() => require('./routes/notifications')
 app.use('/api/reports', lazyRouter(() => require('./routes/reports')));
 app.use('/api/history', lazyRouter(() => require('./routes/history')));
 app.use('/api/audit-logs', lazyRouter(() => require('./routes/auditLogs')));
+app.use('/api/security', lazyRouter(() => require('./routes/security')));
 
 app.get('/api/health', (req, res) => {
   res.status(isDatabaseReady ? 200 : 503).json({

@@ -70,7 +70,6 @@ const LoginPage = () => {
   const [loginRole, setLoginRole] = useState('admin');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [generalError, setGeneralError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -96,7 +95,6 @@ const LoginPage = () => {
     setLoginRole(role);
     setIdentifier('');
     setPassword('');
-    setShowPassword(false);
     clearErrors();
   };
 
@@ -159,17 +157,15 @@ const LoginPage = () => {
 
           <label>{loginRole === 'parent' ? 'Name' : 'Email'}</label>
           <input
-            type={loginRole === 'parent' ? 'text' : 'email'}
+            type={loginRole === 'parent' ? 'text' : 'password'}
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
+            autoComplete="username"
           />
           {fieldErrors.identifier && <p className="field-error">{fieldErrors.identifier}</p>}
 
           <label>Password</label>
-          <div className="password-input-row">
-            <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} />
-            <button type="button" className="password-toggle" onClick={() => setShowPassword(!showPassword)}>{showPassword ? 'Hide' : 'Show'}</button>
-          </div>
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
           {fieldErrors.password && <p className="field-error">{fieldErrors.password}</p>}
 
           <button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Signing In...' : 'Sign In'}</button>
