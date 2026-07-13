@@ -1285,6 +1285,25 @@ textarea {
   color: var(--text);
 }
 
+.remember-login-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.remember-login-row input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.remember-login-row span {
+  line-height: 1.3;
+}
+
 .field-error {
   margin: 6px 0 0;
   color: var(--danger);
