@@ -112,23 +112,28 @@ const PaymentsPage = () => {
   const [players, setPlayers] = useState([]);
   const [form, setForm] = useState(initialPaymentForm);
   const [isPaymentUnlocked, setIsPaymentUnlocked] = useState(false);
+  const [showPaymentUnlock, setShowPaymentUnlock] = useState(false);
+  const [pendingPaymentView, setPendingPaymentView] = useState('');
   const [paymentAccessPassword, setPaymentAccessPassword] = useState('');
   const [isUnlockingPayment, setIsUnlockingPayment] = useState(false);
   const [isTransactionTouched, setIsTransactionTouched] = useState(false);
   const [editingPaymentId, setEditingPaymentId] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeView, setActiveView] = useState('day');
+  const [activeView, setActiveView] = useState('thisDay');
   const [selectedMonth, setSelectedMonth] = useState(getPaymentMonthKey(new Date()));
   const [selectedDay, setSelectedDay] = useState(getDateInputValue());
   const [searchQuery, setSearchQuery] = useState('');
   const [playerSearch, setPlayerSearch] = useState('');
   const { t } = useLanguage();
 
-  const loadPayments = async () => {
-    if (!isPaymentUnlocked) return;
+  const loadPayments = async (options = {}) => {
     try {
-      setPayments(sortPaymentsNewestFirst(await fetchPayments({ fresh: Date.now() })));
+      const forceAll = Boolean(options.forceAll);
+      const params = isPaymentUnlocked || forceAll
+        ? { fresh: Date.now() }
+        : { day: getDateInputValue(), fresh: Date.now() };
+      setPayments(sortPaymentsNewestFirst(await fetchPayments(params)));
     } catch (err) {
       console.error(err);
     }
@@ -139,9 +144,12 @@ const PaymentsPage = () => {
   };
 
   useEffect(() => {
-    if (!isPaymentUnlocked) return;
     fetchPlayers({ fresh: Date.now() }).then(setPlayers).catch(console.error);
     loadPayments();
+  }, []);
+
+  useEffect(() => {
+    loadPayments({ forceAll: isPaymentUnlocked });
   }, [isPaymentUnlocked]);
 
   const handlePaymentUnlock = async (event) => {
@@ -152,12 +160,27 @@ const PaymentsPage = () => {
       setIsUnlockingPayment(true);
       await verifyPaymentPassword(paymentAccessPassword);
       setIsPaymentUnlocked(true);
+      if (pendingPaymentView) {
+        setActiveView(pendingPaymentView);
+      }
+      setPendingPaymentView('');
+      setShowPaymentUnlock(false);
       setPaymentAccessPassword('');
     } catch (err) {
       setError(err.response?.data?.message || 'Unable to unlock payments.');
     } finally {
       setIsUnlockingPayment(false);
     }
+  };
+
+  const handlePaymentViewClick = (viewId) => {
+    if (viewId !== 'thisDay' && !isPaymentUnlocked) {
+      setPendingPaymentView(viewId);
+      setShowPaymentUnlock(true);
+      setError('');
+      return;
+    }
+    setActiveView(viewId);
   };
 
   const getAutoTransactionType = (playerId, paidAmount) => {
@@ -258,8 +281,21 @@ const PaymentsPage = () => {
   }, [players, playerSearch]);
 
   const visiblePayments = useMemo(() => {
-    return payments.filter((payment) => getPaymentDayKey(payment.paymentDate) === getDateInputValue());
-  }, [payments]);
+    if (activeView === 'thisDay') {
+      return payments.filter((payment) => getPaymentDayKey(payment.paymentDate) === getDateInputValue());
+    }
+    if (activeView === 'thisMonth') {
+      const thisMonth = getPaymentMonthKey(new Date());
+      return payments.filter((payment) => getPaymentMonthKey(payment.paymentDate) === thisMonth);
+    }
+    if (activeView === 'month') {
+      return payments.filter((payment) => getPaymentMonthKey(payment.paymentDate) === selectedMonth);
+    }
+    if (activeView === 'day') {
+      return payments.filter((payment) => getPaymentDayKey(payment.paymentDate) === selectedDay);
+    }
+    return payments;
+  }, [payments, activeView, selectedMonth, selectedDay]);
 
   const searchedPayments = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -347,7 +383,7 @@ const PaymentsPage = () => {
       transactionType: ['Full payment', 'Partial payment'].includes(getTransactionLabel(payment)) ? getTransactionLabel(payment) : 'custom',
       customTransactionType: ['Full payment', 'Partial payment'].includes(getTransactionLabel(payment)) ? '' : getTransactionLabel(payment),
       paymentMethod: payment.paymentMethod || 'Cash',
-      paymentDate: getDateInputValue(),
+      paymentDate: getDateInputValue(payment.paymentDate),
       notes: payment.notes || ''
     });
     setIsTransactionTouched(false);
@@ -382,11 +418,14 @@ const PaymentsPage = () => {
   };
 
   const viewTabs = [
-    { id: 'day', label: 'This Day' }
+    { id: 'thisDay', label: 'This Day' },
+    { id: 'thisMonth', label: 'This Month' },
+    { id: 'month', label: 'By Month' },
+    { id: 'day', label: 'By Day' }
   ];
   const activeViewLabel = viewTabs.find((tab) => tab.id === activeView)?.label || 'payments';
   const activeRecordCount = searchedPayments.length;
-  const dayTotals = useMemo(() => ({
+  const viewTotals = useMemo(() => ({
     paid: searchedPayments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0),
     remaining: searchedPayments.reduce((sum, payment) => sum + Number(payment.remainingAmount || 0), 0),
     fullPayments: searchedPayments.filter((payment) => Number(payment.remainingAmount || 0) <= 0).length
@@ -396,31 +435,6 @@ const PaymentsPage = () => {
     <div className="dashboard-layout payments-admin-layout">
       <Sidebar />
       <main className="page-content payments-admin-page">
-        {!isPaymentUnlocked ? (
-          <section className="payment-lock-card">
-            <div>
-              <p className="payments-kicker">Warriors Gymnastics</p>
-              <h1>{t('payments')}</h1>
-              <span>Enter the payment password to view today's payment records.</span>
-            </div>
-            {error && <p className="alert-error">{error}</p>}
-            <form onSubmit={handlePaymentUnlock}>
-              <label>
-                <span>Payment Password</span>
-                <input
-                  type="password"
-                  value={paymentAccessPassword}
-                  onChange={(event) => setPaymentAccessPassword(event.target.value)}
-                  autoFocus
-                  required
-                />
-              </label>
-              <button className="btn-primary" type="submit" disabled={isUnlockingPayment}>
-                {isUnlockingPayment ? 'Checking...' : 'Unlock Payments'}
-              </button>
-            </form>
-          </section>
-        ) : (
         <section className="payments-workspace">
           <div className="payments-topbar">
             <div>
@@ -436,7 +450,7 @@ const PaymentsPage = () => {
                 type="button"
                 className={activeView === tab.id ? 'active' : ''}
                 key={tab.id}
-                onClick={() => setActiveView(tab.id)}
+                onClick={() => handlePaymentViewClick(tab.id)}
               >
                 {tab.label}
               </button>
@@ -445,15 +459,15 @@ const PaymentsPage = () => {
 
           <div className="payment-metrics">
             <div>
-              <span>Today Paid</span>
-              <strong>{formatMoney(dayTotals.paid)}</strong>
+              <span>{activeViewLabel} Paid</span>
+              <strong>{formatMoney(viewTotals.paid)}</strong>
             </div>
             <div>
-              <span>Today Remaining</span>
-              <strong>{formatMoney(dayTotals.remaining)}</strong>
+              <span>{activeViewLabel} Remaining</span>
+              <strong>{formatMoney(viewTotals.remaining)}</strong>
             </div>
             <div>
-              <span>Today Records</span>
+              <span>{activeViewLabel} Records</span>
               <strong>{searchedPayments.length}</strong>
             </div>
           </div>
@@ -533,7 +547,12 @@ const PaymentsPage = () => {
 
                   <label>
                     <span>Payment Date</span>
-                    <input type="date" value={getDateInputValue()} disabled required />
+                    <input
+                      type="date"
+                      value={form.paymentDate}
+                      onChange={(e) => setForm({ ...form, paymentDate: e.target.value || getDateInputValue() })}
+                      required
+                    />
                   </label>
 
                   <label>
@@ -565,12 +584,22 @@ const PaymentsPage = () => {
                     placeholder={`Search ${activeViewLabel}`}
                   />
                 </label>
+                {activeView === 'month' && (
+                  <select value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}>
+                    {monthOptions.map((month) => <option key={month} value={month}>{month}</option>)}
+                  </select>
+                )}
+                {activeView === 'day' && (
+                  <select value={selectedDay} onChange={(event) => setSelectedDay(event.target.value)}>
+                    {dayOptions.map((day) => <option key={day} value={day}>{day}</option>)}
+                  </select>
+                )}
               </div>
               <strong>{t('paymentHistory')}</strong>
             </div>
 
             <div className="payment-view-panel payment-month-banner">
-              <span>Showing today</span>
+              <span>{activeView === 'thisDay' ? 'Showing today' : activeView === 'thisMonth' ? 'Showing this month' : activeView === 'day' ? `Showing ${selectedDay}` : `Showing ${selectedMonth}`}</span>
               <strong>{searchedPayments.length} records / {formatMoney(searchedPayments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0))}</strong>
             </div>
 
@@ -628,6 +657,35 @@ const PaymentsPage = () => {
             </div>
           </div>
         </section>
+        {showPaymentUnlock && (
+          <div className="student-modal-backdrop" role="presentation" onClick={() => setShowPaymentUnlock(false)}>
+            <section className="payment-lock-card payment-lock-modal" role="dialog" aria-modal="true" aria-label="Unlock payment data" onClick={(event) => event.stopPropagation()}>
+              <div>
+                <p className="payments-kicker">Protected payment data</p>
+                <h1>{viewTabs.find((tab) => tab.id === pendingPaymentView)?.label || 'Payments'}</h1>
+                <span>Enter the payment password to view this payment data.</span>
+              </div>
+              {error && <p className="alert-error">{error}</p>}
+              <form onSubmit={handlePaymentUnlock}>
+                <label>
+                  <span>Payment Password</span>
+                  <input
+                    type="password"
+                    value={paymentAccessPassword}
+                    onChange={(event) => setPaymentAccessPassword(event.target.value)}
+                    autoFocus
+                    required
+                  />
+                </label>
+                <div className="payment-entry-actions">
+                  <button className="btn-primary" type="submit" disabled={isUnlockingPayment}>
+                    {isUnlockingPayment ? 'Checking...' : 'Unlock'}
+                  </button>
+                  <button className="btn-secondary" type="button" onClick={() => setShowPaymentUnlock(false)}>Cancel</button>
+                </div>
+              </form>
+            </section>
+          </div>
         )}
       </main>
     </div>

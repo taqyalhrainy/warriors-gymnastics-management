@@ -115,6 +115,18 @@ const getPayments = async (req, res, next) => {
     if (req.query.playerId && validateObjectId(req.query.playerId)) {
       filter.playerId = req.query.playerId;
     }
+    if (req.query.day) {
+      const start = new Date(`${req.query.day}T00:00:00.000`);
+      const end = new Date(`${req.query.day}T23:59:59.999`);
+      if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+        filter.paymentDate = { $gte: start, $lte: end };
+      }
+    } else if (req.query.month && /^\d{4}-\d{2}$/.test(String(req.query.month))) {
+      const [year, month] = String(req.query.month).split('-').map(Number);
+      const start = new Date(year, month - 1, 1);
+      const end = new Date(year, month, 0, 23, 59, 59, 999);
+      filter.paymentDate = { $gte: start, $lte: end };
+    }
     const payments = await populatePaymentQuery(Payment.find(filter).sort({ paymentDate: -1, _id: -1 }));
     res.json(payments.map(formatPaymentResponse));
   } catch (error) {

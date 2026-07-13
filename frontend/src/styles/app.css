@@ -2410,6 +2410,11 @@ body.attendance-touch-dragging {
   min-height: 42px;
 }
 
+.payment-lock-modal {
+  margin: 0;
+  width: min(520px, calc(100vw - 32px));
+}
+
 .new-subscription-dashboard {
   display: grid;
   grid-template-columns: minmax(320px, 1.35fr) minmax(280px, 1fr);
