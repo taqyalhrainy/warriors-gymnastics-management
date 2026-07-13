@@ -17,6 +17,13 @@ const getDateInputValue = (date = new Date()) => {
   return `${year}-${month}-${day}`;
 };
 
+const getFourWeekEndDateValue = (startDate) => {
+  const value = new Date(`${startDate || getDateInputValue()}T00:00:00`);
+  if (Number.isNaN(value.getTime())) return '';
+  value.setDate(value.getDate() + 28);
+  return getDateInputValue(value);
+};
+
 const PlayerProfilePage = () => {
   const { id } = useParams();
   const [player, setPlayer] = useState(null);
@@ -55,12 +62,21 @@ const PlayerProfilePage = () => {
   const totalPaid = currentSubscriptionPayments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
 
   const openSubscriptionModal = () => {
+    const startDate = getDateInputValue();
     setSubscriptionForm({
-      startDate: getDateInputValue(),
-      endDate: getDateInputValue(player?.endDate)
+      startDate,
+      endDate: getFourWeekEndDateValue(startDate)
     });
     setSubscriptionMessage('');
     setShowSubscriptionModal(true);
+  };
+
+  const handleSubscriptionStartDateChange = (startDate) => {
+    setSubscriptionForm((current) => ({
+      ...current,
+      startDate,
+      endDate: getFourWeekEndDateValue(startDate)
+    }));
   };
 
   const handleSubscriptionSave = async (event) => {
@@ -150,7 +166,7 @@ const PlayerProfilePage = () => {
                     <input
                       type="date"
                       value={subscriptionForm.startDate}
-                      onChange={(event) => setSubscriptionForm({ ...subscriptionForm, startDate: event.target.value })}
+                      onChange={(event) => handleSubscriptionStartDateChange(event.target.value)}
                       required
                     />
                   </label>

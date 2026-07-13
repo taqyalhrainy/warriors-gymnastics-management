@@ -30,6 +30,13 @@ const getDateInputValue = (date = new Date()) => {
   return getLocalDateValue(value);
 };
 
+const getFourWeekEndDateValue = (startDate) => {
+  const value = new Date(`${startDate || getDateInputValue()}T00:00:00`);
+  if (Number.isNaN(value.getTime())) return '';
+  value.setDate(value.getDate() + 28);
+  return getDateInputValue(value);
+};
+
 const getLocalDateOnly = (date = new Date()) => {
   const value = new Date(date);
   value.setHours(0, 0, 0, 0);
@@ -1127,12 +1134,21 @@ const AttendancePage = () => {
   };
 
   const openSubscriptionModal = () => {
+    const startDate = getDateInputValue();
     setSubscriptionForm({
-      startDate: getDateInputValue(),
-      endDate: getDateInputValue(selectedPlayer?.endDate)
+      startDate,
+      endDate: getFourWeekEndDateValue(startDate)
     });
     setSubscriptionMessage('');
     setShowSubscriptionModal(true);
+  };
+
+  const handleSubscriptionStartDateChange = (startDate) => {
+    setSubscriptionForm((current) => ({
+      ...current,
+      startDate,
+      endDate: getFourWeekEndDateValue(startDate)
+    }));
   };
 
   const handleSubscriptionSave = async (event, keepWarning = false) => {
@@ -1977,7 +1993,7 @@ const AttendancePage = () => {
                     <input
                       type="date"
                       value={subscriptionForm.startDate}
-                      onChange={(event) => setSubscriptionForm({ ...subscriptionForm, startDate: event.target.value })}
+                      onChange={(event) => handleSubscriptionStartDateChange(event.target.value)}
                       required
                     />
                   </label>
