@@ -244,6 +244,8 @@ const AttendancePage = () => {
   const pointerStartPointRef = useRef(null);
   const attendanceDateInputRef = useRef(null);
   const pendingAttendanceKeysRef = useRef(new Set());
+  const attendanceActionSequenceRef = useRef(0);
+  const latestAttendanceActionRef = useRef(new Map());
   const pendingAttendanceHistoryIdRef = useRef(null);
   const didRunInitialAttendanceLoadRef = useRef(false);
   const selectedPlayerFormDirtyRef = useRef(false);
@@ -832,18 +834,13 @@ const AttendancePage = () => {
 
   const isAttendanceActionPending = (playerId, groupId) => pendingAttendanceKeys.includes(getAttendanceActionKey(playerId, groupId));
 
+  const getAttendancePlayerFromBoard = (groups, playerId, groupId) => groups
+    .find((group) => getEntityId(group._id) === getEntityId(groupId))
+    ?.players.find((currentPlayer) => getEntityId(currentPlayer._id) === getEntityId(playerId)) || null;
+
   const setAttendanceHistoryPending = (recordId) => {
     pendingAttendanceHistoryIdRef.current = recordId;
     setPendingAttendanceHistoryId(recordId);
-  };
-
-  const restoreBoard = (groups) => {
-    setGroupColumns(groups);
-    groupColumnsRef.current = groups;
-    attendanceBoardCache = groups;
-    attendanceBoardCacheTimestamp = Date.now();
-    attendanceBoardCacheDate = selectedAttendanceDate;
-    attendanceBoardCacheVersion = getCacheVersion();
   };
 
   const handleAction = async (player, groupId, status) => {
@@ -857,9 +854,14 @@ const AttendancePage = () => {
       return;
     }
 
-    const previousGroups = groupColumns;
+    const actionSequence = attendanceActionSequenceRef.current + 1;
+    attendanceActionSequenceRef.current = actionSequence;
+    const playerDateKey = `${getEntityId(player._id)}:${selectedAttendanceDate}`;
+    latestAttendanceActionRef.current.set(playerDateKey, actionSequence);
+    const previousPlayerRecord = getAttendancePlayerFromBoard(groupColumnsRef.current, player._id, groupId);
+    const previousAttendance = previousPlayerRecord?.todayAttendance || null;
     const optimisticAttendance = {
-      ...(player.todayAttendance || {}),
+      ...(previousAttendance || {}),
       playerId: player._id,
       groupId,
       status,
@@ -880,6 +882,9 @@ const AttendancePage = () => {
 
     try {
       const savedAttendance = await updateTodayAttendance({ playerId: player._id, groupId, status, date: selectedAttendanceDate });
+      if (latestAttendanceActionRef.current.get(playerDateKey) !== actionSequence) {
+        return;
+      }
       setPlayerAttendanceInBoard(player._id, groupId, savedAttendance);
       if (selectedPlayer?._id === player._id) {
         setSelectedPlayer((currentPlayer) => currentPlayer ? {
@@ -889,20 +894,22 @@ const AttendancePage = () => {
       }
       setMessage('Attendance recorded');
     } catch (err) {
-      restoreBoard(previousGroups);
+      if (latestAttendanceActionRef.current.get(playerDateKey) === actionSequence) {
+        setPlayerAttendanceInBoard(player._id, groupId, previousAttendance);
 
-      if (selectedPlayer?._id === player._id) {
-        const previousSelectedPlayer = previousGroups
-          .flatMap((group) => group.players)
-          .find((currentPlayer) => currentPlayer._id === player._id && currentPlayer.todayAttendance);
-        setSelectedPlayer((currentPlayer) => currentPlayer ? {
-          ...currentPlayer,
-          todayAttendance: previousSelectedPlayer?.todayAttendance || null
-        } : currentPlayer);
+        if (selectedPlayer?._id === player._id) {
+          setSelectedPlayer((currentPlayer) => currentPlayer ? {
+            ...currentPlayer,
+            todayAttendance: previousAttendance
+          } : currentPlayer);
+        }
       }
 
       setMessage(err.response?.data?.message || 'Unable to record attendance');
     } finally {
+      if (latestAttendanceActionRef.current.get(playerDateKey) === actionSequence) {
+        latestAttendanceActionRef.current.delete(playerDateKey);
+      }
       setAttendanceActionPending(actionKey, false);
     }
   };
@@ -918,7 +925,12 @@ const AttendancePage = () => {
       return;
     }
 
-    const previousGroups = groupColumns;
+    const actionSequence = attendanceActionSequenceRef.current + 1;
+    attendanceActionSequenceRef.current = actionSequence;
+    const playerDateKey = `${getEntityId(player._id)}:${selectedAttendanceDate}`;
+    latestAttendanceActionRef.current.set(playerDateKey, actionSequence);
+    const previousPlayerRecord = getAttendancePlayerFromBoard(groupColumnsRef.current, player._id, groupId);
+    const previousAttendance = previousPlayerRecord?.todayAttendance || null;
     setMessage('');
     setAttendanceActionPending(actionKey, true);
     setPlayerAttendanceInBoard(player._id, groupId, null);
@@ -931,24 +943,29 @@ const AttendancePage = () => {
     }
 
     try {
-      const attendanceGroupId = getEntityId(player.todayAttendance?.groupId) || groupId;
+      const attendanceGroupId = getEntityId(previousAttendance?.groupId) || groupId;
       await cancelTodayAttendance({ playerId: player._id, groupId: attendanceGroupId, date: selectedAttendanceDate });
+      if (latestAttendanceActionRef.current.get(playerDateKey) !== actionSequence) {
+        return;
+      }
       setMessage('Attendance cancelled');
     } catch (err) {
-      restoreBoard(previousGroups);
+      if (latestAttendanceActionRef.current.get(playerDateKey) === actionSequence) {
+        setPlayerAttendanceInBoard(player._id, groupId, previousAttendance);
 
-      if (selectedPlayer?._id === player._id) {
-        const previousSelectedPlayer = previousGroups
-          .flatMap((group) => group.players)
-          .find((currentPlayer) => currentPlayer._id === player._id && currentPlayer.todayAttendance);
-        setSelectedPlayer((currentPlayer) => currentPlayer ? {
-          ...currentPlayer,
-          todayAttendance: previousSelectedPlayer?.todayAttendance || null
-        } : currentPlayer);
+        if (selectedPlayer?._id === player._id) {
+          setSelectedPlayer((currentPlayer) => currentPlayer ? {
+            ...currentPlayer,
+            todayAttendance: previousAttendance
+          } : currentPlayer);
+        }
       }
 
       setMessage(err.response?.data?.message || 'Unable to cancel attendance');
     } finally {
+      if (latestAttendanceActionRef.current.get(playerDateKey) === actionSequence) {
+        latestAttendanceActionRef.current.delete(playerDateKey);
+      }
       setAttendanceActionPending(actionKey, false);
     }
   };
