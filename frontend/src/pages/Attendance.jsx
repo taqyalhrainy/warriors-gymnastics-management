@@ -31,7 +31,8 @@ const getDateInputValue = (date = new Date()) => {
 };
 
 const getFourWeekEndDateValue = (startDate) => {
-  const value = new Date(`${startDate || getDateInputValue()}T00:00:00`);
+  const [year, month, day] = String(startDate || getDateInputValue()).split('-').map(Number);
+  const value = new Date(year, month - 1, day);
   if (Number.isNaN(value.getTime())) return '';
   value.setDate(value.getDate() + 28);
   return getDateInputValue(value);
@@ -1150,6 +1151,16 @@ const AttendancePage = () => {
       endDate: getFourWeekEndDateValue(startDate)
     }));
   };
+
+  useEffect(() => {
+    if (!showSubscriptionModal || !subscriptionForm.startDate) return;
+    const nextEndDate = getFourWeekEndDateValue(subscriptionForm.startDate);
+    setSubscriptionForm((current) => (
+      current.endDate === nextEndDate
+        ? current
+        : { ...current, endDate: nextEndDate }
+    ));
+  }, [showSubscriptionModal, subscriptionForm.startDate]);
 
   const handleSubscriptionSave = async (event, keepWarning = false) => {
     event.preventDefault();
