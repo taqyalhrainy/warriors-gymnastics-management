@@ -1771,6 +1771,9 @@ body.attendance-touch-dragging {
   position: absolute;
   top: 8px;
   right: 8px;
+  left: auto;
+  inset-inline-start: auto;
+  inset-inline-end: 8px;
   z-index: 3;
   width: 13px;
   height: 13px;

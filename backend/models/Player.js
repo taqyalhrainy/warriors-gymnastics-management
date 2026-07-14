@@ -21,6 +21,7 @@ const playerSchema = new mongoose.Schema({
   note: { type: String, trim: true, default: '' },
   status: { type: String, enum: ['active', 'expired', 'frozen', 'left', 'tryout'], default: 'active' },
   subscriptionNeedsAttention: { type: Boolean, default: false },
+  attendanceAlertEnabled: { type: Boolean, default: false },
   isDeleted: { type: Boolean, default: false },
   deletedAt: { type: Date },
   profileImage: { type: String, default: '' },

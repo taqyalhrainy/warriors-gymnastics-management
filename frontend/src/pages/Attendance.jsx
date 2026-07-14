@@ -1417,6 +1417,32 @@ const AttendancePage = () => {
     }
   };
 
+  const handleAttendanceAlertToggle = async (isEnabled) => {
+    if (!selectedPlayer?._id) {
+      return;
+    }
+
+    const previousPlayer = selectedPlayer;
+    const optimisticPlayer = {
+      ...selectedPlayer,
+      attendanceAlertEnabled: isEnabled
+    };
+
+    try {
+      setMessage('');
+      applyOptimisticSelectedPlayer(optimisticPlayer);
+      setMessage(isEnabled ? 'Attendance alert dot enabled' : 'Attendance alert dot cleared');
+      await updatePlayer(selectedPlayer._id, { attendanceAlertEnabled: isEnabled });
+      const refreshedPlayer = await getPlayer(selectedPlayer._id, { force: true });
+      syncPlayerInAttendanceBoard(refreshedPlayer);
+      setSelectedPlayer(refreshedPlayer);
+      setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
+    } catch (error) {
+      applyOptimisticSelectedPlayer(previousPlayer);
+      setMessage(error.response?.data?.message || 'Unable to update attendance alert dot');
+    }
+  };
+
   const handleAttendanceHistoryStatusChange = async (record, status) => {
     if (!selectedPlayer?._id || !record?._id || !['present', 'absent'].includes(status)) {
       return;
@@ -1916,8 +1942,8 @@ const AttendancePage = () => {
                       ? (player.subscriptionNeedsAttention ? 'Review' : 'Expired')
                       : (isFrozen ? t('frozenStatus') : (player.status && player.status !== 'active' ? player.status : ''));
                     return (
-                      <article className={`attendance-player-card${isFrozen ? ' is-frozen' : ''}${isExpired ? ' is-expired' : ''}${player.subscriptionNeedsAttention ? ' is-attention' : ''}`} key={player._id}>
-                        {player.subscriptionNeedsAttention && <span className="attendance-review-pulse" aria-hidden="true" />}
+                      <article className={`attendance-player-card${isFrozen ? ' is-frozen' : ''}${isExpired ? ' is-expired' : ''}${player.attendanceAlertEnabled ? ' is-attention-alert' : ''}`} key={player._id}>
+                        {player.attendanceAlertEnabled && <span className="attendance-review-pulse" aria-hidden="true" />}
                         <button type="button" className="attendance-player-main" onClick={() => handleSelectPlayer(player)}>
                           <strong>{player.fullName}</strong>
                           <span>{player.parentId?.name || t('noParent')}</span>
@@ -2113,6 +2139,19 @@ const AttendancePage = () => {
                         <button type="button" className="btn-secondary" onClick={handleClearSubscriptionAttention}>Clear red highlight</button>
                       ) : (
                         <button type="button" className="btn-secondary" onClick={handleSetSubscriptionAttention}>Set highlight</button>
+                      )}
+                    </div>
+                    <div className={`student-info-grid-full subscription-attention-box${selectedPlayer.attendanceAlertEnabled ? ' is-active' : ''}`}>
+                      <span>Attendance alert dot</span>
+                      <strong>
+                        {selectedPlayer.attendanceAlertEnabled
+                          ? 'A pulsing red dot is visible on this attendance card.'
+                          : 'Show a pulsing red dot on this attendance card.'}
+                      </strong>
+                      {selectedPlayer.attendanceAlertEnabled ? (
+                        <button type="button" className="btn-secondary" onClick={() => handleAttendanceAlertToggle(false)}>Clear alert dot</button>
+                      ) : (
+                        <button type="button" className="btn-secondary" onClick={() => handleAttendanceAlertToggle(true)}>Enable alert dot</button>
                       )}
                     </div>
                     {selectedPlayer.note && (
