@@ -1916,7 +1916,8 @@ const AttendancePage = () => {
                       ? (player.subscriptionNeedsAttention ? 'Review' : 'Expired')
                       : (isFrozen ? t('frozenStatus') : (player.status && player.status !== 'active' ? player.status : ''));
                     return (
-                      <article className={`attendance-player-card${isFrozen ? ' is-frozen' : ''}${isExpired ? ' is-expired' : ''}`} key={player._id}>
+                      <article className={`attendance-player-card${isFrozen ? ' is-frozen' : ''}${isExpired ? ' is-expired' : ''}${player.subscriptionNeedsAttention ? ' is-attention' : ''}`} key={player._id}>
+                        {player.subscriptionNeedsAttention && <span className="attendance-review-pulse" aria-hidden="true" />}
                         <button type="button" className="attendance-player-main" onClick={() => handleSelectPlayer(player)}>
                           <strong>{player.fullName}</strong>
                           <span>{player.parentId?.name || t('noParent')}</span>
