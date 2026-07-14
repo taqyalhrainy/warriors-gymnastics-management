@@ -919,6 +919,34 @@ const AttendancePage = () => {
     patchPlayerInAttendanceBoard(updatedPlayer, attendanceRecords, fallbackGroupId);
   };
 
+  const applyOptimisticSelectedPlayer = (nextPlayer, attendanceRecords = null, fallbackGroupId = '') => {
+    setSelectedPlayer(nextPlayer);
+    setSelectedPlayerForm(createSelectedPlayerForm(nextPlayer));
+    syncPlayerInAttendanceBoard(nextPlayer, attendanceRecords, fallbackGroupId);
+  };
+
+  const applyPresentDeltaToPlayer = (player, presentDelta) => {
+    if (!player || !presentDelta) {
+      return player;
+    }
+
+    const subscription = player.subscriptionId && typeof player.subscriptionId === 'object'
+      ? {
+        ...player.subscriptionId,
+        usedSessions: Math.max(0, Number(player.subscriptionId.usedSessions || 0) + presentDelta),
+        remainingSessions: typeof player.subscriptionId.remainingSessions !== 'undefined'
+          ? Math.max(0, Number(player.subscriptionId.remainingSessions || 0) - presentDelta)
+          : player.subscriptionId.remainingSessions
+      }
+      : player.subscriptionId;
+
+    return {
+      ...player,
+      subscriptionId: subscription,
+      attendancePresentCount: Math.max(0, Number(player.attendancePresentCount || 0) + presentDelta)
+    };
+  };
+
   const setAttendanceHistoryPending = (recordId) => {
     pendingAttendanceHistoryIdRef.current = recordId;
     setPendingAttendanceHistoryId(recordId);
@@ -1269,9 +1297,32 @@ const AttendancePage = () => {
     const confirmed = window.confirm('This will start a new subscription cycle and cannot be undone. Continue?');
     if (!confirmed) return;
 
+    const previousPlayer = selectedPlayer;
+    const optimisticPlayer = {
+      ...selectedPlayer,
+      startDate: subscriptionForm.startDate,
+      endDate: subscriptionForm.endDate,
+      status: selectedPlayer.status === 'expired' ? 'active' : selectedPlayer.status,
+      subscriptionNeedsAttention: keepWarning,
+      currentSubscriptionStartedAt: subscriptionForm.startDate,
+      attendancePresentCount: 0,
+      subscriptionId: selectedPlayer.subscriptionId && typeof selectedPlayer.subscriptionId === 'object'
+        ? {
+          ...selectedPlayer.subscriptionId,
+          startDate: subscriptionForm.startDate,
+          endDate: subscriptionForm.endDate,
+          usedSessions: 0,
+          remainingSessions: Number(selectedPlayer.subscriptionId.totalSessions || selectedPlayer.packageClasses || 0)
+        }
+        : selectedPlayer.subscriptionId
+    };
+
     setSubscriptionMessage('');
     setIsSavingSubscription(true);
     try {
+      applyOptimisticSelectedPlayer(optimisticPlayer);
+      setShowSubscriptionModal(false);
+      setMessage('New subscription started');
       await updatePlayer(selectedPlayer._id, {
         startDate: subscriptionForm.startDate,
         endDate: subscriptionForm.endDate,
@@ -1288,10 +1339,10 @@ const AttendancePage = () => {
       setSelectedPlayer(refreshedPlayer);
       setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
       setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
-      setShowSubscriptionModal(false);
-      setMessage('New subscription started');
       syncPlayerInAttendanceBoard(refreshedPlayer, attendanceRecords);
     } catch (error) {
+      applyOptimisticSelectedPlayer(previousPlayer);
+      setShowSubscriptionModal(true);
       setSubscriptionMessage(error.response?.data?.message || 'Unable to start a new subscription.');
     } finally {
       setIsSavingSubscription(false);
@@ -1303,15 +1354,23 @@ const AttendancePage = () => {
       return;
     }
 
+    const previousPlayer = selectedPlayer;
+    const optimisticPlayer = {
+      ...selectedPlayer,
+      subscriptionNeedsAttention: false
+    };
+
     try {
       setMessage('');
+      applyOptimisticSelectedPlayer(optimisticPlayer);
+      setMessage('Subscription warning cleared');
       await updatePlayer(selectedPlayer._id, { subscriptionNeedsAttention: false });
       const refreshedPlayer = await getPlayer(selectedPlayer._id, { force: true });
+      syncPlayerInAttendanceBoard(refreshedPlayer);
       setSelectedPlayer(refreshedPlayer);
       setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
-      setMessage('Subscription warning cleared');
-      syncPlayerInAttendanceBoard(refreshedPlayer);
     } catch (error) {
+      applyOptimisticSelectedPlayer(previousPlayer);
       setMessage(error.response?.data?.message || 'Unable to clear subscription warning');
     }
   };
@@ -1321,15 +1380,23 @@ const AttendancePage = () => {
       return;
     }
 
+    const previousPlayer = selectedPlayer;
+    const optimisticPlayer = {
+      ...selectedPlayer,
+      subscriptionNeedsAttention: true
+    };
+
     try {
       setMessage('');
+      applyOptimisticSelectedPlayer(optimisticPlayer);
+      setMessage('Subscription warning enabled');
       await updatePlayer(selectedPlayer._id, { subscriptionNeedsAttention: true });
       const refreshedPlayer = await getPlayer(selectedPlayer._id, { force: true });
+      syncPlayerInAttendanceBoard(refreshedPlayer);
       setSelectedPlayer(refreshedPlayer);
       setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
-      setMessage('Subscription warning enabled');
-      syncPlayerInAttendanceBoard(refreshedPlayer);
     } catch (error) {
+      applyOptimisticSelectedPlayer(previousPlayer);
       setMessage(error.response?.data?.message || 'Unable to mark subscription warning');
     }
   };
@@ -1348,18 +1415,25 @@ const AttendancePage = () => {
       return;
     }
 
+    const previousPlayer = selectedPlayer;
+    const previousRecords = selectedPlayerAttendanceHistory;
+    const optimisticRecord = {
+      ...record,
+      status,
+      checkInTime: status === 'present' ? (record.checkInTime || new Date().toISOString()) : undefined
+    };
+    const optimisticRecords = previousRecords.map((item) => (
+      item._id === record._id ? optimisticRecord : item
+    ));
+    const presentDelta = (record.status === 'present' ? -1 : 0) + (status === 'present' ? 1 : 0);
+    const optimisticPlayer = applyPresentDeltaToPlayer(selectedPlayer, presentDelta);
+
     try {
       setMessage('');
       setAttendanceHistoryPending(record._id);
-      setSelectedPlayerAttendanceHistory((records) => records.map((item) => (
-        item._id === record._id
-          ? {
-            ...item,
-            status,
-            checkInTime: status === 'present' ? (item.checkInTime || new Date().toISOString()) : undefined
-          }
-          : item
-      )));
+      setSelectedPlayerAttendanceHistory(optimisticRecords);
+      applyOptimisticSelectedPlayer(optimisticPlayer, optimisticRecords, groupId);
+      setMessage('Attendance history updated');
       await updateTodayAttendance({
         playerId: selectedPlayer._id,
         groupId,
@@ -1375,10 +1449,11 @@ const AttendancePage = () => {
       setSelectedPlayer(refreshedPlayer);
       setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
       setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
-      setMessage('Attendance history updated');
       syncPlayerInAttendanceBoard(refreshedPlayer, attendanceRecords, groupId);
       setEditingAttendanceHistoryId(null);
     } catch (error) {
+      setSelectedPlayerAttendanceHistory(previousRecords);
+      applyOptimisticSelectedPlayer(previousPlayer, previousRecords, groupId);
       setMessage(error.response?.data?.message || 'Unable to update attendance history');
     } finally {
       setAttendanceHistoryPending(null);
@@ -1399,10 +1474,17 @@ const AttendancePage = () => {
       return;
     }
 
+    const previousPlayer = selectedPlayer;
+    const previousRecords = selectedPlayerAttendanceHistory;
+    const optimisticRecords = previousRecords.filter((item) => item._id !== record._id);
+    const optimisticPlayer = applyPresentDeltaToPlayer(selectedPlayer, record.status === 'present' ? -1 : 0);
+
     try {
       setMessage('');
       setAttendanceHistoryPending(record._id);
-      setSelectedPlayerAttendanceHistory((records) => records.filter((item) => item._id !== record._id));
+      setSelectedPlayerAttendanceHistory(optimisticRecords);
+      applyOptimisticSelectedPlayer(optimisticPlayer, optimisticRecords, groupId);
+      setMessage('Attendance history record removed');
       await cancelTodayAttendance({
         playerId: selectedPlayer._id,
         groupId,
@@ -1417,10 +1499,11 @@ const AttendancePage = () => {
       setSelectedPlayer(refreshedPlayer);
       setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
       setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
-      setMessage('Attendance history record removed');
       syncPlayerInAttendanceBoard(refreshedPlayer, attendanceRecords, groupId);
       setEditingAttendanceHistoryId(null);
     } catch (error) {
+      setSelectedPlayerAttendanceHistory(previousRecords);
+      applyOptimisticSelectedPlayer(previousPlayer, previousRecords, groupId);
       setMessage(error.response?.data?.message || 'Unable to remove attendance history record');
     } finally {
       setAttendanceHistoryPending(null);
@@ -1440,14 +1523,19 @@ const AttendancePage = () => {
       return;
     }
 
+    const previousPlayer = selectedPlayer;
+    const previousRecords = selectedPlayerAttendanceHistory;
+    const nextSubscriptionStart = getDateInputValue(record.date);
+    const optimisticPlayer = {
+      ...selectedPlayer,
+      currentSubscriptionStartedAt: nextSubscriptionStart
+    };
+
     try {
       setMessage('');
       setAttendanceHistoryPending(record._id);
-      const nextSubscriptionStart = getDateInputValue(record.date);
-      setSelectedPlayer((currentPlayer) => currentPlayer ? {
-        ...currentPlayer,
-        currentSubscriptionStartedAt: nextSubscriptionStart
-      } : currentPlayer);
+      applyOptimisticSelectedPlayer(optimisticPlayer, previousRecords);
+      setMessage('Attendance record counted in current subscription');
       await updatePlayer(selectedPlayer._id, {
         currentSubscriptionStartedAt: nextSubscriptionStart
       });
@@ -1460,10 +1548,11 @@ const AttendancePage = () => {
       setSelectedPlayer(refreshedPlayer);
       setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
       setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
-      setMessage('Attendance record counted in current subscription');
       syncPlayerInAttendanceBoard(refreshedPlayer, attendanceRecords);
       setEditingAttendanceHistoryId(null);
     } catch (error) {
+      setSelectedPlayerAttendanceHistory(previousRecords);
+      applyOptimisticSelectedPlayer(previousPlayer, previousRecords);
       setMessage(error.response?.data?.message || 'Unable to count this attendance in current subscription');
     } finally {
       setAttendanceHistoryPending(null);
@@ -1485,15 +1574,19 @@ const AttendancePage = () => {
 
     const recordDate = new Date(record.checkInTime || record.date);
     recordDate.setDate(recordDate.getDate() + 1);
+    const previousPlayer = selectedPlayer;
+    const previousRecords = selectedPlayerAttendanceHistory;
+    const nextSubscriptionStart = getDateInputValue(recordDate);
+    const optimisticPlayer = {
+      ...selectedPlayer,
+      currentSubscriptionStartedAt: nextSubscriptionStart
+    };
 
     try {
       setMessage('');
       setAttendanceHistoryPending(record._id);
-      const nextSubscriptionStart = getDateInputValue(recordDate);
-      setSelectedPlayer((currentPlayer) => currentPlayer ? {
-        ...currentPlayer,
-        currentSubscriptionStartedAt: nextSubscriptionStart
-      } : currentPlayer);
+      applyOptimisticSelectedPlayer(optimisticPlayer, previousRecords);
+      setMessage('Attendance record removed from current subscription');
       await updatePlayer(selectedPlayer._id, {
         currentSubscriptionStartedAt: nextSubscriptionStart
       });
@@ -1506,10 +1599,11 @@ const AttendancePage = () => {
       setSelectedPlayer(refreshedPlayer);
       setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
       setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
-      setMessage('Attendance record removed from current subscription');
       syncPlayerInAttendanceBoard(refreshedPlayer, attendanceRecords);
       setEditingAttendanceHistoryId(null);
     } catch (error) {
+      setSelectedPlayerAttendanceHistory(previousRecords);
+      applyOptimisticSelectedPlayer(previousPlayer, previousRecords);
       setMessage(error.response?.data?.message || 'Unable to remove this attendance from current subscription');
     } finally {
       setAttendanceHistoryPending(null);
@@ -1522,30 +1616,55 @@ const AttendancePage = () => {
       return;
     }
 
+    const previousPlayer = selectedPlayer;
+    const selectedParent = editParents.find((parent) => getEntityId(parent._id) === getEntityId(selectedPlayerForm.parentId));
+    const selectedGroupRefs = selectedPlayerForm.groupIds
+      .map((groupId) => editGroups.find((group) => getEntityId(group._id) === getEntityId(groupId)) || { _id: groupId, name: '' });
+    const updatePayload = {
+      ...selectedPlayerForm,
+      groupId: selectedPlayerForm.groupIds[0] || '',
+      groupIds: selectedPlayerForm.groupIds,
+      packageClasses: parseLocalizedNumber(selectedPlayerForm.packageClasses),
+      packageHours: parseLocalizedNumber(selectedPlayerForm.packageHours),
+      payment: parseLocalizedNumber(selectedPlayerForm.payment)
+    };
+    const optimisticPlayer = {
+      ...selectedPlayer,
+      ...updatePayload,
+      parentId: selectedParent
+        ? {
+          ...selectedParent,
+          phone: selectedParent.phone || selectedPlayerForm.parentPhone || ''
+        }
+        : selectedPlayer.parentId,
+      parentPhone: selectedPlayerForm.parentPhone,
+      groupId: selectedGroupRefs[0] || null,
+      groupIds: selectedGroupRefs,
+      note: selectedPlayerForm.note
+    };
+
     try {
       setMessage('');
       setShowUnsavedExitConfirm(false);
-      await updatePlayer(selectedPlayer._id, {
-        ...selectedPlayerForm,
-        groupId: selectedPlayerForm.groupIds[0] || '',
-        groupIds: selectedPlayerForm.groupIds,
-        packageClasses: parseLocalizedNumber(selectedPlayerForm.packageClasses),
-        packageHours: parseLocalizedNumber(selectedPlayerForm.packageHours),
-        payment: parseLocalizedNumber(selectedPlayerForm.payment)
-      });
+      applyOptimisticSelectedPlayer(optimisticPlayer);
+      selectedPlayerFormDirtyRef.current = false;
+      setIsEditingSelectedPlayer(false);
+      setMessage('Player updated successfully');
+      await updatePlayer(selectedPlayer._id, updatePayload);
 
       const refreshedPlayer = await getPlayer(selectedPlayer._id, { force: true });
 
       setSelectedPlayer(refreshedPlayer);
       setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
-      selectedPlayerFormDirtyRef.current = false;
-      setIsEditingSelectedPlayer(false);
-      setMessage('Player updated successfully');
       syncPlayerInAttendanceBoard(refreshedPlayer);
       if (options.closeAfterSave) {
         closeSelectedPlayer({ force: true });
       }
     } catch (err) {
+      applyOptimisticSelectedPlayer(previousPlayer);
+      setSelectedPlayerForm(selectedPlayerForm);
+      setIsEditingSelectedPlayer(true);
+      selectedPlayerFormDirtyRef.current = true;
       setMessage(err.response?.data?.message || 'Unable to update player');
     }
   };
