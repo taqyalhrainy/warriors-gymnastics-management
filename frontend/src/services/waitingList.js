@@ -14,6 +14,12 @@ export const createWaitingListEntry = async (data) => {
   return response.data;
 };
 
+export const updateWaitingListEntry = async (id, data) => {
+  const response = await api.put(`/waiting-list/${id}`, data);
+  invalidateCache(['waiting-list:']);
+  return response.data;
+};
+
 export const deleteWaitingListEntry = async (id) => {
   const response = await api.delete(`/waiting-list/${id}`);
   invalidateCache(['waiting-list:']);

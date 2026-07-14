@@ -18,37 +18,80 @@ const getWaitingListEntries = async (req, res, next) => {
   }
 };
 
-const createWaitingListEntry = async (req, res, next) => {
-  try {
-    const payload = sanitizeObject(req.body);
-    const { playerName, playerAge, parentName, parentPhone, desiredGroupId, notes } = payload;
+const validateWaitingListPayload = async (payload) => {
+  const { playerName, playerAge, parentName, parentPhone, desiredGroupId, notes } = payload;
 
-    if (!playerName || !parentName || !parentPhone || !validateObjectId(desiredGroupId)) {
-      return res.status(400).json({ message: 'Player name, parent name, parent phone, and desired group are required.' });
-    }
-    const parsedPlayerAge = playerAge === '' || typeof playerAge === 'undefined' ? undefined : Number(playerAge);
-    if (typeof parsedPlayerAge !== 'undefined' && (!Number.isFinite(parsedPlayerAge) || parsedPlayerAge < 0 || parsedPlayerAge > 120)) {
-      return res.status(400).json({ message: 'Player age must be a valid number.' });
-    }
+  if (!playerName || !parentName || !parentPhone || !validateObjectId(desiredGroupId)) {
+    return { error: { status: 400, message: 'Player name, parent name, parent phone, and desired group are required.' } };
+  }
 
-    const group = await TrainingGroup.findById(desiredGroupId);
-    if (!group) {
-      return res.status(404).json({ message: 'Group not found.' });
-    }
+  const parsedPlayerAge = playerAge === '' || typeof playerAge === 'undefined' ? undefined : Number(playerAge);
+  if (typeof parsedPlayerAge !== 'undefined' && (!Number.isFinite(parsedPlayerAge) || parsedPlayerAge < 0 || parsedPlayerAge > 120)) {
+    return { error: { status: 400, message: 'Player age must be a valid number.' } };
+  }
 
-    const entry = await WaitingListEntry.create({
+  const group = await TrainingGroup.findById(desiredGroupId);
+  if (!group) {
+    return { error: { status: 404, message: 'Group not found.' } };
+  }
+
+  return {
+    data: {
       playerName,
       playerAge: parsedPlayerAge,
       parentName,
       parentPhone,
       desiredGroupId,
-      notes: notes || '',
+      notes: notes || ''
+    }
+  };
+};
+
+const createWaitingListEntry = async (req, res, next) => {
+  try {
+    const payload = sanitizeObject(req.body);
+    const { data, error } = await validateWaitingListPayload(payload);
+    if (error) {
+      return res.status(error.status).json({ message: error.message });
+    }
+
+    const entry = await WaitingListEntry.create({
+      ...data,
       createdBy: req.user._id
     });
     await createAuditLog({ userId: req.user._id, action: 'create waiting list entry', entity: 'WaitingListEntry', entityId: entry._id, req });
 
     const populatedEntry = await populateWaitingListEntry(WaitingListEntry.findById(entry._id));
     res.status(201).json(populatedEntry);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateWaitingListEntry = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!validateObjectId(id)) {
+      return res.status(400).json({ message: 'Invalid waiting list entry ID.' });
+    }
+
+    const entry = await WaitingListEntry.findById(id);
+    if (!entry) {
+      return res.status(404).json({ message: 'Waiting list entry not found.' });
+    }
+
+    const payload = sanitizeObject(req.body);
+    const { data, error } = await validateWaitingListPayload(payload);
+    if (error) {
+      return res.status(error.status).json({ message: error.message });
+    }
+
+    Object.assign(entry, data);
+    await entry.save();
+    await createAuditLog({ userId: req.user._id, action: 'update waiting list entry', entity: 'WaitingListEntry', entityId: entry._id, req });
+
+    const populatedEntry = await populateWaitingListEntry(WaitingListEntry.findById(entry._id));
+    res.json(populatedEntry);
   } catch (error) {
     next(error);
   }
@@ -74,4 +117,4 @@ const deleteWaitingListEntry = async (req, res, next) => {
   }
 };
 
-module.exports = { getWaitingListEntries, createWaitingListEntry, deleteWaitingListEntry };
+module.exports = { getWaitingListEntries, createWaitingListEntry, updateWaitingListEntry, deleteWaitingListEntry };

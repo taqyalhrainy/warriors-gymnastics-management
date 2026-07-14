@@ -7,7 +7,7 @@ import { fetchGroups } from '../services/groups.js';
 import { fetchPlayers, getPlayer } from '../services/players.js';
 import { fetchAttendanceByPlayer } from '../services/attendance.js';
 import { fetchPaymentsByPlayer } from '../services/payments.js';
-import { createWaitingListEntry, deleteWaitingListEntry, fetchWaitingList } from '../services/waitingList.js';
+import { createWaitingListEntry, deleteWaitingListEntry, fetchWaitingList, updateWaitingListEntry } from '../services/waitingList.js';
 import { formatCurrency } from '../utils/format.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -100,6 +100,7 @@ const AdminDashboard = () => {
   const [isBackupDownloading, setIsBackupDownloading] = useState(false);
   const [isDashboardLoading, setIsDashboardLoading] = useState(false);
   const [waitingForm, setWaitingForm] = useState(initialWaitingForm);
+  const [editingWaitingEntryId, setEditingWaitingEntryId] = useState('');
   const [isWaitingFormOpen, setIsWaitingFormOpen] = useState(false);
   const [error, setError] = useState('');
   const [waitingMessage, setWaitingMessage] = useState('');
@@ -233,20 +234,57 @@ const AdminDashboard = () => {
     setWaitingMessage('');
 
     try {
-      const entry = await createWaitingListEntry(waitingForm);
-      setWaitingList((current) => [entry, ...current]);
+      if (editingWaitingEntryId) {
+        const entry = await updateWaitingListEntry(editingWaitingEntryId, waitingForm);
+        setWaitingList((current) => current.map((item) => (item._id === entry._id ? entry : item)));
+        setWaitingMessage('Waiting list entry updated.');
+      } else {
+        const entry = await createWaitingListEntry(waitingForm);
+        setWaitingList((current) => [entry, ...current]);
+        setWaitingMessage(copy.added);
+      }
       setWaitingForm(initialWaitingForm);
-      setIsWaitingFormOpen(false);
-      setWaitingMessage(copy.added);
+      setEditingWaitingEntryId('');
+      if (!editingWaitingEntryId) {
+        setIsWaitingFormOpen(false);
+      }
     } catch (err) {
-      setWaitingMessage(err.response?.data?.message || copy.unableSave);
+      setWaitingMessage(err.response?.data?.message || (editingWaitingEntryId ? 'Unable to update waiting list entry.' : copy.unableSave));
     }
+  };
+
+  const handleWaitingEdit = (entry) => {
+    setWaitingForm({
+      playerName: entry.playerName || '',
+      playerAge: typeof entry.playerAge === 'number' ? String(entry.playerAge) : '',
+      parentName: entry.parentName || '',
+      parentPhone: entry.parentPhone || '',
+      desiredGroupId: entry.desiredGroupId?._id || entry.desiredGroupId || '',
+      notes: entry.notes || ''
+    });
+    setEditingWaitingEntryId(entry._id);
+    setWaitingMessage('');
+  };
+
+  const handleWaitingCancelEdit = () => {
+    setWaitingForm(initialWaitingForm);
+    setEditingWaitingEntryId('');
+    setWaitingMessage('');
+  };
+
+  const closeWaitingListModal = () => {
+    setIsWaitingFormOpen(false);
+    handleWaitingCancelEdit();
   };
 
   const handleWaitingDelete = async (id) => {
     try {
       await deleteWaitingListEntry(id);
       setWaitingList((current) => current.filter((entry) => entry._id !== id));
+      if (editingWaitingEntryId === id) {
+        setWaitingForm(initialWaitingForm);
+        setEditingWaitingEntryId('');
+      }
       setWaitingMessage(copy.deleted);
     } catch (err) {
       setWaitingMessage(err.response?.data?.message || copy.unableDelete);
@@ -413,7 +451,7 @@ const AdminDashboard = () => {
         </div>
 
         {isWaitingFormOpen && (
-          <div className="student-modal-backdrop" role="presentation" onClick={() => setIsWaitingFormOpen(false)}>
+          <div className="student-modal-backdrop" role="presentation" onClick={closeWaitingListModal}>
             <section className="student-modal waiting-list-modal" role="dialog" aria-modal="true" aria-label={copy.waitingList} onClick={(event) => event.stopPropagation()}>
               <div className="student-modal-header">
                 <div className="waiting-list-heading">
@@ -423,7 +461,7 @@ const AdminDashboard = () => {
                   </div>
                   <strong>{waitingList.length}</strong>
                 </div>
-                <button type="button" className="btn-secondary" onClick={() => setIsWaitingFormOpen(false)}>{t('close')}</button>
+                <button type="button" className="btn-secondary" onClick={closeWaitingListModal}>{t('close')}</button>
               </div>
 
               {waitingMessage && <p className="alert-info">{waitingMessage}</p>}
@@ -460,7 +498,10 @@ const AdminDashboard = () => {
                   <span>{copy.note}</span>
                   <input name="notes" value={waitingForm.notes} onChange={handleWaitingFormChange} />
                 </label>
-                <button className="btn-primary" type="submit">{copy.save}</button>
+                <button className="btn-primary" type="submit">{editingWaitingEntryId ? 'Save changes' : copy.save}</button>
+                {editingWaitingEntryId && (
+                  <button className="btn-secondary" type="button" onClick={handleWaitingCancelEdit}>Cancel edit</button>
+                )}
               </form>
 
               <div className="waiting-list-table-wrap">
@@ -493,7 +534,7 @@ const AdminDashboard = () => {
                         <td>{entry.createdAt ? new Date(entry.createdAt).toLocaleDateString() : '-'}</td>
                         <td>
                           <div className="table-actions">
-                            <a className="btn-secondary" href={`tel:${entry.parentPhone}`}>{copy.call}</a>
+                            <button className="btn-secondary" type="button" onClick={() => handleWaitingEdit(entry)}>{t('edit')}</button>
                             <button className="btn-secondary" type="button" onClick={() => handleWaitingDelete(entry._id)}>{t('delete')}</button>
                           </div>
                         </td>
