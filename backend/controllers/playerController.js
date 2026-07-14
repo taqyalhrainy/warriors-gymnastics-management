@@ -34,6 +34,8 @@ const normalizeGroupIds = (payload) => {
   return [...new Set(rawGroupIds.filter((groupId) => validateObjectId(groupId)).map(String))];
 };
 
+const escapeRegex = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const getPlayerGroupIds = (player) => {
   if (player.groupIds?.length) {
     return normalizeGroupIds({ groupIds: player.groupIds.map(String) });
@@ -164,6 +166,15 @@ const createPlayer = async (req, res, next) => {
     const parent = await Parent.findById(parentId);
     if (!parent) {
       return res.status(404).json({ message: 'Parent not found.' });
+    }
+
+    const existingPlayer = await Player.findOne({
+      parentId,
+      fullName: new RegExp(`^${escapeRegex(fullName.trim())}$`, 'i'),
+      isDeleted: { $ne: true }
+    });
+    if (existingPlayer) {
+      return res.status(409).json({ message: 'This player is already added for this parent.' });
     }
 
     await validateGroupsHaveCapacity(groupIds, 'One or more groups were not found.', 'is already at full capacity.');

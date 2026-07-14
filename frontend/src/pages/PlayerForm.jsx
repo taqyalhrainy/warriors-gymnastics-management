@@ -31,6 +31,7 @@ const PlayerFormPage = () => {
   const [groups, setGroups] = useState([]);
   const [packageOptions, setPackageOptions] = useState([]);
   const [message, setMessage] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const [parentSearch, setParentSearch] = useState('');
   const [groupSearch, setGroupSearch] = useState('');
   const { t } = useLanguage();
@@ -111,7 +112,12 @@ const PlayerFormPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSaving) {
+      return;
+    }
+
     setMessage('');
+    setIsSaving(true);
     try {
       const payload = {
         ...player,
@@ -134,6 +140,8 @@ const PlayerFormPage = () => {
       navigate('/players');
     } catch (err) {
       setMessage(err.response?.data?.message || 'Unable to save player');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -238,7 +246,9 @@ const PlayerFormPage = () => {
             <label>{t('note')}</label>
             <textarea name="note" value={player.note} onChange={handleChange} placeholder={t('discountNotePlaceholder')} />
 
-            <button type="submit" className="btn-primary">{t('savePlayer')}</button>
+            <button type="submit" className="btn-primary" disabled={isSaving}>
+              {isSaving ? 'Saving...' : t('savePlayer')}
+            </button>
           </form>
         </div>
       </main>

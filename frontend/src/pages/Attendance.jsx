@@ -72,6 +72,17 @@ const getHistorySnapshotIsoForDate = (dateValue) => new Date(`${dateValue}T23:59
 
 const getEntityId = (value) => String(value?._id || value || '');
 const getAttendanceRecordKey = (playerId, groupId) => `${getEntityId(playerId)}:${getEntityId(groupId)}`;
+const dedupePlayersById = (players = []) => {
+  const seenPlayerIds = new Set();
+  return players.filter((player) => {
+    const playerId = getEntityId(player._id);
+    if (!playerId || seenPlayerIds.has(playerId)) {
+      return false;
+    }
+    seenPlayerIds.add(playerId);
+    return true;
+  });
+};
 
 const decodeDisplayText = (value) => {
   if (typeof value !== 'string') {
@@ -268,7 +279,7 @@ const AttendancePage = () => {
     });
 
     return groups.map((group) => {
-      const players = group.players.map((player) => ({
+      const players = dedupePlayersById(group.players).map((player) => ({
         ...player,
         todayAttendance: recordsByPlayerAndGroupId.get(getAttendanceRecordKey(player._id, group._id)) || null
       }));
@@ -408,7 +419,7 @@ const AttendancePage = () => {
         });
       const currentGroupsWithPlayers = await Promise.all(
         groups.map(async (group) => {
-          const players = (await fetchGroupPlayers(group._id, { force }))
+          const players = dedupePlayersById(await fetchGroupPlayers(group._id, { force }))
             .filter((player) => isPlayerVisibleInAttendance(player, date));
 
           return {
@@ -768,7 +779,7 @@ const AttendancePage = () => {
 
       const nextGroups = currentGroups.map((group) => {
         let changed = false;
-        const nextPlayers = group.players.map((player) => {
+        const nextPlayers = dedupePlayersById(group.players).map((player) => {
           if (player._id !== playerId) {
             return player;
           }
@@ -880,8 +891,10 @@ const AttendancePage = () => {
         const groupId = getEntityId(group._id);
         const shouldIncludePlayer = isVisibleForSelectedDate && targetGroupIds.has(groupId);
         const groupInfo = targetGroups.find((targetGroup) => getEntityId(targetGroup._id) === groupId);
+        const cleanPlayers = dedupePlayersById(group.players);
+        const existingPlayerIndex = cleanPlayers.findIndex((player) => getEntityId(player._id) === playerId);
         const existingPlayer = existingPlayerByGroupId.get(groupId);
-        let nextPlayers = group.players.filter((player) => getEntityId(player._id) !== playerId);
+        let nextPlayers = cleanPlayers.filter((player) => getEntityId(player._id) !== playerId);
 
         if (shouldIncludePlayer) {
           const patchedPlayer = {
@@ -892,9 +905,11 @@ const AttendancePage = () => {
               ? (overrideAttendanceByGroupId.get(groupId) || null)
               : (attendanceByGroupId.get(groupId) || null)
           };
-          nextPlayers = existingPlayer
-            ? group.players.map((player) => (getEntityId(player._id) === playerId ? patchedPlayer : player))
-            : [...nextPlayers, patchedPlayer];
+          if (existingPlayerIndex >= 0) {
+            nextPlayers.splice(existingPlayerIndex, 0, patchedPlayer);
+          } else {
+            nextPlayers = [...nextPlayers, patchedPlayer];
+          }
         }
 
         return {
