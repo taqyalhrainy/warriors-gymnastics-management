@@ -838,6 +838,87 @@ const AttendancePage = () => {
     .find((group) => getEntityId(group._id) === getEntityId(groupId))
     ?.players.find((currentPlayer) => getEntityId(currentPlayer._id) === getEntityId(playerId)) || null;
 
+  const patchPlayerInAttendanceBoard = (updatedPlayer, attendanceRecords = null, fallbackGroupId = '') => {
+    if (!updatedPlayer?._id) {
+      return;
+    }
+
+    setGroupColumns((currentGroups) => {
+      const playerId = getEntityId(updatedPlayer._id);
+      const attendanceByGroupId = new Map();
+      const existingPlayerByGroupId = new Map();
+      const targetGroups = getSnapshotGroups(updatedPlayer);
+      const targetGroupIds = new Set(targetGroups.map((group) => getEntityId(group._id)).filter(Boolean));
+      const playerStartTime = getPlayerAttendanceStartTime(updatedPlayer);
+      const selectedDateTime = new Date(`${selectedAttendanceDate}T23:59:59.999`).getTime();
+      const isVisibleForSelectedDate = isPlayerVisibleInAttendance(updatedPlayer)
+        && (!playerStartTime || playerStartTime <= selectedDateTime);
+      const hasAttendanceOverride = Array.isArray(attendanceRecords);
+      const selectedDateRecords = hasAttendanceOverride
+        ? attendanceRecords.filter((record) => getDateInputValue(record.date) === selectedAttendanceDate)
+        : [];
+      const overrideAttendanceByGroupId = new Map();
+      selectedDateRecords.forEach((record) => {
+        overrideAttendanceByGroupId.set(getEntityId(record.groupId), record);
+      });
+      if (hasAttendanceOverride && fallbackGroupId && !overrideAttendanceByGroupId.has(getEntityId(fallbackGroupId))) {
+        overrideAttendanceByGroupId.set(getEntityId(fallbackGroupId), null);
+      }
+
+      currentGroups.forEach((group) => {
+        const groupId = getEntityId(group._id);
+        const existingPlayer = group.players.find((player) => getEntityId(player._id) === playerId);
+        if (existingPlayer) {
+          existingPlayerByGroupId.set(groupId, existingPlayer);
+          if (existingPlayer.todayAttendance) {
+            attendanceByGroupId.set(groupId, existingPlayer.todayAttendance);
+          }
+        }
+      });
+
+      const nextGroups = currentGroups.map((group) => {
+        const groupId = getEntityId(group._id);
+        const shouldIncludePlayer = isVisibleForSelectedDate && targetGroupIds.has(groupId);
+        const groupInfo = targetGroups.find((targetGroup) => getEntityId(targetGroup._id) === groupId);
+        const existingPlayer = existingPlayerByGroupId.get(groupId);
+        let nextPlayers = group.players.filter((player) => getEntityId(player._id) !== playerId);
+
+        if (shouldIncludePlayer) {
+          const patchedPlayer = {
+            ...existingPlayer,
+            ...updatedPlayer,
+            groupId: groupInfo ? { ...groupInfo } : updatedPlayer.groupId,
+            todayAttendance: hasAttendanceOverride
+              ? (overrideAttendanceByGroupId.get(groupId) || null)
+              : (attendanceByGroupId.get(groupId) || null)
+          };
+          nextPlayers = existingPlayer
+            ? group.players.map((player) => (getEntityId(player._id) === playerId ? patchedPlayer : player))
+            : [...nextPlayers, patchedPlayer];
+        }
+
+        return {
+          ...group,
+          players: nextPlayers,
+          currentCount: nextPlayers.length,
+          markedCount: nextPlayers.filter((player) => Boolean(player.todayAttendance)).length,
+          presentCount: nextPlayers.filter((player) => player.todayAttendance?.status === 'present').length
+        };
+      });
+
+      attendanceBoardCache = nextGroups;
+      attendanceBoardCacheTimestamp = Date.now();
+      attendanceBoardCacheDate = selectedAttendanceDate;
+      attendanceBoardCacheVersion = getCacheVersion();
+      groupColumnsRef.current = nextGroups;
+      return nextGroups;
+    });
+  };
+
+  const syncPlayerInAttendanceBoard = (updatedPlayer, attendanceRecords = null, fallbackGroupId = '') => {
+    patchPlayerInAttendanceBoard(updatedPlayer, attendanceRecords, fallbackGroupId);
+  };
+
   const setAttendanceHistoryPending = (recordId) => {
     pendingAttendanceHistoryIdRef.current = recordId;
     setPendingAttendanceHistoryId(recordId);
@@ -1209,7 +1290,7 @@ const AttendancePage = () => {
       setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
       setShowSubscriptionModal(false);
       setMessage('New subscription started');
-      await loadAttendanceBoard({ force: true, date: selectedAttendanceDate });
+      syncPlayerInAttendanceBoard(refreshedPlayer, attendanceRecords);
     } catch (error) {
       setSubscriptionMessage(error.response?.data?.message || 'Unable to start a new subscription.');
     } finally {
@@ -1229,7 +1310,7 @@ const AttendancePage = () => {
       setSelectedPlayer(refreshedPlayer);
       setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
       setMessage('Subscription warning cleared');
-      await loadAttendanceBoard({ force: true, date: selectedAttendanceDate });
+      syncPlayerInAttendanceBoard(refreshedPlayer);
     } catch (error) {
       setMessage(error.response?.data?.message || 'Unable to clear subscription warning');
     }
@@ -1247,7 +1328,7 @@ const AttendancePage = () => {
       setSelectedPlayer(refreshedPlayer);
       setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
       setMessage('Subscription warning enabled');
-      await loadAttendanceBoard({ force: true, date: selectedAttendanceDate });
+      syncPlayerInAttendanceBoard(refreshedPlayer);
     } catch (error) {
       setMessage(error.response?.data?.message || 'Unable to mark subscription warning');
     }
@@ -1295,7 +1376,7 @@ const AttendancePage = () => {
       setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
       setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
       setMessage('Attendance history updated');
-      await loadAttendanceBoard({ force: true, date: selectedAttendanceDate });
+      syncPlayerInAttendanceBoard(refreshedPlayer, attendanceRecords, groupId);
       setEditingAttendanceHistoryId(null);
     } catch (error) {
       setMessage(error.response?.data?.message || 'Unable to update attendance history');
@@ -1337,7 +1418,7 @@ const AttendancePage = () => {
       setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
       setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
       setMessage('Attendance history record removed');
-      await loadAttendanceBoard({ force: true, date: selectedAttendanceDate });
+      syncPlayerInAttendanceBoard(refreshedPlayer, attendanceRecords, groupId);
       setEditingAttendanceHistoryId(null);
     } catch (error) {
       setMessage(error.response?.data?.message || 'Unable to remove attendance history record');
@@ -1380,7 +1461,7 @@ const AttendancePage = () => {
       setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
       setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
       setMessage('Attendance record counted in current subscription');
-      await loadAttendanceBoard({ force: true, date: selectedAttendanceDate });
+      syncPlayerInAttendanceBoard(refreshedPlayer, attendanceRecords);
       setEditingAttendanceHistoryId(null);
     } catch (error) {
       setMessage(error.response?.data?.message || 'Unable to count this attendance in current subscription');
@@ -1426,7 +1507,7 @@ const AttendancePage = () => {
       setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
       setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
       setMessage('Attendance record removed from current subscription');
-      await loadAttendanceBoard({ force: true, date: selectedAttendanceDate });
+      syncPlayerInAttendanceBoard(refreshedPlayer, attendanceRecords);
       setEditingAttendanceHistoryId(null);
     } catch (error) {
       setMessage(error.response?.data?.message || 'Unable to remove this attendance from current subscription');
@@ -1460,7 +1541,7 @@ const AttendancePage = () => {
       selectedPlayerFormDirtyRef.current = false;
       setIsEditingSelectedPlayer(false);
       setMessage('Player updated successfully');
-      await loadAttendanceBoard({ force: true, date: selectedAttendanceDate });
+      syncPlayerInAttendanceBoard(refreshedPlayer);
       if (options.closeAfterSave) {
         closeSelectedPlayer({ force: true });
       }
