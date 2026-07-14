@@ -1772,8 +1772,6 @@ body.attendance-touch-dragging {
   top: 8px;
   right: 8px;
   left: auto;
-  inset-inline-start: auto;
-  inset-inline-end: 8px;
   z-index: 3;
   width: 13px;
   height: 13px;
@@ -1783,6 +1781,11 @@ body.attendance-touch-dragging {
   box-shadow: 0 0 0 0 rgba(239, 25, 25, 0.72), 0 0 14px rgba(239, 25, 25, 0.82);
   pointer-events: none;
   animation: attendance-review-pulse 1.05s ease-in-out infinite;
+}
+
+.attendance-player-card.is-expired .attendance-review-pulse {
+  top: 10px;
+  right: 34px;
 }
 
 .attendance-player-main:hover {
