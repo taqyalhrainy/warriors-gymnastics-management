@@ -1269,6 +1269,7 @@ const AttendancePage = () => {
 
     setShowUnsavedExitConfirm(false);
     selectedPlayerFormDirtyRef.current = false;
+    selectedPlayerLoadRequestIdRef.current += 1;
     selectedPlayerEditRequestIdRef.current += 1;
     setIsEditingSelectedPlayer(false);
     setSelectedPlayerForm(null);
@@ -1631,6 +1632,7 @@ const AttendancePage = () => {
       return;
     }
 
+    const shouldCloseAfterSave = Boolean(options.closeAfterSave);
     const previousPlayer = selectedPlayer;
     const selectedParent = editParents.find((parent) => getEntityId(parent._id) === getEntityId(selectedPlayerForm.parentId));
     const selectedGroupRefs = selectedPlayerForm.groupIds
@@ -1665,15 +1667,17 @@ const AttendancePage = () => {
       selectedPlayerFormDirtyRef.current = false;
       setIsEditingSelectedPlayer(false);
       setMessage('Player updated successfully');
+      if (shouldCloseAfterSave) {
+        closeSelectedPlayer({ force: true });
+      }
       await updatePlayer(selectedPlayer._id, updatePayload);
 
       const refreshedPlayer = await getPlayer(selectedPlayer._id, { force: true });
 
-      setSelectedPlayer(refreshedPlayer);
-      setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
       syncPlayerInAttendanceBoard(refreshedPlayer);
-      if (options.closeAfterSave) {
-        closeSelectedPlayer({ force: true });
+      if (!shouldCloseAfterSave) {
+        setSelectedPlayer(refreshedPlayer);
+        setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
       }
     } catch (err) {
       applyOptimisticSelectedPlayer(previousPlayer);
