@@ -228,6 +228,7 @@ const AttendancePage = () => {
   const [subscriptionForm, setSubscriptionForm] = useState({ startDate: '', endDate: '' });
   const [subscriptionMessage, setSubscriptionMessage] = useState('');
   const [isSavingSubscription, setIsSavingSubscription] = useState(false);
+  const [pendingSelectedPlayerMutation, setPendingSelectedPlayerMutation] = useState('');
   const [editParents, setEditParents] = useState([]);
   const [editGroups, setEditGroups] = useState([]);
   const [packageOptions, setPackageOptions] = useState([]);
@@ -259,9 +260,12 @@ const AttendancePage = () => {
   const latestAttendanceActionRef = useRef(new Map());
   const pendingAttendanceHistoryIdRef = useRef(null);
   const didRunInitialAttendanceLoadRef = useRef(false);
+  const selectedPlayerRef = useRef(null);
   const selectedPlayerFormDirtyRef = useRef(false);
   const selectedPlayerLoadRequestIdRef = useRef(0);
   const selectedPlayerEditRequestIdRef = useRef(0);
+  const selectedPlayerMutationSequenceRef = useRef(0);
+  const pendingSelectedPlayerMutationRef = useRef('');
   const { t } = useLanguage();
   const todayDateValue = getLocalDateValue();
   const attendanceRangeStartValue = getAttendanceRangeStartValue();
@@ -462,6 +466,10 @@ const AttendancePage = () => {
   useEffect(() => {
     groupColumnsRef.current = groupColumns;
   }, [groupColumns]);
+
+  useEffect(() => {
+    selectedPlayerRef.current = selectedPlayer;
+  }, [selectedPlayer]);
 
   useEffect(() => {
     if (isAttendanceDateOutOfRange) {
@@ -934,10 +942,53 @@ const AttendancePage = () => {
     patchPlayerInAttendanceBoard(updatedPlayer, attendanceRecords, fallbackGroupId);
   };
 
+  const isSelectedPlayerOpen = (playerId) => getEntityId(selectedPlayerRef.current?._id) === getEntityId(playerId);
+
+  const setSelectedPlayerIfOpen = (player, { updateForm = true } = {}) => {
+    if (!isSelectedPlayerOpen(player?._id)) {
+      return;
+    }
+
+    setSelectedPlayer(player);
+    if (updateForm) {
+      setSelectedPlayerForm(createSelectedPlayerForm(player));
+    }
+  };
+
   const applyOptimisticSelectedPlayer = (nextPlayer, attendanceRecords = null, fallbackGroupId = '') => {
-    setSelectedPlayer(nextPlayer);
-    setSelectedPlayerForm(createSelectedPlayerForm(nextPlayer));
     syncPlayerInAttendanceBoard(nextPlayer, attendanceRecords, fallbackGroupId);
+    setSelectedPlayerIfOpen(nextPlayer);
+  };
+
+  const beginSelectedPlayerMutation = (name) => {
+    const mutation = {
+      sequence: selectedPlayerMutationSequenceRef.current + 1,
+      playerId: getEntityId(selectedPlayerRef.current?._id),
+      sessionId: selectedPlayerLoadRequestIdRef.current
+    };
+    selectedPlayerMutationSequenceRef.current = mutation.sequence;
+    pendingSelectedPlayerMutationRef.current = name;
+    setPendingSelectedPlayerMutation(name);
+    return mutation;
+  };
+
+  const isCurrentSelectedPlayerMutation = (mutation) => (
+    mutation
+    && selectedPlayerMutationSequenceRef.current === mutation.sequence
+    && selectedPlayerLoadRequestIdRef.current === mutation.sessionId
+    && isSelectedPlayerOpen(mutation.playerId)
+  );
+
+  const isLatestSelectedPlayerMutation = (mutation) => (
+    mutation
+    && selectedPlayerMutationSequenceRef.current === mutation.sequence
+  );
+
+  const finishSelectedPlayerMutation = (mutation) => {
+    if (mutation && selectedPlayerMutationSequenceRef.current === mutation.sequence) {
+      pendingSelectedPlayerMutationRef.current = '';
+      setPendingSelectedPlayerMutation('');
+    }
   };
 
   const applyPresentDeltaToPlayer = (player, presentDelta) => {
@@ -1352,13 +1403,16 @@ const AttendancePage = () => {
         fetchAttendanceByPlayer(selectedPlayer._id)
       ]);
 
-      setSelectedPlayer(refreshedPlayer);
-      setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
-      setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
       syncPlayerInAttendanceBoard(refreshedPlayer, attendanceRecords);
+      setSelectedPlayerIfOpen(refreshedPlayer);
+      if (isSelectedPlayerOpen(refreshedPlayer._id)) {
+        setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
+      }
     } catch (error) {
       applyOptimisticSelectedPlayer(previousPlayer);
-      setShowSubscriptionModal(true);
+      if (isSelectedPlayerOpen(previousPlayer._id)) {
+        setShowSubscriptionModal(true);
+      }
       setSubscriptionMessage(error.response?.data?.message || 'Unable to start a new subscription.');
     } finally {
       setIsSavingSubscription(false);
@@ -1369,7 +1423,11 @@ const AttendancePage = () => {
     if (!selectedPlayer?._id) {
       return;
     }
+    if (pendingSelectedPlayerMutationRef.current) {
+      return;
+    }
 
+    const mutation = beginSelectedPlayerMutation('subscription-attention');
     const previousPlayer = selectedPlayer;
     const optimisticPlayer = {
       ...selectedPlayer,
@@ -1382,12 +1440,20 @@ const AttendancePage = () => {
       setMessage('Subscription warning cleared');
       await updatePlayer(selectedPlayer._id, { subscriptionNeedsAttention: false });
       const refreshedPlayer = await getPlayer(selectedPlayer._id, { force: true });
+      if (!isLatestSelectedPlayerMutation(mutation)) {
+        return;
+      }
       syncPlayerInAttendanceBoard(refreshedPlayer);
-      setSelectedPlayer(refreshedPlayer);
-      setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
+      setSelectedPlayerIfOpen(refreshedPlayer);
     } catch (error) {
-      applyOptimisticSelectedPlayer(previousPlayer);
-      setMessage(error.response?.data?.message || 'Unable to clear subscription warning');
+      if (isLatestSelectedPlayerMutation(mutation)) {
+        applyOptimisticSelectedPlayer(previousPlayer);
+        if (isCurrentSelectedPlayerMutation(mutation)) {
+          setMessage(error.response?.data?.message || 'Unable to clear subscription warning');
+        }
+      }
+    } finally {
+      finishSelectedPlayerMutation(mutation);
     }
   };
 
@@ -1395,7 +1461,11 @@ const AttendancePage = () => {
     if (!selectedPlayer?._id) {
       return;
     }
+    if (pendingSelectedPlayerMutationRef.current) {
+      return;
+    }
 
+    const mutation = beginSelectedPlayerMutation('subscription-attention');
     const previousPlayer = selectedPlayer;
     const optimisticPlayer = {
       ...selectedPlayer,
@@ -1408,12 +1478,20 @@ const AttendancePage = () => {
       setMessage('Subscription warning enabled');
       await updatePlayer(selectedPlayer._id, { subscriptionNeedsAttention: true });
       const refreshedPlayer = await getPlayer(selectedPlayer._id, { force: true });
+      if (!isLatestSelectedPlayerMutation(mutation)) {
+        return;
+      }
       syncPlayerInAttendanceBoard(refreshedPlayer);
-      setSelectedPlayer(refreshedPlayer);
-      setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
+      setSelectedPlayerIfOpen(refreshedPlayer);
     } catch (error) {
-      applyOptimisticSelectedPlayer(previousPlayer);
-      setMessage(error.response?.data?.message || 'Unable to mark subscription warning');
+      if (isLatestSelectedPlayerMutation(mutation)) {
+        applyOptimisticSelectedPlayer(previousPlayer);
+        if (isCurrentSelectedPlayerMutation(mutation)) {
+          setMessage(error.response?.data?.message || 'Unable to mark subscription warning');
+        }
+      }
+    } finally {
+      finishSelectedPlayerMutation(mutation);
     }
   };
 
@@ -1421,7 +1499,11 @@ const AttendancePage = () => {
     if (!selectedPlayer?._id) {
       return;
     }
+    if (pendingSelectedPlayerMutationRef.current) {
+      return;
+    }
 
+    const mutation = beginSelectedPlayerMutation('attendance-alert');
     const previousPlayer = selectedPlayer;
     const optimisticPlayer = {
       ...selectedPlayer,
@@ -1434,12 +1516,20 @@ const AttendancePage = () => {
       setMessage(isEnabled ? 'Attendance alert dot enabled' : 'Attendance alert dot cleared');
       await updatePlayer(selectedPlayer._id, { attendanceAlertEnabled: isEnabled });
       const refreshedPlayer = await getPlayer(selectedPlayer._id, { force: true });
+      if (!isLatestSelectedPlayerMutation(mutation)) {
+        return;
+      }
       syncPlayerInAttendanceBoard(refreshedPlayer);
-      setSelectedPlayer(refreshedPlayer);
-      setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
+      setSelectedPlayerIfOpen(refreshedPlayer);
     } catch (error) {
-      applyOptimisticSelectedPlayer(previousPlayer);
-      setMessage(error.response?.data?.message || 'Unable to update attendance alert dot');
+      if (isLatestSelectedPlayerMutation(mutation)) {
+        applyOptimisticSelectedPlayer(previousPlayer);
+        if (isCurrentSelectedPlayerMutation(mutation)) {
+          setMessage(error.response?.data?.message || 'Unable to update attendance alert dot');
+        }
+      }
+    } finally {
+      finishSelectedPlayerMutation(mutation);
     }
   };
 
@@ -1488,10 +1578,11 @@ const AttendancePage = () => {
         fetchAttendanceByPlayer(selectedPlayer._id)
       ]);
 
-      setSelectedPlayer(refreshedPlayer);
-      setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
-      setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
       syncPlayerInAttendanceBoard(refreshedPlayer, attendanceRecords, groupId);
+      setSelectedPlayerIfOpen(refreshedPlayer);
+      if (isSelectedPlayerOpen(refreshedPlayer._id)) {
+        setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
+      }
       setEditingAttendanceHistoryId(null);
     } catch (error) {
       setSelectedPlayerAttendanceHistory(previousRecords);
@@ -1538,10 +1629,11 @@ const AttendancePage = () => {
         fetchAttendanceByPlayer(selectedPlayer._id)
       ]);
 
-      setSelectedPlayer(refreshedPlayer);
-      setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
-      setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
       syncPlayerInAttendanceBoard(refreshedPlayer, attendanceRecords, groupId);
+      setSelectedPlayerIfOpen(refreshedPlayer);
+      if (isSelectedPlayerOpen(refreshedPlayer._id)) {
+        setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
+      }
       setEditingAttendanceHistoryId(null);
     } catch (error) {
       setSelectedPlayerAttendanceHistory(previousRecords);
@@ -1587,10 +1679,11 @@ const AttendancePage = () => {
         fetchAttendanceByPlayer(selectedPlayer._id)
       ]);
 
-      setSelectedPlayer(refreshedPlayer);
-      setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
-      setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
       syncPlayerInAttendanceBoard(refreshedPlayer, attendanceRecords);
+      setSelectedPlayerIfOpen(refreshedPlayer);
+      if (isSelectedPlayerOpen(refreshedPlayer._id)) {
+        setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
+      }
       setEditingAttendanceHistoryId(null);
     } catch (error) {
       setSelectedPlayerAttendanceHistory(previousRecords);
@@ -1638,10 +1731,11 @@ const AttendancePage = () => {
         fetchAttendanceByPlayer(selectedPlayer._id)
       ]);
 
-      setSelectedPlayer(refreshedPlayer);
-      setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
-      setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
       syncPlayerInAttendanceBoard(refreshedPlayer, attendanceRecords);
+      setSelectedPlayerIfOpen(refreshedPlayer);
+      if (isSelectedPlayerOpen(refreshedPlayer._id)) {
+        setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
+      }
       setEditingAttendanceHistoryId(null);
     } catch (error) {
       setSelectedPlayerAttendanceHistory(previousRecords);
@@ -1702,14 +1796,15 @@ const AttendancePage = () => {
 
       syncPlayerInAttendanceBoard(refreshedPlayer);
       if (!shouldCloseAfterSave) {
-        setSelectedPlayer(refreshedPlayer);
-        setSelectedPlayerForm(createSelectedPlayerForm(refreshedPlayer));
+        setSelectedPlayerIfOpen(refreshedPlayer);
       }
     } catch (err) {
       applyOptimisticSelectedPlayer(previousPlayer);
-      setSelectedPlayerForm(selectedPlayerForm);
-      setIsEditingSelectedPlayer(true);
-      selectedPlayerFormDirtyRef.current = true;
+      if (isSelectedPlayerOpen(previousPlayer._id)) {
+        setSelectedPlayerForm(selectedPlayerForm);
+        setIsEditingSelectedPlayer(true);
+        selectedPlayerFormDirtyRef.current = true;
+      }
       setMessage(err.response?.data?.message || 'Unable to update player');
     }
   };
@@ -2136,9 +2231,9 @@ const AttendancePage = () => {
                           : 'Mark this player red for admin review.'}
                       </strong>
                       {selectedPlayer.subscriptionNeedsAttention ? (
-                        <button type="button" className="btn-secondary" onClick={handleClearSubscriptionAttention}>Clear red highlight</button>
+                        <button type="button" className="btn-secondary" onClick={handleClearSubscriptionAttention} disabled={Boolean(pendingSelectedPlayerMutation)}>Clear red highlight</button>
                       ) : (
-                        <button type="button" className="btn-secondary" onClick={handleSetSubscriptionAttention}>Set highlight</button>
+                        <button type="button" className="btn-secondary" onClick={handleSetSubscriptionAttention} disabled={Boolean(pendingSelectedPlayerMutation)}>Set highlight</button>
                       )}
                     </div>
                     <div className={`student-info-grid-full subscription-attention-box${selectedPlayer.attendanceAlertEnabled ? ' is-active' : ''}`}>
@@ -2149,9 +2244,9 @@ const AttendancePage = () => {
                           : 'Show a pulsing red dot on this attendance card.'}
                       </strong>
                       {selectedPlayer.attendanceAlertEnabled ? (
-                        <button type="button" className="btn-secondary" onClick={() => handleAttendanceAlertToggle(false)}>Clear alert dot</button>
+                        <button type="button" className="btn-secondary" onClick={() => handleAttendanceAlertToggle(false)} disabled={Boolean(pendingSelectedPlayerMutation)}>Clear alert dot</button>
                       ) : (
-                        <button type="button" className="btn-secondary" onClick={() => handleAttendanceAlertToggle(true)}>Enable alert dot</button>
+                        <button type="button" className="btn-secondary" onClick={() => handleAttendanceAlertToggle(true)} disabled={Boolean(pendingSelectedPlayerMutation)}>Enable alert dot</button>
                       )}
                     </div>
                     {selectedPlayer.note && (
