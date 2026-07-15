@@ -25,6 +25,60 @@ const getFourWeekEndDateValue = (startDate) => {
   return getDateInputValue(value);
 };
 
+const DAY_INDEXES = {
+  sunday: 0,
+  sun: 0,
+  'الأحد': 0,
+  monday: 1,
+  mon: 1,
+  'الاثنين': 1,
+  'الإثنين': 1,
+  tuesday: 2,
+  tue: 2,
+  tues: 2,
+  'الثلاثاء': 2,
+  wednesday: 3,
+  wed: 3,
+  'الأربعاء': 3,
+  thursday: 4,
+  thu: 4,
+  thurs: 4,
+  'الخميس': 4,
+  friday: 5,
+  fri: 5,
+  'الجمعة': 5,
+  saturday: 6,
+  sat: 6,
+  'السبت': 6
+};
+
+const getScheduledEndDateValue = (startDate, player) => {
+  const totalClasses = Number(player?.packageClasses || 0);
+  const groups = player?.groupIds?.length ? player.groupIds : [player?.groupId].filter(Boolean);
+  const scheduledDays = new Set(
+    groups
+      .flatMap((group) => group?.days || [])
+      .map((day) => DAY_INDEXES[String(day).trim().toLowerCase()])
+      .filter((day) => Number.isInteger(day))
+  );
+
+  if (!startDate || totalClasses <= 0 || !scheduledDays.size) {
+    return getFourWeekEndDateValue(startDate);
+  }
+
+  const [year, month, day] = String(startDate).split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  if (Number.isNaN(date.getTime())) return '';
+
+  let scheduledClasses = 0;
+  while (scheduledClasses < totalClasses) {
+    if (scheduledDays.has(date.getDay())) scheduledClasses += 1;
+    if (scheduledClasses < totalClasses) date.setDate(date.getDate() + 1);
+  }
+
+  return getDateInputValue(date);
+};
+
 const PlayerProfilePage = () => {
   const { id } = useParams();
   const [player, setPlayer] = useState(null);
@@ -66,7 +120,7 @@ const PlayerProfilePage = () => {
     const startDate = getDateInputValue();
     setSubscriptionForm({
       startDate,
-      endDate: getFourWeekEndDateValue(startDate)
+      endDate: getScheduledEndDateValue(startDate, player)
     });
     setSubscriptionMessage('');
     setShowSubscriptionModal(true);
@@ -76,19 +130,19 @@ const PlayerProfilePage = () => {
     setSubscriptionForm((current) => ({
       ...current,
       startDate,
-      endDate: getFourWeekEndDateValue(startDate)
+      endDate: getScheduledEndDateValue(startDate, player)
     }));
   };
 
   useEffect(() => {
     if (!showSubscriptionModal || !subscriptionForm.startDate) return;
-    const nextEndDate = getFourWeekEndDateValue(subscriptionForm.startDate);
+    const nextEndDate = getScheduledEndDateValue(subscriptionForm.startDate, player);
     setSubscriptionForm((current) => (
       current.endDate === nextEndDate
         ? current
         : { ...current, endDate: nextEndDate }
     ));
-  }, [showSubscriptionModal, subscriptionForm.startDate]);
+  }, [showSubscriptionModal, subscriptionForm.startDate, player]);
 
   const handleSubscriptionSave = async (event) => {
     event.preventDefault();
