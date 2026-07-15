@@ -1,5 +1,6 @@
 const TrainingGroup = require('../models/TrainingGroup');
 const Player = require('../models/Player');
+require('../models/Parent');
 const Attendance = require('../models/Attendance');
 const { sanitizeObject, decodeText, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');

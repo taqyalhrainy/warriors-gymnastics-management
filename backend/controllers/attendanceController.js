@@ -1,6 +1,7 @@
 const Attendance = require('../models/Attendance');
 const Subscription = require('../models/Subscription');
 const Player = require('../models/Player');
+require('../models/Parent');
 const Notification = require('../models/Notification');
 const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
