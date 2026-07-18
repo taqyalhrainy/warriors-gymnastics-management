@@ -985,6 +985,35 @@ const AttendancePage = () => {
     patchPlayerInAttendanceBoard(updatedPlayer, attendanceRecords, fallbackGroupId);
   };
 
+  const patchExistingPlayerInAttendanceBoard = (updatedPlayer) => {
+    if (!updatedPlayer?._id) return;
+
+    setGroupColumns((currentGroups) => {
+      const playerId = getEntityId(updatedPlayer._id);
+      const nextGroups = currentGroups.map((group) => ({
+        ...group,
+        players: group.players.map((player) => (
+          getEntityId(player._id) === playerId
+            ? {
+              ...player,
+              ...updatedPlayer,
+              groupId: updatedPlayer.groupId || player.groupId,
+              groupIds: updatedPlayer.groupIds?.length ? updatedPlayer.groupIds : player.groupIds,
+              todayAttendance: player.todayAttendance
+            }
+            : player
+        ))
+      }));
+
+      attendanceBoardCache = nextGroups;
+      attendanceBoardCacheTimestamp = Date.now();
+      attendanceBoardCacheDate = selectedAttendanceDate;
+      attendanceBoardCacheVersion = getCacheVersion();
+      groupColumnsRef.current = nextGroups;
+      return nextGroups;
+    });
+  };
+
   const isSelectedPlayerOpen = (playerId) => getEntityId(selectedPlayerRef.current?._id) === getEntityId(playerId);
 
   const setSelectedPlayerIfOpen = (player, { updateForm = true } = {}) => {
@@ -1479,18 +1508,20 @@ const AttendancePage = () => {
 
     try {
       setMessage('');
-      applyOptimisticSelectedPlayer(optimisticPlayer);
+      patchExistingPlayerInAttendanceBoard(optimisticPlayer);
+      setSelectedPlayerIfOpen(optimisticPlayer);
       setMessage('Subscription warning cleared');
       await updatePlayer(selectedPlayer._id, { subscriptionNeedsAttention: false });
       const refreshedPlayer = await getPlayer(selectedPlayer._id, { force: true });
       if (!isLatestSelectedPlayerMutation(mutation)) {
         return;
       }
-      syncPlayerInAttendanceBoard(refreshedPlayer);
+      patchExistingPlayerInAttendanceBoard(refreshedPlayer);
       setSelectedPlayerIfOpen(refreshedPlayer);
     } catch (error) {
       if (isLatestSelectedPlayerMutation(mutation)) {
-        applyOptimisticSelectedPlayer(previousPlayer);
+        patchExistingPlayerInAttendanceBoard(previousPlayer);
+        setSelectedPlayerIfOpen(previousPlayer);
         if (isCurrentSelectedPlayerMutation(mutation)) {
           setMessage(error.response?.data?.message || 'Unable to clear subscription warning');
         }
@@ -1517,18 +1548,20 @@ const AttendancePage = () => {
 
     try {
       setMessage('');
-      applyOptimisticSelectedPlayer(optimisticPlayer);
+      patchExistingPlayerInAttendanceBoard(optimisticPlayer);
+      setSelectedPlayerIfOpen(optimisticPlayer);
       setMessage('Subscription warning enabled');
       await updatePlayer(selectedPlayer._id, { subscriptionNeedsAttention: true });
       const refreshedPlayer = await getPlayer(selectedPlayer._id, { force: true });
       if (!isLatestSelectedPlayerMutation(mutation)) {
         return;
       }
-      syncPlayerInAttendanceBoard(refreshedPlayer);
+      patchExistingPlayerInAttendanceBoard(refreshedPlayer);
       setSelectedPlayerIfOpen(refreshedPlayer);
     } catch (error) {
       if (isLatestSelectedPlayerMutation(mutation)) {
-        applyOptimisticSelectedPlayer(previousPlayer);
+        patchExistingPlayerInAttendanceBoard(previousPlayer);
+        setSelectedPlayerIfOpen(previousPlayer);
         if (isCurrentSelectedPlayerMutation(mutation)) {
           setMessage(error.response?.data?.message || 'Unable to mark subscription warning');
         }
@@ -1555,18 +1588,20 @@ const AttendancePage = () => {
 
     try {
       setMessage('');
-      applyOptimisticSelectedPlayer(optimisticPlayer);
+      patchExistingPlayerInAttendanceBoard(optimisticPlayer);
+      setSelectedPlayerIfOpen(optimisticPlayer);
       setMessage(isEnabled ? 'Attendance alert dot enabled' : 'Attendance alert dot cleared');
       await updatePlayer(selectedPlayer._id, { attendanceAlertEnabled: isEnabled });
       const refreshedPlayer = await getPlayer(selectedPlayer._id, { force: true });
       if (!isLatestSelectedPlayerMutation(mutation)) {
         return;
       }
-      syncPlayerInAttendanceBoard(refreshedPlayer);
+      patchExistingPlayerInAttendanceBoard(refreshedPlayer);
       setSelectedPlayerIfOpen(refreshedPlayer);
     } catch (error) {
       if (isLatestSelectedPlayerMutation(mutation)) {
-        applyOptimisticSelectedPlayer(previousPlayer);
+        patchExistingPlayerInAttendanceBoard(previousPlayer);
+        setSelectedPlayerIfOpen(previousPlayer);
         if (isCurrentSelectedPlayerMutation(mutation)) {
           setMessage(error.response?.data?.message || 'Unable to update attendance alert dot');
         }
