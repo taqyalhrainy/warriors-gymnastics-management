@@ -19,6 +19,27 @@ const api = axios.create({
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const healthURL = `${baseURL}/health`;
+export const apiHealthURL = healthURL;
+
+const notifyNetworkStatus = (status, detail = {}) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.dispatchEvent(new CustomEvent('network:status', {
+    detail: {
+      status,
+      ...detail
+    }
+  }));
+};
+
+const isNetworkFailure = (error) => (
+  !error.response
+  || error.code === 'ERR_NETWORK'
+  || error.code === 'ECONNABORTED'
+  || /network|timeout/i.test(error.message || '')
+);
 
 const shouldRetryRequest = (error) => {
   const method = error.config?.method?.toLowerCase();
@@ -35,11 +56,31 @@ const shouldRetryRequest = (error) => {
   );
 };
 
+api.interceptors.request.use((config) => {
+  const method = config.method?.toLowerCase();
+  const isWriteRequest = method && method !== 'get';
+  if (isWriteRequest && typeof window !== 'undefined' && window.__warriorsNetworkBlocked) {
+    notifyNetworkStatus('offline', { reason: 'blocked' });
+    return Promise.reject(new Error('Connection is offline or unstable.'));
+  }
+
+  return config;
+});
+
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    notifyNetworkStatus('online');
+    return response;
+  },
   async (error) => {
     const config = error.config || {};
     const status = error.response?.status;
+
+    if (isNetworkFailure(error)) {
+      notifyNetworkStatus('offline', {
+        reason: error.code === 'ECONNABORTED' ? 'timeout' : 'request-failed'
+      });
+    }
 
     if (status === 401 && !config.__skipAuthInvalidation && !config.url?.includes('/auth/login')) {
       localStorage.removeItem('warriors-token');

@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
 import { useLanguage } from './context/LanguageContext.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
+import NetworkGuard from './components/NetworkGuard.jsx';
 
 const LoginPage = lazy(() => import('./pages/Login.jsx'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard.jsx'));
@@ -49,6 +50,7 @@ function App() {
       <button className={`language-toggle-btn ${language === 'ar' ? 'left' : 'right'}`} type="button" onClick={toggleLanguage}>
         <span>{language === 'en' ? 'AR' : 'EN'}</span>
       </button>
+      <NetworkGuard />
       <Suspense fallback={<div className="route-loading"><span className="loading-spinner" />Loading...</div>}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
