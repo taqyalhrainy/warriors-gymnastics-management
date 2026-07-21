@@ -1752,6 +1752,26 @@ button[type="submit"],
   scrollbar-gutter: stable;
 }
 
+.attendance-board-loading {
+  min-height: 420px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 14px;
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border));
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--surface) 94%, transparent), color-mix(in srgb, var(--primary) 5%, var(--surface))),
+    var(--surface);
+  color: var(--text);
+  box-shadow: 0 16px 36px var(--shadow);
+}
+
+.attendance-board-loading strong {
+  font-size: 1rem;
+  font-weight: 900;
+}
+
 .attendance-group {
   flex: 0 0 255px;
   min-width: 0;

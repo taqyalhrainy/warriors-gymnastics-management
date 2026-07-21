@@ -526,7 +526,7 @@ const AttendancePage = () => {
       return;
     }
 
-    loadAttendanceBoard({ force: true, silent: true, date: selectedAttendanceDate });
+    loadAttendanceBoard({ force: true, date: selectedAttendanceDate });
   }, [selectedAttendanceDate]);
 
   useEffect(() => {
@@ -2137,7 +2137,10 @@ const AttendancePage = () => {
         )}
 
         {isLoading ? (
-          <div className="form-card">{t('loadingAttendanceBoard')}</div>
+          <div className="attendance-board-loading" role="status" aria-live="polite">
+            <span className="loading-spinner" />
+            <strong>{t('loadingAttendanceBoard')}</strong>
+          </div>
         ) : (
           <div className="attendance-board" ref={attendanceBoardRef}>
             {filteredGroupColumns.map((group) => (
