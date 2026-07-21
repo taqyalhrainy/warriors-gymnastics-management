@@ -937,6 +937,7 @@ const AttendancePage = () => {
           }
         }
       });
+      const existingPlayerFallback = [...existingPlayerByGroupId.values()][0] || null;
 
       const nextGroups = currentGroups.map((group) => {
         const groupId = getEntityId(group._id);
@@ -949,6 +950,7 @@ const AttendancePage = () => {
 
         if (shouldIncludePlayer) {
           const patchedPlayer = {
+            ...existingPlayerFallback,
             ...existingPlayer,
             ...updatedPlayer,
             groupId: groupInfo ? { ...groupInfo } : updatedPlayer.groupId,
@@ -1933,11 +1935,15 @@ const AttendancePage = () => {
       }
       await updatePlayer(selectedPlayer._id, updatePayload);
 
-      const refreshedPlayer = await getPlayer(selectedPlayer._id, { force: true });
+      const [refreshedPlayer, attendanceRecords] = await Promise.all([
+        getPlayer(selectedPlayer._id, { force: true }),
+        fetchAttendanceByPlayer(selectedPlayer._id)
+      ]);
+      const refreshedPlayerWithCount = withAttendancePresentCount(refreshedPlayer, attendanceRecords);
 
-      syncPlayerInAttendanceBoard(refreshedPlayer);
+      syncPlayerInAttendanceBoard(refreshedPlayerWithCount, attendanceRecords);
       if (!shouldCloseAfterSave) {
-        setSelectedPlayerIfOpen(refreshedPlayer);
+        setSelectedPlayerIfOpen(refreshedPlayerWithCount);
       }
     } catch (err) {
       applyOptimisticSelectedPlayer(previousPlayer);
