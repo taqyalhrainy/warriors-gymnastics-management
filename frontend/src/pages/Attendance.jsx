@@ -1360,6 +1360,9 @@ const AttendancePage = () => {
     parentId: player?.parentId?._id || player?.parentId || '',
     parentPhone: player?.parentPhone || '',
     groupIds: player?.groupIds?.length ? player.groupIds.map((group) => group._id || group) : (player?.groupId?._id ? [player.groupId._id] : []),
+    groupEditMode: 'separate',
+    swapFromGroupId: getPlayerAttendanceGroupId(player),
+    swapToGroupId: getPlayerAttendanceGroupId(player),
     startDate: player?.startDate?.split?.('T')?.[0] || '',
     endDate: player?.endDate?.split?.('T')?.[0] || '',
     packageName: player?.packageName || '',
@@ -1398,9 +1401,13 @@ const AttendancePage = () => {
       setEditParents(parentsData);
       setEditGroups(groupsData);
       setPackageOptions(packageData);
-      setSelectedPlayer(latestPlayer);
+      const latestPlayerWithContext = {
+        ...latestPlayer,
+        attendanceGroupId: getPlayerAttendanceGroupId(selectedPlayer)
+      };
+      setSelectedPlayer(latestPlayerWithContext);
       if (!selectedPlayerFormDirtyRef.current) {
-        setSelectedPlayerForm(createSelectedPlayerForm(latestPlayer));
+        setSelectedPlayerForm(createSelectedPlayerForm(latestPlayerWithContext));
       }
     } catch (err) {
       if (requestId !== selectedPlayerEditRequestIdRef.current) {
@@ -1459,6 +1466,38 @@ const AttendancePage = () => {
     });
   };
 
+  const handleSelectedPlayerGroupModeChange = (mode) => {
+    selectedPlayerFormDirtyRef.current = true;
+    setSelectedPlayerForm((current) => {
+      const swapFromGroupId = current.swapFromGroupId || getPlayerAttendanceGroupId(selectedPlayer);
+      return {
+        ...current,
+        groupEditMode: mode,
+        swapFromGroupId,
+        swapToGroupId: current.swapToGroupId || swapFromGroupId
+      };
+    });
+  };
+
+  const handleSelectedPlayerSwapGroupSelect = (groupId) => {
+    selectedPlayerFormDirtyRef.current = true;
+    setSelectedPlayerForm((current) => {
+      const swapFromGroupId = current.swapFromGroupId || getPlayerAttendanceGroupId(selectedPlayer);
+      const nextGroupIds = [
+        ...current.groupIds.filter((id) => getEntityId(id) !== getEntityId(swapFromGroupId) && getEntityId(id) !== getEntityId(groupId)),
+        groupId
+      ];
+
+      return {
+        ...current,
+        groupEditMode: 'swap',
+        swapFromGroupId,
+        swapToGroupId: groupId,
+        groupIds: nextGroupIds
+      };
+    });
+  };
+
   const handleCancelSelectedPlayerEdit = () => {
     selectedPlayerFormDirtyRef.current = false;
     selectedPlayerEditRequestIdRef.current += 1;
@@ -1475,6 +1514,9 @@ const AttendancePage = () => {
     return {
       ...form,
       groupIds: [...(form.groupIds || [])].map(String).sort(),
+      groupEditMode: form.groupEditMode || 'separate',
+      swapFromGroupId: String(form.swapFromGroupId || ''),
+      swapToGroupId: String(form.swapToGroupId || ''),
       payment: String(form.payment ?? ''),
       packageClasses: String(form.packageClasses ?? ''),
       packageHours: String(form.packageHours ?? '')
@@ -1955,20 +1997,35 @@ const AttendancePage = () => {
 
     const shouldCloseAfterSave = Boolean(options.closeAfterSave);
     const previousPlayer = selectedPlayer;
+    const {
+      groupEditMode,
+      swapFromGroupId,
+      swapToGroupId,
+      ...editablePlayerForm
+    } = selectedPlayerForm;
     const selectedParent = editParents.find((parent) => getEntityId(parent._id) === getEntityId(selectedPlayerForm.parentId));
     const selectedGroupRefs = selectedPlayerForm.groupIds
       .map((groupId) => editGroups.find((group) => getEntityId(group._id) === getEntityId(groupId)) || { _id: groupId, name: '' });
     const updatePayload = {
-      ...selectedPlayerForm,
+      ...editablePlayerForm,
       groupId: selectedPlayerForm.groupIds[0] || '',
       groupIds: selectedPlayerForm.groupIds,
       packageClasses: parseLocalizedNumber(selectedPlayerForm.packageClasses),
       packageHours: parseLocalizedNumber(selectedPlayerForm.packageHours),
       payment: parseLocalizedNumber(selectedPlayerForm.payment)
     };
+    const swapTargetGroupId = getEntityId(swapToGroupId);
+    const swapSourceGroupId = getEntityId(swapFromGroupId) || getPlayerAttendanceGroupId(selectedPlayer);
+    if (groupEditMode === 'swap' && swapSourceGroupId && swapTargetGroupId && swapSourceGroupId !== swapTargetGroupId) {
+      updatePayload.groupSwap = {
+        fromGroupId: swapSourceGroupId,
+        toGroupId: swapTargetGroupId
+      };
+    }
     const optimisticPlayer = {
       ...selectedPlayer,
       ...updatePayload,
+      attendanceGroupId: updatePayload.groupSwap?.toGroupId || getPlayerAttendanceGroupId(selectedPlayer),
       parentId: selectedParent
         ? {
           ...selectedParent,
@@ -1993,11 +2050,24 @@ const AttendancePage = () => {
       }
       await updatePlayer(selectedPlayer._id, updatePayload);
 
-      const refreshedPlayer = await getPlayer(selectedPlayer._id, { force: true });
+      const [refreshedPlayer, attendanceRecords] = await Promise.all([
+        getPlayer(selectedPlayer._id, { force: true }),
+        fetchAttendanceByPlayer(selectedPlayer._id)
+      ]);
+      const refreshedPlayerWithCount = withAttendancePresentCount(
+        refreshedPlayer,
+        attendanceRecords,
+        '',
+        updatePayload.groupSwap?.toGroupId || getPlayerAttendanceGroupId(selectedPlayer)
+      );
 
-      syncPlayerInAttendanceBoard(refreshedPlayer);
+      syncPlayerInAttendanceBoard(
+        refreshedPlayerWithCount,
+        attendanceRecords,
+        updatePayload.groupSwap?.toGroupId || getPlayerAttendanceGroupId(selectedPlayer)
+      );
       if (!shouldCloseAfterSave) {
-        setSelectedPlayerIfOpen(refreshedPlayer);
+        setSelectedPlayerIfOpen(refreshedPlayerWithCount);
       }
     } catch (err) {
       applyOptimisticSelectedPlayer(previousPlayer);
@@ -2392,20 +2462,48 @@ const AttendancePage = () => {
 
                   <div className="student-modal-edit-groups">
                     <span>{t('group')}</span>
+                    <div className="group-edit-mode-switch" role="group" aria-label="Group update mode">
+                      <button
+                        type="button"
+                        className={selectedPlayerForm.groupEditMode !== 'swap' ? 'is-active' : ''}
+                        onClick={() => handleSelectedPlayerGroupModeChange('separate')}
+                      >
+                        Separate package
+                      </button>
+                      <button
+                        type="button"
+                        className={selectedPlayerForm.groupEditMode === 'swap' ? 'is-active' : ''}
+                        onClick={() => handleSelectedPlayerGroupModeChange('swap')}
+                      >
+                        Swap
+                      </button>
+                    </div>
                     <div className="multi-select-list">
-                      {editGroups.length ? editGroups.map((group) => (
-                        <label className="multi-select-option" key={group._id}>
-                          <input
-                            type="checkbox"
-                            checked={selectedPlayerForm.groupIds.includes(group._id)}
-                            onChange={() => handleSelectedPlayerGroupToggle(group._id)}
-                          />
-                          <span>
-                            <strong>{group.name}</strong>
-                            <small>{[group.days?.join(', '), [group.startTime, group.endTime].filter(Boolean).join(' - ')].filter(Boolean).join(' | ')}</small>
-                          </span>
-                        </label>
-                      )) : <p className="empty-state">{t('noGroupsFound')}</p>}
+                      {editGroups.length ? editGroups.map((group) => {
+                        const isSwapMode = selectedPlayerForm.groupEditMode === 'swap';
+                        const isSwapSource = getEntityId(group._id) === getEntityId(selectedPlayerForm.swapFromGroupId);
+                        return (
+                          <label className={`multi-select-option${isSwapSource && isSwapMode ? ' is-swap-source' : ''}`} key={group._id}>
+                            <input
+                              type={isSwapMode ? 'radio' : 'checkbox'}
+                              name={isSwapMode ? 'swapGroupId' : undefined}
+                              checked={isSwapMode
+                                ? getEntityId(selectedPlayerForm.swapToGroupId) === getEntityId(group._id)
+                                : selectedPlayerForm.groupIds.includes(group._id)}
+                              onChange={() => (
+                                isSwapMode
+                                  ? handleSelectedPlayerSwapGroupSelect(group._id)
+                                  : handleSelectedPlayerGroupToggle(group._id)
+                              )}
+                            />
+                            <span>
+                              <strong>{group.name}</strong>
+                              <small>{[group.days?.join(', '), [group.startTime, group.endTime].filter(Boolean).join(' - ')].filter(Boolean).join(' | ')}</small>
+                              {isSwapSource && isSwapMode && <em>Current appointment</em>}
+                            </span>
+                          </label>
+                        );
+                      }) : <p className="empty-state">{t('noGroupsFound')}</p>}
                     </div>
                   </div>
 
