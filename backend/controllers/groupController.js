@@ -273,6 +273,7 @@ const getGroupPlayers = async (req, res, next) => {
     const presentRecords = playerIds.length
       ? await Attendance.find({
         playerId: { $in: playerIds },
+        groupId: id,
         status: 'present'
       }).select('playerId date checkInTime').lean()
       : [];

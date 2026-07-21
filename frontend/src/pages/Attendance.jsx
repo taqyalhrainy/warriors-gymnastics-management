@@ -839,12 +839,19 @@ const AttendancePage = () => {
           const isTargetGroup = getEntityId(group._id) === getEntityId(targetGroupId);
           const nextAttendance = targetGroupId && isTargetGroup ? attendance : player.todayAttendance;
           const clearedAttendance = !attendance && (!targetGroupId || isTargetGroup) ? null : nextAttendance;
+          const nextPlayerPresentCount = isTargetGroup
+            ? nextPresentCount
+            : Number(player.attendancePresentCount || 0);
           const subscription = player.subscriptionId && typeof player.subscriptionId === 'object'
             ? {
               ...player.subscriptionId,
-              usedSessions: Math.max(0, Number(player.subscriptionId.usedSessions || 0) + presentDelta),
+              usedSessions: isTargetGroup
+                ? Math.max(0, Number(player.subscriptionId.usedSessions || 0) + presentDelta)
+                : player.subscriptionId.usedSessions,
               remainingSessions: typeof player.subscriptionId.remainingSessions !== 'undefined'
-                ? Math.max(0, Number(player.subscriptionId.remainingSessions || 0) - presentDelta)
+                ? (isTargetGroup
+                  ? Math.max(0, Number(player.subscriptionId.remainingSessions || 0) - presentDelta)
+                  : player.subscriptionId.remainingSessions)
                 : player.subscriptionId.remainingSessions
             }
             : player.subscriptionId;
@@ -852,7 +859,7 @@ const AttendancePage = () => {
           return {
             ...player,
             subscriptionId: subscription,
-            attendancePresentCount: nextPresentCount,
+            attendancePresentCount: nextPlayerPresentCount,
             todayAttendance: clearedAttendance
           };
         });
