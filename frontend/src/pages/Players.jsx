@@ -79,7 +79,7 @@ const PlayersPage = () => {
               <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search players..." />
             </label>
           </div>
-          <table className="data-table">
+          <table className="data-table players-table">
             <thead>
               <tr>
                 <th>{t('name')}</th>
@@ -97,7 +97,7 @@ const PlayersPage = () => {
                   <td>{getPlayerGroups(player) || t('unassigned')}</td>
                   <td>{player.status}</td>
                   <td>{player.parentId?.name || t('unknown')}</td>
-                  <td className="table-actions">
+                  <td className="table-actions player-table-actions">
                     <Link className="table-action-button" to={`/players/${player._id}`}>{t('view')}</Link>
                     <Link className="table-action-button is-edit" to={`/players/${player._id}/edit`}>{t('edit')}</Link>
                     <button className="table-action-button is-danger" type="button" onClick={() => handleDelete(player._id)}>{t('delete')}</button>

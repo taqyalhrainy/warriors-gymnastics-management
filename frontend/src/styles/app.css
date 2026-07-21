@@ -1377,6 +1377,30 @@ body.theme-light .new-subscription-warning {
   color: #fff;
 }
 
+.players-table th:last-child,
+.players-table td:last-child {
+  width: 190px;
+  min-width: 190px;
+}
+
+.player-table-actions {
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.player-table-actions .table-action-button {
+  min-width: 50px;
+  min-height: 32px;
+  padding: 0 9px;
+  border-radius: 6px;
+  box-shadow: none;
+  font-size: 0.84rem;
+}
+
+.player-table-actions .is-danger {
+  min-width: 62px;
+}
+
 .group-color-input {
   display: grid;
   grid-template-columns: 56px 1fr;
