@@ -1317,6 +1317,66 @@ body.theme-light .new-subscription-warning {
   gap: 8px;
 }
 
+.table-actions a,
+.table-actions button,
+.table-action-button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 74%, var(--text));
+  border-radius: 7px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, white), var(--surface-alt));
+  color: var(--text);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.07);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 850;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease, background 150ms ease, color 150ms ease;
+}
+
+.table-actions a:hover,
+.table-actions button:hover,
+.table-action-button:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--primary) 46%, var(--border));
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12);
+}
+
+.table-actions a:focus-visible,
+.table-actions button:focus-visible,
+.table-action-button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary) 24%, transparent);
+  outline-offset: 2px;
+}
+
+.table-actions .is-edit,
+.table-actions a:nth-child(2) {
+  border-color: color-mix(in srgb, var(--primary) 42%, var(--border));
+  color: var(--primary-strong);
+}
+
+.table-actions .is-danger,
+.table-actions button {
+  border-color: color-mix(in srgb, #dc2626 42%, var(--border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, #dc2626 9%, var(--surface)), var(--surface));
+  color: #b91c1c;
+}
+
+.table-actions .is-danger:hover,
+.table-actions button:hover {
+  border-color: #dc2626;
+  background: #dc2626;
+  color: #fff;
+}
+
 .group-color-input {
   display: grid;
   grid-template-columns: 56px 1fr;

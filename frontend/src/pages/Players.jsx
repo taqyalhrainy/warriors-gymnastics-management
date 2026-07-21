@@ -98,9 +98,9 @@ const PlayersPage = () => {
                   <td>{player.status}</td>
                   <td>{player.parentId?.name || t('unknown')}</td>
                   <td className="table-actions">
-                    <Link to={`/players/${player._id}`}>{t('view')}</Link>
-                    <Link to={`/players/${player._id}/edit`}>{t('edit')}</Link>
-                    <button type="button" onClick={() => handleDelete(player._id)}>{t('delete')}</button>
+                    <Link className="table-action-button" to={`/players/${player._id}`}>{t('view')}</Link>
+                    <Link className="table-action-button is-edit" to={`/players/${player._id}/edit`}>{t('edit')}</Link>
+                    <button className="table-action-button is-danger" type="button" onClick={() => handleDelete(player._id)}>{t('delete')}</button>
                   </td>
                 </tr>
               ))}
