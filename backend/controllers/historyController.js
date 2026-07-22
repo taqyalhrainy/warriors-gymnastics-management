@@ -2,13 +2,17 @@ const Player = require('../models/Player');
 const Payment = require('../models/Payment');
 const Parent = require('../models/Parent');
 const TrainingGroup = require('../models/TrainingGroup');
-const Attendance = require('../models/Attendance');
-const mongoose = require('mongoose');
 const { validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { encrypt } = require('../utils/encryption');
 const { clearDashboardReportCache } = require('./reportController');
-const { restoreStateAt, getHistoryAvailableSince } = require('../utils/history');
+const {
+  restoreStateAt,
+  getHistoryAvailableSince,
+  snapshotPlayerDocument,
+  snapshotPaymentDocument,
+  createHistoryEntry
+} = require('../utils/history');
 
 const snapshotRestoreJobs = new Map();
 
@@ -72,9 +76,22 @@ const buildPaymentRestorePayload = (snapshot) => ({
   updatedAt: asDate(snapshot.updatedAt) || null
 });
 
-const stripUndefined = (payload) => Object.fromEntries(
-  Object.entries(payload).filter(([, value]) => typeof value !== 'undefined')
-);
+const loadPlayerForSnapshot = (id) => Player.findById(id)
+  .populate('parentId', 'name')
+  .populate('programId', 'name level')
+  .populate('groupId', 'name')
+  .populate('groupIds', 'name')
+  .populate('coachId', 'name')
+  .populate('subscriptionId', 'type status totalSessions remainingSessions usedSessions startDate endDate price');
+
+const loadPaymentForSnapshot = (id) => Payment.findById(id)
+  .populate({
+    path: 'playerId',
+    select: 'fullName parentId',
+    populate: { path: 'parentId', select: 'name' }
+  })
+  .populate('createdBy', 'name')
+  .populate('updatedBy', 'name');
 
 const syncParentChildren = async () => {
   const activePlayers = await Player.find({ isDeleted: { $ne: true } }).select('_id parentId').lean();
@@ -157,7 +174,7 @@ const restorePlayers = async (targetPlayers, req) => {
       continue;
     }
 
-    const payload = stripUndefined(buildPlayerRestorePayload(target));
+    const payload = buildPlayerRestorePayload(target);
     if (!payload.parentId && player.parentId) {
       payload.parentId = player.parentId;
     }
@@ -178,7 +195,7 @@ const restorePlayers = async (targetPlayers, req) => {
   }
 
   for (const target of targetById.values()) {
-    const payload = stripUndefined(buildPlayerRestorePayload(target));
+    const payload = buildPlayerRestorePayload(target);
     if (!payload.parentId || !validateObjectId(target._id)) {
       skipped += 1;
       continue;
@@ -220,7 +237,7 @@ const restorePayments = async (targetPayments, req) => {
       continue;
     }
 
-    const payload = stripUndefined(buildPaymentRestorePayload(target));
+    const payload = buildPaymentRestorePayload(target);
     if (!payload.playerId && payment.playerId) {
       payload.playerId = payment.playerId;
     }
@@ -241,7 +258,7 @@ const restorePayments = async (targetPayments, req) => {
   }
 
   for (const target of targetById.values()) {
-    const payload = stripUndefined(buildPaymentRestorePayload(target));
+    const payload = buildPaymentRestorePayload(target);
     if (!payload.playerId || !validateObjectId(target._id)) {
       skipped += 1;
       continue;
@@ -259,18 +276,6 @@ const restorePayments = async (targetPayments, req) => {
   }
 
   return { restored, removed, skipped };
-};
-
-const restoreAttendance = async (asOf) => {
-  const cutoffId = mongoose.Types.ObjectId.createFromTime(Math.floor(asOf.getTime() / 1000));
-  const result = await Attendance.deleteMany({
-    $or: [
-      { _id: { $gt: cutoffId } },
-      { checkInTime: { $gt: asOf } }
-    ]
-  });
-
-  return { removed: result.deletedCount || 0 };
 };
 
 const getHistorySnapshot = async (req, res, next) => {
@@ -321,8 +326,6 @@ const runSnapshotRestore = async ({ jobId, asOf, reqMeta }) => {
     const playerResult = await restorePlayers(players, reqMeta);
     job.message = 'Restoring payments...';
     const paymentResult = await restorePayments(payments, reqMeta);
-    job.message = 'Restoring attendance...';
-    const attendanceResult = await restoreAttendance(asOf);
     job.message = 'Rebuilding links and counters...';
     await Promise.all([
       syncParentChildren(),
@@ -336,8 +339,7 @@ const runSnapshotRestore = async ({ jobId, asOf, reqMeta }) => {
     job.result = {
       asOf: asOf.toISOString(),
       players: playerResult,
-      payments: paymentResult,
-      attendance: attendanceResult
+      payments: paymentResult
     };
     job.completedAt = new Date();
   } catch (error) {
