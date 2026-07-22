@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiHealthURL } from '../services/api.js';
 
-const PING_INTERVAL_MS = 6000;
-const PING_TIMEOUT_MS = 10000;
-const FAILURE_THRESHOLD = 2;
-const RECOVERY_SUCCESSES = 1;
+const PING_INTERVAL_MS = 4500;
+const PING_TIMEOUT_MS = 3500;
+const RECOVERY_SUCCESSES = 2;
 
 const getInitialOnlineState = () => (
   typeof navigator === 'undefined' ? true : navigator.onLine
@@ -35,13 +34,6 @@ const NetworkGuard = () => {
       setIsBlocked(true);
     };
 
-    const registerFailure = (nextMessage, options = {}) => {
-      failureCountRef.current += 1;
-      if (options.force || failureCountRef.current >= FAILURE_THRESHOLD) {
-        blockConnection(nextMessage);
-      }
-    };
-
     const releaseConnection = () => {
       if (!isMounted) return;
       failureCountRef.current = 0;
@@ -53,7 +45,8 @@ const NetworkGuard = () => {
 
     const runPing = async () => {
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        registerFailure('Internet connection is offline.', { force: true });
+        failureCountRef.current += 1;
+        blockConnection('Internet connection is offline.');
         scheduleNextPing();
         return;
       }
@@ -73,7 +66,8 @@ const NetworkGuard = () => {
         clearTimeout(timeout);
 
         if (!response.ok || latency > PING_TIMEOUT_MS) {
-          registerFailure(latency > PING_TIMEOUT_MS ? 'Connection is too weak to save safely.' : 'Server connection is unstable.');
+          failureCountRef.current += 1;
+          blockConnection(latency > PING_TIMEOUT_MS ? 'Connection is too weak to save safely.' : 'Server connection is unstable.');
         } else {
           successCountRef.current += 1;
           if (successCountRef.current >= RECOVERY_SUCCESSES) {
@@ -82,7 +76,8 @@ const NetworkGuard = () => {
         }
       } catch (error) {
         clearTimeout(timeout);
-        registerFailure(error.name === 'AbortError' ? 'Connection is too weak to save safely.' : 'Connection to the server was lost.');
+        failureCountRef.current += 1;
+        blockConnection(error.name === 'AbortError' ? 'Connection is too weak to save safely.' : 'Connection to the server was lost.');
       } finally {
         scheduleNextPing();
       }
@@ -94,7 +89,8 @@ const NetworkGuard = () => {
     };
 
     const handleBrowserOffline = () => {
-      registerFailure('Internet connection is offline.', { force: true });
+      failureCountRef.current += 1;
+      blockConnection('Internet connection is offline.');
     };
 
     const handleBrowserOnline = () => {
@@ -103,7 +99,8 @@ const NetworkGuard = () => {
 
     const handleApiNetworkStatus = (event) => {
       if (event.detail?.status === 'offline') {
-        registerFailure(event.detail?.reason === 'timeout'
+        failureCountRef.current += 1;
+        blockConnection(event.detail?.reason === 'timeout'
           ? 'Connection is too weak to save safely.'
           : 'Connection to the server was lost.');
       }
