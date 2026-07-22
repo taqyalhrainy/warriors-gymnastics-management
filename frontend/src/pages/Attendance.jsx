@@ -352,16 +352,18 @@ const AttendancePage = () => {
     const fallbackGroupIds = [];
     const historicalPlayerIds = new Set();
     const snapshotTime = new Date(`${snapshotDate}T23:59:59.999`).getTime();
-    const currentPlayerByGroupAndId = new Map();
+    const currentPlayerById = new Map();
 
     currentGroupsWithPlayers.forEach((group) => {
       group.players.forEach((player) => {
-        currentPlayerByGroupAndId.set(getAttendanceRecordKey(player._id, group._id), player);
+        if (!currentPlayerById.has(getEntityId(player._id))) {
+          currentPlayerById.set(getEntityId(player._id), player);
+        }
       });
     });
 
     const mergeCurrentPackageCounter = (player, groupId) => {
-      const currentPlayer = currentPlayerByGroupAndId.get(getAttendanceRecordKey(player._id, groupId));
+      const currentPlayer = currentPlayerById.get(getEntityId(player._id));
       if (!currentPlayer) {
         return {
           ...player,
@@ -868,19 +870,13 @@ const AttendancePage = () => {
           const isTargetGroup = getEntityId(group._id) === getEntityId(targetGroupId);
           const nextAttendance = targetGroupId && isTargetGroup ? attendance : player.todayAttendance;
           const clearedAttendance = !attendance && (!targetGroupId || isTargetGroup) ? null : nextAttendance;
-          const nextPlayerPresentCount = isTargetGroup
-            ? nextPresentCount
-            : Number(player.attendancePresentCount || 0);
+          const nextPlayerPresentCount = nextPresentCount;
           const subscription = player.subscriptionId && typeof player.subscriptionId === 'object'
             ? {
               ...player.subscriptionId,
-              usedSessions: isTargetGroup
-                ? Math.max(0, Number(player.subscriptionId.usedSessions || 0) + presentDelta)
-                : player.subscriptionId.usedSessions,
+              usedSessions: Math.max(0, Number(player.subscriptionId.usedSessions || 0) + presentDelta),
               remainingSessions: typeof player.subscriptionId.remainingSessions !== 'undefined'
-                ? (isTargetGroup
-                  ? Math.max(0, Number(player.subscriptionId.remainingSessions || 0) - presentDelta)
-                  : player.subscriptionId.remainingSessions)
+                ? Math.max(0, Number(player.subscriptionId.remainingSessions || 0) - presentDelta)
                 : player.subscriptionId.remainingSessions
             }
             : player.subscriptionId;
@@ -984,15 +980,11 @@ const AttendancePage = () => {
         let nextPlayers = cleanPlayers.filter((player) => getEntityId(player._id) !== playerId);
 
         if (shouldIncludePlayer) {
-          const shouldUseUpdatedAttendanceCount = getEntityId(updatedPlayer.attendanceGroupId) === groupId
-            || (!existingPlayer && typeof updatedPlayer.attendancePresentCount !== 'undefined');
           const patchedPlayer = {
             ...existingPlayer,
             ...updatedPlayer,
             attendanceGroupId: groupId,
-            attendancePresentCount: shouldUseUpdatedAttendanceCount
-              ? updatedPlayer.attendancePresentCount
-              : (existingPlayer?.attendancePresentCount ?? updatedPlayer.attendancePresentCount),
+            attendancePresentCount: updatedPlayer.attendancePresentCount ?? existingPlayer?.attendancePresentCount,
             groupId: groupInfo ? { ...groupInfo } : updatedPlayer.groupId,
             todayAttendance: hasAttendanceOverride
               ? (overrideAttendanceByGroupId.get(groupId) || null)
@@ -1145,15 +1137,13 @@ const AttendancePage = () => {
     return getLocalDateOnly(record.date) >= getLocalDateOnly(cycleStart);
   };
 
-  const getAttendancePresentCountForCycle = (records, player, cycleStartOverride = '', groupId = '') => {
+  const getAttendancePresentCountForCycle = (records, player, cycleStartOverride = '') => {
     if (!Array.isArray(records)) {
       return Number(player?.attendancePresentCount || 0);
     }
 
-    const targetGroupId = getEntityId(groupId);
     return records.filter((record) => (
       record.status === 'present'
-      && (!targetGroupId || getEntityId(record.groupId) === targetGroupId)
       && isAttendanceRecordInSubscriptionCycle(record, player, cycleStartOverride)
     )).length;
   };
@@ -1164,7 +1154,7 @@ const AttendancePage = () => {
     }
 
     const targetGroupId = getEntityId(groupId) || getPlayerAttendanceGroupId(player);
-    const attendancePresentCount = getAttendancePresentCountForCycle(records, player, cycleStartOverride, targetGroupId);
+    const attendancePresentCount = getAttendancePresentCountForCycle(records, player, cycleStartOverride);
     const totalSessions = Number(player.subscriptionId?.totalSessions || player.packageClasses || 0);
     const subscription = player.subscriptionId && typeof player.subscriptionId === 'object'
       ? {
