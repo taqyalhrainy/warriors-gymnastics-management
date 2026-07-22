@@ -2,7 +2,6 @@ const Player = require('../models/Player');
 const Parent = require('../models/Parent');
 const TrainingGroup = require('../models/TrainingGroup');
 const Payment = require('../models/Payment');
-const Attendance = require('../models/Attendance');
 const { sanitizeObject, decodeText, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { encrypt, decrypt } = require('../utils/encryption');
@@ -99,38 +98,6 @@ const incrementGroups = async (groupIds, amount) => {
   await TrainingGroup.updateMany({ _id: { $in: groupIds } }, { $inc: { currentCount: amount } });
   if (amount < 0) {
     await TrainingGroup.updateMany({ _id: { $in: groupIds }, currentCount: { $lt: 0 } }, { $set: { currentCount: 0 } });
-  }
-};
-
-const transferPlayerAttendanceGroup = async (playerId, fromGroupId, toGroupId) => {
-  if (!validateObjectId(playerId) || !validateObjectId(fromGroupId) || !validateObjectId(toGroupId) || String(fromGroupId) === String(toGroupId)) {
-    return;
-  }
-
-  const records = await Attendance.find({
-    playerId,
-    groupId: fromGroupId
-  }).sort({ date: 1, _id: 1 });
-
-  for (const record of records) {
-    const existingTargetRecord = await Attendance.findOne({
-      playerId,
-      groupId: toGroupId,
-      date: record.date
-    });
-
-    if (existingTargetRecord) {
-      if (record.status === 'present' && existingTargetRecord.status !== 'present') {
-        existingTargetRecord.status = 'present';
-        existingTargetRecord.checkInTime = record.checkInTime || existingTargetRecord.checkInTime;
-        await existingTargetRecord.save();
-      }
-      await Attendance.deleteOne({ _id: record._id });
-      continue;
-    }
-
-    record.groupId = toGroupId;
-    await record.save();
   }
 };
 
@@ -286,13 +253,6 @@ const updatePlayer = async (req, res, next) => {
       return res.status(400).json({ message: 'Invalid player ID.' });
     }
     const updates = cleanPlayerPayload(sanitizeObject(req.body));
-    const groupSwap = updates.groupSwap && typeof updates.groupSwap === 'object'
-      ? {
-        fromGroupId: String(updates.groupSwap.fromGroupId || ''),
-        toGroupId: String(updates.groupSwap.toGroupId || '')
-      }
-      : null;
-    delete updates.groupSwap;
     const startsNewSubscription = Boolean(updates.newSubscription);
     delete updates.newSubscription;
     const player = await Player.findById(id);
@@ -321,29 +281,11 @@ const updatePlayer = async (req, res, next) => {
       await newParent.save();
     }
 
-    let validatedGroupSwap = null;
     if (Array.isArray(updates.groupIds) || typeof updates.groupId !== 'undefined') {
       const nextGroupIds = normalizeGroupIds(updates);
       const currentGroupIds = getPlayerGroupIds(player);
       const addedGroupIds = nextGroupIds.filter((groupId) => !currentGroupIds.includes(groupId));
       const removedGroupIds = currentGroupIds.filter((groupId) => !nextGroupIds.includes(groupId));
-
-      if (groupSwap) {
-        const fromGroupId = groupSwap.fromGroupId;
-        const toGroupId = groupSwap.toGroupId;
-        if (!validateObjectId(fromGroupId) || !validateObjectId(toGroupId)) {
-          return res.status(400).json({ message: 'Invalid swap group.' });
-        }
-        if (!currentGroupIds.includes(fromGroupId)) {
-          return res.status(400).json({ message: 'Swap source group is not assigned to this player.' });
-        }
-        if (!nextGroupIds.includes(toGroupId)) {
-          return res.status(400).json({ message: 'Swap target group must be assigned to this player.' });
-        }
-        if (fromGroupId !== toGroupId) {
-          validatedGroupSwap = { fromGroupId, toGroupId };
-        }
-      }
 
       await validateGroupsHaveCapacity(addedGroupIds, 'One or more new groups were not found.', 'is full.');
       await incrementGroups(addedGroupIds, 1);
@@ -370,9 +312,6 @@ const updatePlayer = async (req, res, next) => {
     }
     Object.assign(player, updates);
     await player.save();
-    if (validatedGroupSwap) {
-      await transferPlayerAttendanceGroup(player._id, validatedGroupSwap.fromGroupId, validatedGroupSwap.toGroupId);
-    }
     if (startsNewSubscription || typeof updates.payment !== 'undefined' || typeof updates.startDate !== 'undefined' || typeof updates.currentSubscriptionStartedAt !== 'undefined') {
       await recalculatePlayerPayments(player);
     }
