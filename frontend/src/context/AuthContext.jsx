@@ -6,6 +6,7 @@ import { warmAdminAppCache, resetPrefetchState } from '../services/prefetch.js';
 const AuthContext = createContext(null);
 let verifiedServerToken = '';
 const adminDataRoles = ['admin', 'coach', 'receptionist'];
+const retryPreparationAfter = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
@@ -47,33 +48,33 @@ export const AuthProvider = ({ children }) => {
     setIsServerChecking(true);
 
     const prepareApp = async () => {
-      if (verifiedServerToken !== token) {
-        await waitForApiHealth({ timeout: 4000, maxWaitMs: 180000, pollIntervalMs: 500 });
-        verifiedServerToken = token;
-      }
+      while (isMounted) {
+        try {
+          if (verifiedServerToken !== token) {
+            await waitForApiHealth({ timeout: 4000, maxWaitMs: 180000, pollIntervalMs: 500 });
+            verifiedServerToken = token;
+          }
 
-      if (needsAdminData) {
-        await warmAdminAppCache(user);
+          if (needsAdminData) {
+            await warmAdminAppCache(user);
+          }
+
+          if (isMounted) {
+            setIsServerReady(true);
+            setIsServerChecking(false);
+          }
+          return;
+        } catch (error) {
+          console.error('System preparation failed; retrying.', error);
+          if (!isMounted) return;
+          setIsServerReady(false);
+          setIsServerChecking(true);
+          await retryPreparationAfter(1500);
+        }
       }
     };
 
-    prepareApp()
-      .then(() => {
-        if (isMounted) {
-          setIsServerReady(true);
-        }
-      })
-      .catch((error) => {
-        console.error(error);
-        if (isMounted) {
-          setIsServerReady(false);
-        }
-      })
-      .finally(() => {
-        if (isMounted) {
-          setIsServerChecking(false);
-        }
-      });
+    prepareApp();
 
     return () => {
       isMounted = false;
