@@ -8,6 +8,8 @@ import { fetchPlayers, getPlayer } from '../services/players.js';
 import { fetchAttendanceByPlayer } from '../services/attendance.js';
 import { fetchPaymentsByPlayer } from '../services/payments.js';
 import { createWaitingListEntry, deleteWaitingListEntry, fetchWaitingList, updateWaitingListEntry } from '../services/waitingList.js';
+import { fetchSnapshotRestoreStatus, restoreHistorySnapshot } from '../services/history.js';
+import { clearCache } from '../services/cache.js';
 import { formatCurrency } from '../utils/format.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -59,6 +61,15 @@ const getLocalDateValue = (date = new Date()) => {
   return `${year}-${month}-${day}`;
 };
 
+const getLocalTimeValue = (date = new Date()) => {
+  const value = new Date(date);
+  const hours = String(value.getHours()).padStart(2, '0');
+  const minutes = String(value.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+};
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const getDaysUntil = (dateValue) => {
   const today = getLocalDateOnly();
   const targetDate = getLocalDateOnly(dateValue);
@@ -98,6 +109,12 @@ const AdminDashboard = () => {
   const [isPlayerViewLoading, setIsPlayerViewLoading] = useState(false);
   const [playerViewError, setPlayerViewError] = useState('');
   const [isBackupDownloading, setIsBackupDownloading] = useState(false);
+  const [isSnapshotOpen, setIsSnapshotOpen] = useState(false);
+  const [snapshotDate, setSnapshotDate] = useState(() => getLocalDateValue());
+  const [snapshotTime, setSnapshotTime] = useState(() => getLocalTimeValue());
+  const [snapshotConfirmText, setSnapshotConfirmText] = useState('');
+  const [isSnapshotRestoring, setIsSnapshotRestoring] = useState(false);
+  const [snapshotMessage, setSnapshotMessage] = useState('');
   const [isDashboardLoading, setIsDashboardLoading] = useState(false);
   const [waitingForm, setWaitingForm] = useState(initialWaitingForm);
   const [editingWaitingEntryId, setEditingWaitingEntryId] = useState('');
@@ -376,6 +393,90 @@ const AdminDashboard = () => {
     }
   };
 
+  const openSnapshotModal = () => {
+    setSnapshotDate(getLocalDateValue());
+    setSnapshotTime(getLocalTimeValue());
+    setSnapshotConfirmText('');
+    setSnapshotMessage('');
+    setIsSnapshotOpen(true);
+  };
+
+  const closeSnapshotModal = () => {
+    if (isSnapshotRestoring) return;
+    setIsSnapshotOpen(false);
+    setSnapshotConfirmText('');
+    setSnapshotMessage('');
+  };
+
+  const handleSnapshotRestore = async (event) => {
+    event.preventDefault();
+    setSnapshotMessage('');
+
+    const targetDateTime = new Date(`${snapshotDate}T${snapshotTime || '00:00'}`);
+    if (Number.isNaN(targetDateTime.getTime())) {
+      setSnapshotMessage('Choose a valid snapshot date and time.');
+      return;
+    }
+    if (snapshotConfirmText !== 'RESTORE') {
+      setSnapshotMessage('Type RESTORE to confirm snapshot restore.');
+      return;
+    }
+
+    const confirmed = window.confirm(`Restore tracked site data to ${targetDateTime.toLocaleString()}? This will change players and payments.`);
+    if (!confirmed) {
+      return;
+    }
+
+    setIsSnapshotRestoring(true);
+    try {
+      const startedJob = await restoreHistorySnapshot({ at: targetDateTime.toISOString() });
+      setSnapshotMessage(startedJob.message || 'Snapshot restore started.');
+      let result = null;
+
+      for (let attempt = 0; attempt < 240; attempt += 1) {
+        await wait(1000);
+        const job = await fetchSnapshotRestoreStatus(startedJob.jobId);
+        setSnapshotMessage(job.message || 'Restoring snapshot...');
+
+        if (job.status === 'complete') {
+          result = job.result || {};
+          break;
+        }
+
+        if (job.status === 'failed') {
+          throw new Error(job.message || 'Unable to restore snapshot.');
+        }
+      }
+
+      if (!result) {
+        throw new Error('Snapshot restore is still running. Check again in a moment.');
+      }
+
+      localStorage.removeItem(DASHBOARD_STATS_CACHE_KEY);
+      dashboardStatsCache = null;
+      clearCache();
+      const [dashboardData, groupRows, waitingRows, playerRows] = await Promise.all([
+        fetchDashboard(),
+        fetchGroups(),
+        fetchWaitingList(),
+        fetchPlayers({ dashboard: 'expired-alert' })
+      ]);
+      dashboardStatsCache = dashboardData;
+      writeDashboardStatsCache(dashboardData);
+      setStats(dashboardData);
+      setGroups(groupRows);
+      setWaitingList(waitingRows);
+      setDashboardPlayers(playerRows);
+      setExpiredAlertPlayers(getExpiredAlertPlayers(playerRows));
+      const skipped = Number(result.players?.skipped || 0) + Number(result.payments?.skipped || 0);
+      setSnapshotMessage(`Restored ${result.players?.restored || 0} players and ${result.payments?.restored || 0} payments.${skipped ? ` Skipped ${skipped} incomplete records.` : ''}`);
+    } catch (err) {
+      setSnapshotMessage(err.response?.data?.message || 'Unable to restore snapshot.');
+    } finally {
+      setIsSnapshotRestoring(false);
+    }
+  };
+
   const handleExpiredPlayerNotification = (player) => {
     navigate('/notifications', {
       state: {
@@ -412,9 +513,14 @@ const AdminDashboard = () => {
           <h1>{t('adminDashboard')}</h1>
           <div className="page-header-actions">
             {user?.role === 'admin' && (
-              <button className="backup-button" type="button" onClick={handlePlayersBackup} disabled={isBackupDownloading}>
-                <span>{isBackupDownloading ? 'Creating...' : 'Backup'}</span>
-              </button>
+              <>
+                <button className="backup-button" type="button" onClick={handlePlayersBackup} disabled={isBackupDownloading}>
+                  <span>{isBackupDownloading ? 'Creating...' : 'Backup'}</span>
+                </button>
+                <button className="snapshot-button" type="button" onClick={openSnapshotModal}>
+                  <span>Snapshot</span>
+                </button>
+              </>
             )}
             <button
               className="waiting-list-button"
@@ -429,6 +535,40 @@ const AdminDashboard = () => {
           <p className="alert-info">
             Preparing dashboard data...
           </p>
+        )}
+
+        {isSnapshotOpen && (
+          <div className="student-modal-backdrop" role="presentation" onClick={closeSnapshotModal}>
+            <section className="student-modal snapshot-modal" role="dialog" aria-modal="true" aria-label="Snapshot restore" onClick={(event) => event.stopPropagation()}>
+              <div className="student-modal-header">
+                <div>
+                  <h2>Snapshot</h2>
+                  <p>Restore tracked site data to a selected date and time.</p>
+                </div>
+                <button type="button" className="btn-secondary" onClick={closeSnapshotModal} disabled={isSnapshotRestoring}>{t('close')}</button>
+              </div>
+
+              {snapshotMessage && <p className={snapshotMessage.startsWith('Restored') ? 'alert-info' : 'alert-error'}>{snapshotMessage}</p>}
+
+              <form className="snapshot-form" onSubmit={handleSnapshotRestore}>
+                <label>
+                  <span>Date</span>
+                  <input type="date" value={snapshotDate} max={getLocalDateValue()} onChange={(event) => setSnapshotDate(event.target.value)} required />
+                </label>
+                <label>
+                  <span>Time</span>
+                  <input type="time" value={snapshotTime} onChange={(event) => setSnapshotTime(event.target.value)} required />
+                </label>
+                <label>
+                  <span>Confirm</span>
+                  <input type="text" value={snapshotConfirmText} onChange={(event) => setSnapshotConfirmText(event.target.value)} placeholder="RESTORE" required />
+                </label>
+                <button type="submit" className="btn-primary" disabled={isSnapshotRestoring || snapshotConfirmText !== 'RESTORE'}>
+                  {isSnapshotRestoring ? 'Restoring...' : 'Restore Snapshot'}
+                </button>
+              </form>
+            </section>
+          </div>
         )}
         {error && !isDashboardLoading && <p className="alert-error">{error}</p>}
         <div className="stats-grid">

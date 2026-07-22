@@ -9,6 +9,13 @@ let dashboardReportCache = {
   data: null
 };
 
+const clearDashboardReportCache = () => {
+  dashboardReportCache = {
+    timestamp: 0,
+    data: null
+  };
+};
+
 const getDashboardReport = async (req, res, next) => {
   try {
     if (dashboardReportCache.data && (Date.now() - dashboardReportCache.timestamp) < DASHBOARD_CACHE_TTL_MS) {
@@ -26,7 +33,7 @@ const getDashboardReport = async (req, res, next) => {
       paymentTotals,
       subscriptions
     ] = await Promise.all([
-      Player.countDocuments({ status: 'active' }),
+      Player.countDocuments({ status: 'active', isDeleted: { $ne: true } }),
       Attendance.aggregate([
         { $match: { date: todayOnly, status: { $in: ['present', 'absent'] } } },
         { $group: { _id: '$status', count: { $sum: 1 } } }
@@ -126,4 +133,4 @@ const getAttendanceReport = async (req, res, next) => {
   }
 };
 
-module.exports = { getDashboardReport, getRevenueReport, getAttendanceReport };
+module.exports = { getDashboardReport, getRevenueReport, getAttendanceReport, clearDashboardReportCache };

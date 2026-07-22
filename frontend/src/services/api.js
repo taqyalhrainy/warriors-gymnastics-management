@@ -59,7 +59,7 @@ const shouldRetryRequest = (error) => {
 api.interceptors.request.use((config) => {
   const method = config.method?.toLowerCase();
   const isWriteRequest = method && method !== 'get';
-  if (isWriteRequest && typeof window !== 'undefined' && window.__warriorsNetworkBlocked) {
+  if (isWriteRequest && typeof window !== 'undefined' && window.__warriorsNetworkBlocked && !config.__allowWhenNetworkBlocked) {
     notifyNetworkStatus('offline', { reason: 'blocked' });
     return Promise.reject(new Error('Connection is offline or unstable.'));
   }
@@ -76,7 +76,7 @@ api.interceptors.response.use(
     const config = error.config || {};
     const status = error.response?.status;
 
-    if (isNetworkFailure(error)) {
+    if (isNetworkFailure(error) && !config.__skipNetworkStatus) {
       notifyNetworkStatus('offline', {
         reason: error.code === 'ECONNABORTED' ? 'timeout' : 'request-failed'
       });
