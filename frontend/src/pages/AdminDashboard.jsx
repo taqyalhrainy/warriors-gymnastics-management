@@ -456,7 +456,7 @@ const AdminDashboard = () => {
       dashboardStatsCache = null;
       clearCache();
       const [dashboardData, groupRows, waitingRows, playerRows] = await Promise.all([
-        fetchDashboard(),
+        fetchDashboard({ force: true }),
         fetchGroups(),
         fetchWaitingList(),
         fetchPlayers({ dashboard: 'expired-alert' })
@@ -469,9 +469,10 @@ const AdminDashboard = () => {
       setDashboardPlayers(playerRows);
       setExpiredAlertPlayers(getExpiredAlertPlayers(playerRows));
       const skipped = Number(result.players?.skipped || 0) + Number(result.payments?.skipped || 0);
-      setSnapshotMessage(`Restored ${result.players?.restored || 0} players and ${result.payments?.restored || 0} payments.${skipped ? ` Skipped ${skipped} incomplete records.` : ''}`);
+      const attendanceRemoved = Number(result.attendance?.removed || 0);
+      setSnapshotMessage(`Restored ${result.players?.restored || 0} players and ${result.payments?.restored || 0} payments.${attendanceRemoved ? ` Removed ${attendanceRemoved} newer attendance records.` : ''}${skipped ? ` Skipped ${skipped} incomplete records.` : ''}`);
     } catch (err) {
-      setSnapshotMessage(err.response?.data?.message || 'Unable to restore snapshot.');
+      setSnapshotMessage(err.response?.data?.message || err.message || 'Unable to restore snapshot.');
     } finally {
       setIsSnapshotRestoring(false);
     }

@@ -1,11 +1,11 @@
 import api from './api.js';
 import { fetchCached } from './cache.js';
 
-export const fetchDashboard = async () => {
+export const fetchDashboard = async (options = {}) => {
   return fetchCached('reports:dashboard', async () => {
     const response = await api.get('/reports/dashboard');
     return response.data;
-  }, { ttlMs: 60 * 1000 });
+  }, { ttlMs: 60 * 1000, force: Boolean(options.force) });
 };
 
 export const fetchRevenue = async () => {
