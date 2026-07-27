@@ -125,6 +125,14 @@ const recalculatePlayerPayments = async (player) => {
   }
 };
 
+const getDateAtStartOfDay = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
 const getPlayers = async (req, res, next) => {
   try {
     const filter = { isDeleted: { $ne: true } };
@@ -311,7 +319,7 @@ const updatePlayer = async (req, res, next) => {
       updates.packageHours = parseLocalizedNumber(updates.packageHours);
     }
     if (startsNewSubscription) {
-      updates.currentSubscriptionStartedAt = new Date();
+      updates.currentSubscriptionStartedAt = getDateAtStartOfDay(updates.startDate) || new Date();
     }
     Object.assign(player, updates);
     await player.save();

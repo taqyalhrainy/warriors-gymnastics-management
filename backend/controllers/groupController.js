@@ -27,6 +27,15 @@ const getDateOnly = (value) => {
   return date;
 };
 
+const getEndOfDay = (value) => {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) {
+    return null;
+  }
+  date.setHours(23, 59, 59, 999);
+  return date;
+};
+
 const normalizeGroupPayload = (payload) => {
   const normalized = {
     ...payload,
@@ -267,6 +276,7 @@ const getGroupPlayers = async (req, res, next) => {
       String(player._id),
       {
         start: player.currentSubscriptionStartedAt || player.subscriptionId?.startDate || player.startDate || new Date(0),
+        end: player.subscriptionId?.endDate || player.endDate || null,
         precise: Boolean(player.currentSubscriptionStartedAt)
       }
     ]));
@@ -290,8 +300,9 @@ const getGroupPlayers = async (req, res, next) => {
       const isInCurrentCycle = cycleInfo.precise
         ? new Date(recordTime) >= new Date(cycleInfo.start)
         : getDateOnly(record.date) >= getDateOnly(cycleInfo.start);
+      const cycleEnd = getEndOfDay(cycleInfo.end);
 
-      if (isInCurrentCycle) {
+      if (isInCurrentCycle && (!cycleEnd || new Date(recordTime) <= cycleEnd)) {
         presentCountByPlayerId.set(playerId, (presentCountByPlayerId.get(playerId) || 0) + 1);
       }
     });

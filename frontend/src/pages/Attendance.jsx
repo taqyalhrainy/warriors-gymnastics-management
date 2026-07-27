@@ -87,6 +87,12 @@ const getLocalDateOnly = (date = new Date()) => {
   return value;
 };
 
+const getLocalDateEnd = (date = new Date()) => {
+  const value = new Date(date);
+  value.setHours(23, 59, 59, 999);
+  return value;
+};
+
 const getPlayerAttendanceStartTime = (player) => {
   const startSource = player?.startDate || player?.createdAt;
   if (!startSource) {
@@ -1127,17 +1133,21 @@ const AttendancePage = () => {
   const isAttendanceRecordInSubscriptionCycle = (record, player, cycleStartOverride = '') => {
     const preciseCycleStart = cycleStartOverride || player?.currentSubscriptionStartedAt;
     const cycleStart = preciseCycleStart || player?.subscriptionId?.startDate || player?.startDate;
+    const cycleEnd = player?.subscriptionId?.endDate || player?.endDate;
 
     if (!cycleStart) {
-      return true;
+      if (!cycleEnd) return true;
+      return getLocalDateOnly(record.date) <= getLocalDateEnd(cycleEnd);
     }
 
     if (preciseCycleStart) {
       const recordTime = record.checkInTime || getObjectIdDate(record._id) || record.date;
-      return new Date(recordTime) >= new Date(preciseCycleStart);
+      return new Date(recordTime) >= new Date(preciseCycleStart)
+        && (!cycleEnd || new Date(recordTime) <= getLocalDateEnd(cycleEnd));
     }
 
-    return getLocalDateOnly(record.date) >= getLocalDateOnly(cycleStart);
+    return getLocalDateOnly(record.date) >= getLocalDateOnly(cycleStart)
+      && (!cycleEnd || getLocalDateOnly(record.date) <= getLocalDateEnd(cycleEnd));
   };
 
   const getAttendancePresentCountForCycle = (records, player, cycleStartOverride = '') => {
@@ -1536,24 +1546,27 @@ const AttendancePage = () => {
     if (!confirmed) return;
 
     const previousPlayer = selectedPlayer;
-    const optimisticPlayer = {
+    const optimisticPlayerBase = {
       ...selectedPlayer,
       startDate: subscriptionForm.startDate,
       endDate: subscriptionForm.endDate,
       status: selectedPlayer.status === 'expired' ? 'active' : selectedPlayer.status,
       subscriptionNeedsAttention: keepWarning,
       currentSubscriptionStartedAt: subscriptionForm.startDate,
-      attendancePresentCount: 0,
       subscriptionId: selectedPlayer.subscriptionId && typeof selectedPlayer.subscriptionId === 'object'
         ? {
           ...selectedPlayer.subscriptionId,
           startDate: subscriptionForm.startDate,
           endDate: subscriptionForm.endDate,
-          usedSessions: 0,
-          remainingSessions: Number(selectedPlayer.subscriptionId.totalSessions || selectedPlayer.packageClasses || 0)
         }
         : selectedPlayer.subscriptionId
     };
+    const optimisticPlayer = withAttendancePresentCount(
+      optimisticPlayerBase,
+      selectedPlayerAttendanceHistory,
+      subscriptionForm.startDate,
+      getPlayerAttendanceGroupId(selectedPlayer)
+    );
 
     setSubscriptionMessage('');
     setIsSavingSubscription(true);
