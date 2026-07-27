@@ -17,6 +17,18 @@ const api = axios.create({
   }
 });
 
+const AUTH_TOKEN_KEY = 'warriors-token';
+const AUTH_USER_KEY = 'warriors-user';
+const REMEMBERED_ADMIN_LOGIN_KEY = 'warriors-remembered-admin-login';
+
+export const clearStoredAuth = () => {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_USER_KEY);
+  localStorage.removeItem(REMEMBERED_ADMIN_LOGIN_KEY);
+  sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  sessionStorage.removeItem(AUTH_USER_KEY);
+};
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const healthURL = `${baseURL}/health`;
 export const apiHealthURL = healthURL;
@@ -83,8 +95,7 @@ api.interceptors.response.use(
     }
 
     if (status === 401 && !config.__skipAuthInvalidation && !config.url?.includes('/auth/login')) {
-      localStorage.removeItem('warriors-token');
-      localStorage.removeItem('warriors-user');
+      clearStoredAuth();
       delete api.defaults.headers.common.Authorization;
       window.dispatchEvent(new Event('auth:invalid'));
     }
@@ -150,7 +161,11 @@ export const wakeApi = () => {
   }).catch(() => {});
 };
 
-const token = localStorage.getItem('warriors-token');
+localStorage.removeItem(AUTH_TOKEN_KEY);
+localStorage.removeItem(AUTH_USER_KEY);
+localStorage.removeItem(REMEMBERED_ADMIN_LOGIN_KEY);
+
+const token = sessionStorage.getItem(AUTH_TOKEN_KEY);
 if (token) {
   api.defaults.headers.common.Authorization = `Bearer ${token}`;
 }

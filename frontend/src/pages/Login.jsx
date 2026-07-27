@@ -67,30 +67,10 @@ const getAuthErrorMessage = (err) => {
   return message || 'Something went wrong. Please try again.';
 };
 
-const encodeRememberedLogin = (data) => {
-  try {
-    return btoa(unescape(encodeURIComponent(JSON.stringify(data))));
-  } catch (error) {
-    return '';
-  }
-};
-
-const decodeRememberedLogin = () => {
-  try {
-    const raw = localStorage.getItem(REMEMBERED_ADMIN_LOGIN_KEY);
-    if (!raw) return null;
-    return JSON.parse(decodeURIComponent(escape(atob(raw))));
-  } catch (error) {
-    localStorage.removeItem(REMEMBERED_ADMIN_LOGIN_KEY);
-    return null;
-  }
-};
-
 const LoginPage = () => {
   const [loginRole, setLoginRole] = useState('admin');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberAdminLogin, setRememberAdminLogin] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [generalError, setGeneralError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -101,20 +81,12 @@ const LoginPage = () => {
   useEffect(() => {
     if (hasRequestedServerWake) return;
     hasRequestedServerWake = true;
+    localStorage.removeItem(REMEMBERED_ADMIN_LOGIN_KEY);
 
     api.get('/health', { timeout: 15000 }).catch(() => {
       hasRequestedServerWake = false;
     });
   }, []);
-
-  useEffect(() => {
-    if (loginRole !== 'admin') return;
-    const rememberedLogin = decodeRememberedLogin();
-    if (!rememberedLogin?.email || !rememberedLogin?.password) return;
-    setIdentifier(rememberedLogin.email);
-    setPassword(rememberedLogin.password);
-    setRememberAdminLogin(true);
-  }, [loginRole]);
 
   const clearErrors = () => {
     setFieldErrors({});
@@ -123,16 +95,8 @@ const LoginPage = () => {
 
   const switchLoginRole = (role) => {
     setLoginRole(role);
-    if (role === 'admin') {
-      const rememberedLogin = decodeRememberedLogin();
-      setIdentifier(rememberedLogin?.email || '');
-      setPassword(rememberedLogin?.password || '');
-      setRememberAdminLogin(Boolean(rememberedLogin?.email && rememberedLogin?.password));
-    } else {
-      setIdentifier('');
-      setPassword('');
-      setRememberAdminLogin(false);
-    }
+    setIdentifier('');
+    setPassword('');
     clearErrors();
   };
 
@@ -158,14 +122,7 @@ const LoginPage = () => {
         ? { name: trimmedIdentifier, password }
         : { email: trimmedIdentifier, password };
       const data = await sendAuthWithWakeRetry(() => login(payload), setIsWaitingForServer);
-      if (loginRole === 'admin' && rememberAdminLogin) {
-        localStorage.setItem(REMEMBERED_ADMIN_LOGIN_KEY, encodeRememberedLogin({
-          email: trimmedIdentifier,
-          password
-        }));
-      } else if (loginRole === 'admin') {
-        localStorage.removeItem(REMEMBERED_ADMIN_LOGIN_KEY);
-      }
+      localStorage.removeItem(REMEMBERED_ADMIN_LOGIN_KEY);
       authLogin(data);
       navigate(data.user.role === 'parent' ? '/parent' : '/admin');
     } catch (err) {
@@ -213,22 +170,6 @@ const LoginPage = () => {
           <label>Password</label>
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
           {fieldErrors.password && <p className="field-error">{fieldErrors.password}</p>}
-
-          {loginRole === 'admin' && (
-            <label className="remember-login-row">
-              <input
-                type="checkbox"
-                checked={rememberAdminLogin}
-                onChange={(event) => {
-                  setRememberAdminLogin(event.target.checked);
-                  if (!event.target.checked) {
-                    localStorage.removeItem(REMEMBERED_ADMIN_LOGIN_KEY);
-                  }
-                }}
-              />
-              <span>Remember me on this device</span>
-            </label>
-          )}
 
           <button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Signing In...' : 'Sign In'}</button>
         </form>

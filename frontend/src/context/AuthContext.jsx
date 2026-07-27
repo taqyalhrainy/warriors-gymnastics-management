@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import api, { waitForApiHealth } from '../services/api.js';
+import api, { clearStoredAuth, waitForApiHealth } from '../services/api.js';
 import { clearCache } from '../services/cache.js';
 import { warmAdminAppCache, resetPrefetchState } from '../services/prefetch.js';
 
@@ -7,23 +7,37 @@ const AuthContext = createContext(null);
 let verifiedServerToken = '';
 const adminDataRoles = ['admin', 'coach', 'receptionist'];
 const retryPreparationAfter = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const AUTH_TOKEN_KEY = 'warriors-token';
+const AUTH_USER_KEY = 'warriors-user';
+
+const readSessionUser = () => {
+  try {
+    const stored = sessionStorage.getItem(AUTH_USER_KEY);
+    return stored ? JSON.parse(stored) : null;
+  } catch (error) {
+    sessionStorage.removeItem(AUTH_USER_KEY);
+    return null;
+  }
+};
+
+const normalizeUser = (user) => user ? {
+  ...user,
+  id: user.id || user._id
+} : null;
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => {
-    const stored = localStorage.getItem('warriors-user');
-    return stored ? JSON.parse(stored) : null;
-  });
-  const [token, setToken] = useState(() => localStorage.getItem('warriors-token'));
+  const [user, setUser] = useState(() => normalizeUser(readSessionUser()));
+  const [token, setToken] = useState(() => sessionStorage.getItem(AUTH_TOKEN_KEY));
   const [isServerReady, setIsServerReady] = useState(true);
   const [isServerChecking, setIsServerChecking] = useState(false);
 
   useEffect(() => {
     if (token) {
       api.defaults.headers.common.Authorization = `Bearer ${token}`;
-      localStorage.setItem('warriors-token', token);
+      sessionStorage.setItem(AUTH_TOKEN_KEY, token);
     }
     if (user) {
-      localStorage.setItem('warriors-user', JSON.stringify(user));
+      sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
     }
   }, [token, user]);
 
@@ -52,6 +66,17 @@ export const AuthProvider = ({ children }) => {
         try {
           if (verifiedServerToken !== token) {
             await waitForApiHealth({ timeout: 4000, maxWaitMs: 180000, pollIntervalMs: 500 });
+            const response = await api.get('/auth/me', {
+              __skipRetry: true
+            });
+            const verifiedUser = normalizeUser(response.data?.user);
+            if (!verifiedUser) {
+              throw new Error('Unable to verify current session.');
+            }
+            if (isMounted) {
+              setUser(verifiedUser);
+              sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(verifiedUser));
+            }
             verifiedServerToken = token;
           }
 
@@ -85,20 +110,20 @@ export const AuthProvider = ({ children }) => {
     clearCache();
     resetPrefetchState();
     api.defaults.headers.common.Authorization = `Bearer ${data.token}`;
-    localStorage.setItem('warriors-token', data.token);
-    localStorage.setItem('warriors-user', JSON.stringify(data.user));
+    const nextUser = normalizeUser(data.user);
+    sessionStorage.setItem(AUTH_TOKEN_KEY, data.token);
+    sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(nextUser));
     setToken(data.token);
-    setUser(data.user);
+    setUser(nextUser);
     verifiedServerToken = '';
-    setIsServerReady(!adminDataRoles.includes(data.user?.role));
-    setIsServerChecking(adminDataRoles.includes(data.user?.role));
+    setIsServerReady(!adminDataRoles.includes(nextUser?.role));
+    setIsServerChecking(adminDataRoles.includes(nextUser?.role));
   };
 
   const logout = () => {
     setUser(null);
     setToken(null);
-    localStorage.removeItem('warriors-token');
-    localStorage.removeItem('warriors-user');
+    clearStoredAuth();
     delete api.defaults.headers.common.Authorization;
     clearCache();
     resetPrefetchState();
