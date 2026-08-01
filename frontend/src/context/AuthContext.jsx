@@ -11,10 +11,13 @@ const AUTH_TOKEN_KEY = 'warriors-token';
 const AUTH_USER_KEY = 'warriors-user';
 const AUTH_REMEMBER_KEY = 'warriors-remember-auth';
 
+const isRememberedAuth = () => localStorage.getItem(AUTH_REMEMBER_KEY) === 'true';
+
 const readStoredUser = () => {
   try {
-    const stored = sessionStorage.getItem(AUTH_USER_KEY)
-      || (localStorage.getItem(AUTH_REMEMBER_KEY) === 'true' ? localStorage.getItem(AUTH_USER_KEY) : null);
+    const stored = isRememberedAuth()
+      ? localStorage.getItem(AUTH_USER_KEY)
+      : sessionStorage.getItem(AUTH_USER_KEY);
     return stored ? JSON.parse(stored) : null;
   } catch (error) {
     localStorage.removeItem(AUTH_USER_KEY);
@@ -28,21 +31,39 @@ const normalizeUser = (user) => user ? {
   id: user.id || user._id
 } : null;
 
+const writeStoredAuth = ({ token, user, remember }) => {
+  const targetStorage = remember ? localStorage : sessionStorage;
+  const otherStorage = remember ? sessionStorage : localStorage;
+  otherStorage.removeItem(AUTH_TOKEN_KEY);
+  otherStorage.removeItem(AUTH_USER_KEY);
+  if (remember) {
+    localStorage.setItem(AUTH_REMEMBER_KEY, 'true');
+  } else {
+    localStorage.removeItem(AUTH_REMEMBER_KEY);
+  }
+  if (token) {
+    targetStorage.setItem(AUTH_TOKEN_KEY, token);
+  }
+  if (user) {
+    targetStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+  }
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => normalizeUser(readStoredUser()));
   const [token, setToken] = useState(() => getStoredToken());
+  const [rememberSession, setRememberSession] = useState(() => isRememberedAuth());
   const [isServerReady, setIsServerReady] = useState(true);
   const [isServerChecking, setIsServerChecking] = useState(false);
 
   useEffect(() => {
     if (token) {
       api.defaults.headers.common.Authorization = `Bearer ${token}`;
-      sessionStorage.setItem(AUTH_TOKEN_KEY, token);
     }
-    if (user) {
-      sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+    if (token || user) {
+      writeStoredAuth({ token, user, remember: rememberSession });
     }
-  }, [token, user]);
+  }, [token, user, rememberSession]);
 
   useEffect(() => {
     if (!token || !user) {
@@ -78,8 +99,7 @@ export const AuthProvider = ({ children }) => {
             }
             if (isMounted) {
               setUser(verifiedUser);
-              const targetStorage = localStorage.getItem(AUTH_TOKEN_KEY) === token ? localStorage : sessionStorage;
-              targetStorage.setItem(AUTH_USER_KEY, JSON.stringify(verifiedUser));
+              writeStoredAuth({ token, user: verifiedUser, remember: rememberSession });
             }
             verifiedServerToken = token;
           }
@@ -115,17 +135,9 @@ export const AuthProvider = ({ children }) => {
     resetPrefetchState();
     api.defaults.headers.common.Authorization = `Bearer ${data.token}`;
     const nextUser = normalizeUser(data.user);
-    const targetStorage = options.remember ? localStorage : sessionStorage;
-    const otherStorage = options.remember ? sessionStorage : localStorage;
-    otherStorage.removeItem(AUTH_TOKEN_KEY);
-    otherStorage.removeItem(AUTH_USER_KEY);
-    if (options.remember) {
-      localStorage.setItem(AUTH_REMEMBER_KEY, 'true');
-    } else {
-      localStorage.removeItem(AUTH_REMEMBER_KEY);
-    }
-    targetStorage.setItem(AUTH_TOKEN_KEY, data.token);
-    targetStorage.setItem(AUTH_USER_KEY, JSON.stringify(nextUser));
+    const remember = Boolean(options.remember);
+    setRememberSession(remember);
+    writeStoredAuth({ token: data.token, user: nextUser, remember });
     setToken(data.token);
     setUser(nextUser);
     verifiedServerToken = '';
@@ -136,6 +148,7 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     setUser(null);
     setToken(null);
+    setRememberSession(false);
     clearStoredAuth();
     delete api.defaults.headers.common.Authorization;
     clearCache();

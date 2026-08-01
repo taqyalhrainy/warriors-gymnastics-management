@@ -32,8 +32,9 @@ export const clearStoredAuth = () => {
 };
 
 export const getStoredToken = () => (
-  sessionStorage.getItem(AUTH_TOKEN_KEY)
-  || (localStorage.getItem(AUTH_REMEMBER_KEY) === 'true' ? localStorage.getItem(AUTH_TOKEN_KEY) : null)
+  localStorage.getItem(AUTH_REMEMBER_KEY) === 'true'
+    ? localStorage.getItem(AUTH_TOKEN_KEY)
+    : sessionStorage.getItem(AUTH_TOKEN_KEY)
 );
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -169,7 +170,10 @@ export const wakeApi = () => {
 };
 
 localStorage.removeItem(REMEMBERED_ADMIN_LOGIN_KEY);
-if (localStorage.getItem(AUTH_REMEMBER_KEY) !== 'true') {
+if (localStorage.getItem(AUTH_REMEMBER_KEY) === 'true') {
+  sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  sessionStorage.removeItem(AUTH_USER_KEY);
+} else {
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(AUTH_USER_KEY);
 }

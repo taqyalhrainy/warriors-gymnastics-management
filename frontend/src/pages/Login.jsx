@@ -7,6 +7,7 @@ import warriorsLogo from '../assets/warriors-logo.png';
 
 const SERVER_WAKE_RETRY_MS = 3000;
 const SERVER_WAKE_MAX_MS = 180000;
+const AUTH_REMEMBER_KEY = 'warriors-remember-auth';
 const REMEMBERED_ADMIN_LOGIN_KEY = 'warriors-remembered-admin-login';
 let hasRequestedServerWake = false;
 
@@ -71,7 +72,7 @@ const LoginPage = () => {
   const [loginRole, setLoginRole] = useState('admin');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberLogin, setRememberLogin] = useState(false);
+  const [rememberLogin, setRememberLogin] = useState(() => localStorage.getItem(AUTH_REMEMBER_KEY) === 'true');
   const [fieldErrors, setFieldErrors] = useState({});
   const [generalError, setGeneralError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
