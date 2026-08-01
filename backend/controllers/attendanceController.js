@@ -48,7 +48,7 @@ const markPresent = async (req, res, next) => {
     }
     const subscription = await Subscription.findOne({ playerId });
     if (subscription) {
-      if (subscription.type === 'sessions' && subscription.remainingSessions > 0) {
+      if (subscription.type === 'sessions') {
         subscription.usedSessions += 1;
         subscription.remainingSessions = Math.max(0, subscription.remainingSessions - 1);
       }
@@ -154,7 +154,7 @@ const updateTodayAttendance = async (req, res, next) => {
 
     const subscription = await Subscription.findOne({ playerId });
     if (subscription && subscription.type === 'sessions' && previousStatus !== status) {
-      if (status === 'present' && previousStatus !== 'present' && subscription.remainingSessions > 0) {
+      if (status === 'present' && previousStatus !== 'present') {
         subscription.usedSessions += 1;
         subscription.remainingSessions = Math.max(0, subscription.remainingSessions - 1);
       }

@@ -1138,21 +1138,17 @@ const AttendancePage = () => {
   const isAttendanceRecordInSubscriptionCycle = (record, player, cycleStartOverride = '') => {
     const preciseCycleStart = cycleStartOverride || player?.currentSubscriptionStartedAt;
     const cycleStart = preciseCycleStart || player?.subscriptionId?.startDate || player?.startDate;
-    const cycleEnd = player?.subscriptionId?.endDate || player?.endDate;
 
     if (!cycleStart) {
-      if (!cycleEnd) return true;
-      return getLocalDateOnly(record.date) <= getLocalDateEnd(cycleEnd);
+      return true;
     }
 
     if (preciseCycleStart) {
       const recordTime = record.checkInTime || getObjectIdDate(record._id) || record.date;
-      return new Date(recordTime) >= new Date(preciseCycleStart)
-        && (!cycleEnd || new Date(recordTime) <= getLocalDateEnd(cycleEnd));
+      return new Date(recordTime) >= new Date(preciseCycleStart);
     }
 
-    return getLocalDateOnly(record.date) >= getLocalDateOnly(cycleStart)
-      && (!cycleEnd || getLocalDateOnly(record.date) <= getLocalDateEnd(cycleEnd));
+    return getLocalDateOnly(record.date) >= getLocalDateOnly(cycleStart);
   };
 
   const getAttendancePresentCountForCycle = (records, player, cycleStartOverride = '') => {
