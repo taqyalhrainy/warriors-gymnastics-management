@@ -160,7 +160,11 @@ const decodeDisplayText = (value) => {
   return decoded;
 };
 
-const isPlayerVisibleInAttendance = (player) => !player?.isDeleted && player?.status !== 'left';
+const isPlayerVisibleInAttendance = (player) => (
+  !player?.isDeleted
+  && player?.status !== 'left'
+  && !(player?.status === 'frozen' && player?.showInAttendanceWhenFrozen === false)
+);
 const isPlayerFrozen = (player) => player?.status === 'frozen';
 
 const getPlayerPackageCounter = (player) => {
@@ -1370,7 +1374,8 @@ const AttendancePage = () => {
     packageHours: player?.packageHours ?? '',
     payment: player?.payment ?? '',
     note: decodeDisplayText(player?.note),
-    status: player?.status || 'active'
+    status: player?.status || 'active',
+    showInAttendanceWhenFrozen: player?.showInAttendanceWhenFrozen !== false
   });
 
   const handleStartEditSelectedPlayer = async () => {
@@ -1964,13 +1969,23 @@ const AttendancePage = () => {
     const selectedParent = editParents.find((parent) => getEntityId(parent._id) === getEntityId(selectedPlayerForm.parentId));
     const selectedGroupRefs = selectedPlayerForm.groupIds
       .map((groupId) => editGroups.find((group) => getEntityId(group._id) === getEntityId(groupId)) || { _id: groupId, name: '' });
+    const becameFrozen = selectedPlayer.status !== 'frozen' && selectedPlayerForm.status === 'frozen';
+    const leftFrozen = selectedPlayer.status === 'frozen' && selectedPlayerForm.status !== 'frozen';
+    let showInAttendanceWhenFrozen = selectedPlayerForm.showInAttendanceWhenFrozen !== false;
+    if (becameFrozen) {
+      showInAttendanceWhenFrozen = window.confirm('Keep this frozen player visible on the attendance board? Press OK to keep visible, or Cancel to show only under Frozen.');
+    }
+    if (leftFrozen) {
+      showInAttendanceWhenFrozen = true;
+    }
     const updatePayload = {
       ...selectedPlayerForm,
       groupId: selectedPlayerForm.groupIds[0] || '',
       groupIds: selectedPlayerForm.groupIds,
       packageClasses: parseLocalizedNumber(selectedPlayerForm.packageClasses),
       packageHours: parseLocalizedNumber(selectedPlayerForm.packageHours),
-      payment: parseLocalizedNumber(selectedPlayerForm.payment)
+      payment: parseLocalizedNumber(selectedPlayerForm.payment),
+      showInAttendanceWhenFrozen
     };
     const optimisticPlayer = {
       ...selectedPlayer,

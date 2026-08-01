@@ -20,6 +20,7 @@ const playerSchema = new mongoose.Schema({
   payment: { type: Number, default: 0, min: 0 },
   note: { type: String, trim: true, default: '' },
   status: { type: String, enum: ['active', 'expired', 'frozen', 'left', 'tryout'], default: 'active' },
+  showInAttendanceWhenFrozen: { type: Boolean, default: true },
   subscriptionNeedsAttention: { type: Boolean, default: false },
   attendanceAlertEnabled: { type: Boolean, default: false },
   isDeleted: { type: Boolean, default: false },

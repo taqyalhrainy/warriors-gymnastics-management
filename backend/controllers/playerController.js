@@ -318,6 +318,9 @@ const updatePlayer = async (req, res, next) => {
     if (typeof updates.packageHours !== 'undefined') {
       updates.packageHours = parseLocalizedNumber(updates.packageHours);
     }
+    if (updates.status && updates.status !== 'frozen') {
+      updates.showInAttendanceWhenFrozen = true;
+    }
     if (startsNewSubscription) {
       updates.currentSubscriptionStartedAt = getDateAtStartOfDay(updates.startDate) || new Date();
     }

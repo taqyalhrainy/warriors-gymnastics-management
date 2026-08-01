@@ -262,6 +262,14 @@ const getGroupPlayers = async (req, res, next) => {
     const players = await Player.find({
       isDeleted: { $ne: true },
       status: { $ne: 'left' },
+      $and: [
+        {
+          $or: [
+            { status: { $ne: 'frozen' } },
+            { showInAttendanceWhenFrozen: { $ne: false } }
+          ]
+        }
+      ],
       $or: [{ groupId: id }, { groupIds: id }]
     })
       .sort({ createdAt: -1, _id: -1 })

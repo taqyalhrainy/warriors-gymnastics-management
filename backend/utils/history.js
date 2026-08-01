@@ -61,6 +61,7 @@ const snapshotPlayerDocument = (playerDocument) => {
     payment: Number(player?.payment || 0),
     note: player?.note || '',
     status: player?.status || '',
+    showInAttendanceWhenFrozen: player?.showInAttendanceWhenFrozen !== false,
     subscriptionNeedsAttention: Boolean(player?.subscriptionNeedsAttention),
     attendanceAlertEnabled: Boolean(player?.attendanceAlertEnabled),
     profileImage: player?.profileImage || '',

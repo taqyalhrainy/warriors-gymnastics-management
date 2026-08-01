@@ -120,8 +120,8 @@ const LoginPage = () => {
 
     try {
       const payload = loginRole === 'parent'
-        ? { name: trimmedIdentifier, password }
-        : { email: trimmedIdentifier, password };
+        ? { name: trimmedIdentifier, password, remember: rememberLogin }
+        : { email: trimmedIdentifier, password, remember: rememberLogin };
       const data = await sendAuthWithWakeRetry(() => login(payload), setIsWaitingForServer);
       localStorage.removeItem(REMEMBERED_ADMIN_LOGIN_KEY);
       authLogin(data, { remember: rememberLogin });
