@@ -162,10 +162,12 @@ const LoginPage = () => {
 
           <label>{loginRole === 'parent' ? 'Name' : 'Email'}</label>
           <input
-            type={loginRole === 'parent' ? 'text' : 'password'}
+            type="text"
+            className={loginRole === 'admin' ? 'masked-admin-identifier' : ''}
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
             autoComplete="username"
+            inputMode={loginRole === 'admin' ? 'email' : 'text'}
           />
           {fieldErrors.identifier && <p className="field-error">{fieldErrors.identifier}</p>}
 

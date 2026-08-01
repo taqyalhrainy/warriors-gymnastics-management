@@ -1475,6 +1475,11 @@ textarea {
   resize: vertical;
 }
 
+.masked-admin-identifier {
+  -webkit-text-security: disc;
+  text-security: disc;
+}
+
 .password-input-row {
   display: flex;
   gap: 12px;

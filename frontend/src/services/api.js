@@ -102,7 +102,16 @@ api.interceptors.response.use(
       });
     }
 
-    if (status === 401 && !config.__skipAuthInvalidation && !config.url?.includes('/auth/login')) {
+    const authMessage = String(error.response?.data?.message || '').toLowerCase();
+    const isExpiredSession = (
+      authMessage.includes('authentication required')
+      || authMessage.includes('invalid authentication token')
+      || authMessage.includes('unauthorized access')
+      || authMessage.includes('jwt expired')
+      || authMessage.includes('jwt malformed')
+    );
+
+    if (status === 401 && isExpiredSession && !config.__skipAuthInvalidation && !config.url?.includes('/auth/login')) {
       clearStoredAuth();
       delete api.defaults.headers.common.Authorization;
       window.dispatchEvent(new Event('auth:invalid'));
