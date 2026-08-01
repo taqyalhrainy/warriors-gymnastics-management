@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import api, { clearStoredAuth, waitForApiHealth } from '../services/api.js';
+import api, { clearStoredAuth, getStoredToken, waitForApiHealth } from '../services/api.js';
 import { clearCache } from '../services/cache.js';
 import { warmAdminAppCache, resetPrefetchState } from '../services/prefetch.js';
 
@@ -9,12 +9,15 @@ const adminDataRoles = ['admin', 'coach', 'receptionist'];
 const retryPreparationAfter = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const AUTH_TOKEN_KEY = 'warriors-token';
 const AUTH_USER_KEY = 'warriors-user';
+const AUTH_REMEMBER_KEY = 'warriors-remember-auth';
 
-const readSessionUser = () => {
+const readStoredUser = () => {
   try {
-    const stored = sessionStorage.getItem(AUTH_USER_KEY);
+    const stored = sessionStorage.getItem(AUTH_USER_KEY)
+      || (localStorage.getItem(AUTH_REMEMBER_KEY) === 'true' ? localStorage.getItem(AUTH_USER_KEY) : null);
     return stored ? JSON.parse(stored) : null;
   } catch (error) {
+    localStorage.removeItem(AUTH_USER_KEY);
     sessionStorage.removeItem(AUTH_USER_KEY);
     return null;
   }
@@ -26,8 +29,8 @@ const normalizeUser = (user) => user ? {
 } : null;
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => normalizeUser(readSessionUser()));
-  const [token, setToken] = useState(() => sessionStorage.getItem(AUTH_TOKEN_KEY));
+  const [user, setUser] = useState(() => normalizeUser(readStoredUser()));
+  const [token, setToken] = useState(() => getStoredToken());
   const [isServerReady, setIsServerReady] = useState(true);
   const [isServerChecking, setIsServerChecking] = useState(false);
 
@@ -75,7 +78,8 @@ export const AuthProvider = ({ children }) => {
             }
             if (isMounted) {
               setUser(verifiedUser);
-              sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(verifiedUser));
+              const targetStorage = localStorage.getItem(AUTH_TOKEN_KEY) === token ? localStorage : sessionStorage;
+              targetStorage.setItem(AUTH_USER_KEY, JSON.stringify(verifiedUser));
             }
             verifiedServerToken = token;
           }
@@ -106,13 +110,22 @@ export const AuthProvider = ({ children }) => {
     };
   }, [token, user]);
 
-  const login = (data) => {
+  const login = (data, options = {}) => {
     clearCache();
     resetPrefetchState();
     api.defaults.headers.common.Authorization = `Bearer ${data.token}`;
     const nextUser = normalizeUser(data.user);
-    sessionStorage.setItem(AUTH_TOKEN_KEY, data.token);
-    sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(nextUser));
+    const targetStorage = options.remember ? localStorage : sessionStorage;
+    const otherStorage = options.remember ? sessionStorage : localStorage;
+    otherStorage.removeItem(AUTH_TOKEN_KEY);
+    otherStorage.removeItem(AUTH_USER_KEY);
+    if (options.remember) {
+      localStorage.setItem(AUTH_REMEMBER_KEY, 'true');
+    } else {
+      localStorage.removeItem(AUTH_REMEMBER_KEY);
+    }
+    targetStorage.setItem(AUTH_TOKEN_KEY, data.token);
+    targetStorage.setItem(AUTH_USER_KEY, JSON.stringify(nextUser));
     setToken(data.token);
     setUser(nextUser);
     verifiedServerToken = '';

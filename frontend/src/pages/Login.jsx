@@ -71,6 +71,7 @@ const LoginPage = () => {
   const [loginRole, setLoginRole] = useState('admin');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberLogin, setRememberLogin] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [generalError, setGeneralError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -123,7 +124,7 @@ const LoginPage = () => {
         : { email: trimmedIdentifier, password };
       const data = await sendAuthWithWakeRetry(() => login(payload), setIsWaitingForServer);
       localStorage.removeItem(REMEMBERED_ADMIN_LOGIN_KEY);
-      authLogin(data);
+      authLogin(data, { remember: rememberLogin });
       navigate(data.user.role === 'parent' ? '/parent' : '/admin');
     } catch (err) {
       setGeneralError(getAuthErrorMessage(err));
@@ -170,6 +171,15 @@ const LoginPage = () => {
           <label>Password</label>
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
           {fieldErrors.password && <p className="field-error">{fieldErrors.password}</p>}
+
+          <label className="remember-login-row">
+            <input
+              type="checkbox"
+              checked={rememberLogin}
+              onChange={(event) => setRememberLogin(event.target.checked)}
+            />
+            <span>Remember me on this device</span>
+          </label>
 
           <button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Signing In...' : 'Sign In'}</button>
         </form>
