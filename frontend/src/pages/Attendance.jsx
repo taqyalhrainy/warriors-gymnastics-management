@@ -1962,6 +1962,9 @@ const AttendancePage = () => {
     if (!selectedPlayer?._id || !selectedPlayerForm) {
       return;
     }
+    if (pendingSelectedPlayerMutationRef.current) {
+      return;
+    }
 
     const shouldCloseAfterSave = Boolean(options.closeAfterSave);
     const previousPlayer = selectedPlayer;
@@ -1981,6 +1984,9 @@ const AttendancePage = () => {
     if (leftFrozen) {
       showInAttendanceWhenFrozen = true;
     }
+    selectedPlayerLoadRequestIdRef.current += 1;
+    selectedPlayerEditRequestIdRef.current += 1;
+    const mutation = beginSelectedPlayerMutation('player-edit');
     const updatePayload = {
       ...selectedPlayerForm,
       groupId: selectedPlayerForm.groupIds[0] || '',
@@ -2016,27 +2022,39 @@ const AttendancePage = () => {
       if (shouldCloseAfterSave) {
         closeSelectedPlayer({ force: true });
       }
-      await updatePlayer(selectedPlayer._id, updatePayload);
+      const savedPlayer = await updatePlayer(selectedPlayer._id, updatePayload);
 
-      const [refreshedPlayer, attendanceRecords] = await Promise.all([
-        getPlayer(selectedPlayer._id, { force: true }),
-        fetchAttendanceByPlayer(selectedPlayer._id)
-      ]);
-      const refreshedPlayerWithCount = withAttendancePresentCount(refreshedPlayer, attendanceRecords);
+      if (!isLatestSelectedPlayerMutation(mutation)) {
+        return;
+      }
+
+      const attendanceRecords = await fetchAttendanceByPlayer(selectedPlayer._id);
+      const confirmedPlayer = {
+        ...optimisticPlayer,
+        ...savedPlayer,
+        parentId: optimisticPlayer.parentId,
+        groupId: optimisticPlayer.groupId,
+        groupIds: optimisticPlayer.groupIds
+      };
+      const refreshedPlayerWithCount = withAttendancePresentCount(confirmedPlayer, attendanceRecords);
 
       syncPlayerInAttendanceBoard(refreshedPlayerWithCount, attendanceRecords);
       if (!shouldCloseAfterSave) {
         setSelectedPlayerIfOpen(refreshedPlayerWithCount);
       }
     } catch (err) {
-      applyOptimisticSelectedPlayer(previousPlayer);
-      if (isSelectedPlayerOpen(previousPlayer._id)) {
+      if (isLatestSelectedPlayerMutation(mutation)) {
+        applyOptimisticSelectedPlayer(previousPlayer);
+      }
+      if (isCurrentSelectedPlayerMutation(mutation)) {
         setSelectedPlayerForm(selectedPlayerForm);
         setIsEditingSelectedPlayer(true);
         selectedPlayerFormDirtyRef.current = true;
       }
       setPendingFrozenVisibilitySave(null);
       setMessage(err.response?.data?.message || 'Unable to update player');
+    } finally {
+      finishSelectedPlayerMutation(mutation);
     }
   };
 
