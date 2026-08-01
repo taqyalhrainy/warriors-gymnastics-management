@@ -282,6 +282,7 @@ const AttendancePage = () => {
   const [isEditingSelectedPlayer, setIsEditingSelectedPlayer] = useState(false);
   const [selectedPlayerForm, setSelectedPlayerForm] = useState(null);
   const [showUnsavedExitConfirm, setShowUnsavedExitConfirm] = useState(false);
+  const [pendingFrozenVisibilitySave, setPendingFrozenVisibilitySave] = useState(null);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [subscriptionForm, setSubscriptionForm] = useState({ startDate: '', endDate: '' });
   const [subscriptionMessage, setSubscriptionMessage] = useState('');
@@ -1473,6 +1474,7 @@ const AttendancePage = () => {
     setIsEditingSelectedPlayer(false);
     setSelectedPlayerForm(selectedPlayer ? createSelectedPlayerForm(selectedPlayer) : null);
     setShowUnsavedExitConfirm(false);
+    setPendingFrozenVisibilitySave(null);
   };
 
   const normalizeSelectedPlayerForm = (form) => {
@@ -1505,6 +1507,7 @@ const AttendancePage = () => {
     }
 
     setShowUnsavedExitConfirm(false);
+    setPendingFrozenVisibilitySave(null);
     selectedPlayerFormDirtyRef.current = false;
     selectedPlayerLoadRequestIdRef.current += 1;
     selectedPlayerEditRequestIdRef.current += 1;
@@ -1972,8 +1975,12 @@ const AttendancePage = () => {
     const becameFrozen = selectedPlayer.status !== 'frozen' && selectedPlayerForm.status === 'frozen';
     const leftFrozen = selectedPlayer.status === 'frozen' && selectedPlayerForm.status !== 'frozen';
     let showInAttendanceWhenFrozen = selectedPlayerForm.showInAttendanceWhenFrozen !== false;
+    if (becameFrozen && typeof options.showInAttendanceWhenFrozen !== 'boolean') {
+      setPendingFrozenVisibilitySave({ closeAfterSave: shouldCloseAfterSave });
+      return;
+    }
     if (becameFrozen) {
-      showInAttendanceWhenFrozen = window.confirm('Keep this frozen player visible on the attendance board? Press OK to keep visible, or Cancel to show only under Frozen.');
+      showInAttendanceWhenFrozen = options.showInAttendanceWhenFrozen;
     }
     if (leftFrozen) {
       showInAttendanceWhenFrozen = true;
@@ -2005,6 +2012,7 @@ const AttendancePage = () => {
     try {
       setMessage('');
       setShowUnsavedExitConfirm(false);
+      setPendingFrozenVisibilitySave(null);
       applyOptimisticSelectedPlayer(optimisticPlayer);
       selectedPlayerFormDirtyRef.current = false;
       setIsEditingSelectedPlayer(false);
@@ -2031,6 +2039,7 @@ const AttendancePage = () => {
         setIsEditingSelectedPlayer(true);
         selectedPlayerFormDirtyRef.current = true;
       }
+      setPendingFrozenVisibilitySave(null);
       setMessage(err.response?.data?.message || 'Unable to update player');
     }
   };
@@ -2586,6 +2595,45 @@ const AttendancePage = () => {
                 <button type="button" className="btn-secondary" onClick={() => setShowUnsavedExitConfirm(false)}>Keep editing</button>
                 <button type="button" className="btn-secondary" onClick={() => closeSelectedPlayer({ force: true })}>Exit without saving</button>
                 <button type="button" className="btn-primary" onClick={() => handleSaveSelectedPlayerEdit(null, { closeAfterSave: true })}>Save and exit</button>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {pendingFrozenVisibilitySave && (
+          <div className="student-modal-backdrop unsaved-exit-backdrop" role="presentation">
+            <section className="frozen-visibility-dialog" role="dialog" aria-modal="true" aria-label="Frozen attendance visibility" onClick={(event) => event.stopPropagation()}>
+              <div className="frozen-visibility-icon">Frozen</div>
+              <div>
+                <h2>Where should this frozen player appear?</h2>
+                <p>Choose whether the player stays on the attendance board for quick check-in, or moves only to the Frozen list.</p>
+              </div>
+              <div className="frozen-visibility-options">
+                <button
+                  type="button"
+                  className="frozen-visibility-option keep-visible"
+                  onClick={() => handleSaveSelectedPlayerEdit(null, {
+                    closeAfterSave: pendingFrozenVisibilitySave.closeAfterSave,
+                    showInAttendanceWhenFrozen: true
+                  })}
+                >
+                  <span>Keep on attendance</span>
+                  <small>Visible in the group board with a frozen badge.</small>
+                </button>
+                <button
+                  type="button"
+                  className="frozen-visibility-option frozen-only"
+                  onClick={() => handleSaveSelectedPlayerEdit(null, {
+                    closeAfterSave: pendingFrozenVisibilitySave.closeAfterSave,
+                    showInAttendanceWhenFrozen: false
+                  })}
+                >
+                  <span>Frozen list only</span>
+                  <small>Hide from attendance and keep under Frozen.</small>
+                </button>
+              </div>
+              <div className="unsaved-exit-actions">
+                <button type="button" className="btn-secondary" onClick={() => setPendingFrozenVisibilitySave(null)}>Back to edit</button>
               </div>
             </section>
           </div>
