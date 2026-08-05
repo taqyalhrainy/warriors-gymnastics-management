@@ -2054,43 +2054,39 @@ const AttendancePage = () => {
     threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
     return records.filter((record) => new Date(record.date) >= threeMonthsAgo);
   };
-  const getSubscriptionStartValue = (snapshot) => (
+  const getSubscriptionStartValue = (snapshot, allowInitialFallback = false) => (
     snapshot?.currentSubscriptionStartedAt
-    || snapshot?.startDate
-    || snapshot?.createdAt
-    || ''
+    || (allowInitialFallback ? (snapshot?.startDate || snapshot?.createdAt || '') : '')
   );
-  const getSubscriptionCycleStartDate = (snapshot) => getDateInputValue(getSubscriptionStartValue(snapshot));
-  const getSubscriptionHistoryKey = (snapshot) => getSubscriptionCycleStartDate(snapshot);
+  const getSubscriptionCycleStartDate = (snapshot, allowInitialFallback = false) => getDateInputValue(getSubscriptionStartValue(snapshot, allowInitialFallback));
+  const getSubscriptionHistoryKey = (snapshot, allowInitialFallback = false) => getSubscriptionCycleStartDate(snapshot, allowInitialFallback);
+  const upsertSubscriptionCycle = (cyclesByKey, snapshot, changedAt, allowInitialFallback = false) => {
+    if (!snapshot) return;
+    const key = getSubscriptionHistoryKey(snapshot, allowInitialFallback);
+    if (!key) return;
+    cyclesByKey.set(key, {
+      key,
+      changedAt,
+      startDate: getSubscriptionStartValue(snapshot, allowInitialFallback),
+      endDate: snapshot.endDate,
+      packageName: snapshot.packageName || '',
+      packageClasses: Number(snapshot.packageClasses || 0),
+      payment: Number(snapshot.payment || 0)
+    });
+  };
   const buildSubscriptionHistory = (entries = [], player = null) => {
     const cyclesByKey = new Map();
-    entries.forEach((entry) => {
-      if (!entry.after) return;
-      const key = getSubscriptionHistoryKey(entry.after);
-      if (!key) return;
-      cyclesByKey.set(key, {
-        key,
-        changedAt: entry.changedAt,
-        startDate: getSubscriptionStartValue(entry.after),
-        endDate: entry.after.endDate,
-        packageName: entry.after.packageName || '',
-        packageClasses: Number(entry.after.packageClasses || 0),
-        payment: Number(entry.after.payment || 0)
-      });
+    const sortedEntries = [...entries].sort((first, second) => new Date(first.changedAt) - new Date(second.changedAt));
+    const firstSnapshot = sortedEntries.find((entry) => entry.after)?.after;
+    const firstChangedAt = sortedEntries.find((entry) => entry.after)?.changedAt;
+    upsertSubscriptionCycle(cyclesByKey, firstSnapshot, firstChangedAt, true);
+    sortedEntries.forEach((entry) => {
+      if (entry.after?.currentSubscriptionStartedAt) {
+        upsertSubscriptionCycle(cyclesByKey, entry.after, entry.changedAt);
+      }
     });
     if (player) {
-      const key = getSubscriptionHistoryKey(player);
-      if (key) {
-        cyclesByKey.set(key, {
-          key,
-          changedAt: new Date().toISOString(),
-          startDate: getSubscriptionStartValue(player),
-          endDate: player.endDate,
-          packageName: player.packageName || '',
-          packageClasses: Number(player.packageClasses || 0),
-          payment: Number(player.payment || 0)
-        });
-      }
+      upsertSubscriptionCycle(cyclesByKey, player, new Date().toISOString(), cyclesByKey.size === 0);
     }
     return [...cyclesByKey.values()]
       .filter((cycle) => cycle.startDate)
