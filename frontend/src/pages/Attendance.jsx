@@ -37,6 +37,11 @@ const getPreviousDateInputValue = (date) => {
   return getDateInputValue(value);
 };
 
+const getEarliestDateValue = (...dates) => dates
+  .map((date) => getDateInputValue(date))
+  .filter(Boolean)
+  .sort((first, second) => new Date(first) - new Date(second))[0] || '';
+
 const getFourWeekEndDateValue = (startDate) => {
   const [year, month, day] = String(startDate || getDateInputValue()).split('-').map(Number);
   const value = new Date(year, month - 1, day);
@@ -1124,8 +1129,12 @@ const AttendancePage = () => {
   };
 
   const isAttendanceRecordInSubscriptionCycle = (record, player, cycleStartOverride = '') => {
-    const preciseCycleStart = cycleStartOverride || player?.currentSubscriptionStartedAt;
-    const cycleStart = preciseCycleStart || player?.subscriptionId?.startDate || player?.startDate;
+    const preciseCycleStart = cycleStartOverride;
+    const cycleStart = preciseCycleStart || getEarliestDateValue(
+      player?.startDate,
+      player?.subscriptionId?.startDate,
+      player?.currentSubscriptionStartedAt
+    );
 
     if (!cycleStart) {
       return true;
@@ -2158,18 +2167,14 @@ const AttendancePage = () => {
     });
   };
   const isCurrentSubscriptionAttendanceRecord = (record) => {
-    const preciseCycleStart = selectedPlayer?.currentSubscriptionStartedAt;
-    const cycleStart = preciseCycleStart
-      || selectedPlayer?.subscriptionId?.startDate
-      || selectedPlayer?.startDate;
+    const cycleStart = getEarliestDateValue(
+      selectedPlayer?.startDate,
+      selectedPlayer?.subscriptionId?.startDate,
+      selectedPlayer?.currentSubscriptionStartedAt
+    );
 
     if (!cycleStart) {
       return true;
-    }
-
-    if (preciseCycleStart) {
-      const recordTime = record.checkInTime || getObjectIdDate(record._id) || record.date;
-      return new Date(recordTime) >= new Date(preciseCycleStart);
     }
 
     return getLocalDateOnly(record.date) >= getLocalDateOnly(cycleStart);
