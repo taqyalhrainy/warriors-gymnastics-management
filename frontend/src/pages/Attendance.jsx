@@ -2055,8 +2055,8 @@ const AttendancePage = () => {
     return records.filter((record) => new Date(record.date) >= threeMonthsAgo);
   };
   const getSubscriptionStartValue = (snapshot, allowInitialFallback = false) => (
-    snapshot?.currentSubscriptionStartedAt
-    || (allowInitialFallback ? (snapshot?.startDate || snapshot?.createdAt || '') : '')
+    snapshot?.startDate
+    || (allowInitialFallback ? (snapshot?.currentSubscriptionStartedAt || snapshot?.createdAt || '') : '')
   );
   const getSubscriptionCycleStartDate = (snapshot, allowInitialFallback = false) => getDateInputValue(getSubscriptionStartValue(snapshot, allowInitialFallback));
   const getSubscriptionHistoryKey = (snapshot, allowInitialFallback = false) => getSubscriptionCycleStartDate(snapshot, allowInitialFallback);
@@ -2084,9 +2084,12 @@ const AttendancePage = () => {
     upsertSubscriptionCycle(cyclesByKey, initialEntry?.after || player, initialEntry?.changedAt || new Date().toISOString(), true);
     sortedEntries.forEach((entry) => {
       const changedFields = entry.changedFields || [];
-      const isNewSubscriptionEntry = entry.after?.currentSubscriptionStartedAt
-        && changedFields.includes('currentSubscriptionStartedAt')
-        && changedFields.some((field) => ['startDate', 'endDate', 'packageName', 'packageClasses', 'packageHours', 'payment'].includes(field));
+      const beforeStart = getDateInputValue(entry.before?.startDate);
+      const afterStart = getDateInputValue(entry.after?.startDate);
+      const isNewSubscriptionEntry = entry.after
+        && changedFields.includes('startDate')
+        && afterStart
+        && afterStart !== beforeStart;
       if (isNewSubscriptionEntry) {
         upsertSubscriptionCycle(cyclesByKey, entry.after, entry.changedAt);
       }
