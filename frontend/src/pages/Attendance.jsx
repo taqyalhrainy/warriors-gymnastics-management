@@ -1350,6 +1350,7 @@ const AttendancePage = () => {
         getPlayerAttendanceGroupId(player)
       );
 
+      syncPlayerInAttendanceBoard(latestPlayerWithCount, attendanceRecords, getPlayerAttendanceGroupId(player));
       setSelectedPlayer(latestPlayerWithCount);
       if (!selectedPlayerFormDirtyRef.current) {
         setSelectedPlayerForm(createSelectedPlayerForm(latestPlayerWithCount));
