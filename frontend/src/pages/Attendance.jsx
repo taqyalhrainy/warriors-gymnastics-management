@@ -30,6 +30,13 @@ const getDateInputValue = (date = new Date()) => {
   return getLocalDateValue(value);
 };
 
+const getPreviousDateInputValue = (date) => {
+  const value = new Date(date);
+  if (Number.isNaN(value.getTime())) return '';
+  value.setDate(value.getDate() - 1);
+  return getDateInputValue(value);
+};
+
 const getFourWeekEndDateValue = (startDate) => {
   const [year, month, day] = String(startDate || getDateInputValue()).split('-').map(Number);
   const value = new Date(year, month - 1, day);
@@ -2074,6 +2081,43 @@ const AttendancePage = () => {
       payment: Number(snapshot.payment || 0)
     });
   };
+  const cycleHasPackageDetails = (cycle) => (
+    Boolean(cycle.packageName)
+    || Number(cycle.packageClasses || 0) > 0
+    || Number(cycle.payment || 0) > 0
+  );
+  const normalizeSubscriptionCycles = (cycles) => {
+    const sortedAsc = [...cycles]
+      .filter((cycle) => cycle.startDate)
+      .sort((first, second) => new Date(first.startDate) - new Date(second.startDate));
+    const meaningfulCycles = [];
+
+    sortedAsc.forEach((cycle) => {
+      const previous = meaningfulCycles[meaningfulCycles.length - 1];
+      const startsInsidePrevious = previous?.endDate
+        && getLocalDateOnly(cycle.startDate).getTime() <= getLocalDateOnly(previous.endDate).getTime();
+
+      if (!cycleHasPackageDetails(cycle) && startsInsidePrevious) {
+        return;
+      }
+
+      meaningfulCycles.push(cycle);
+    });
+
+    return meaningfulCycles.map((cycle, index) => {
+      const nextCycle = meaningfulCycles[index + 1];
+      if (!nextCycle) return cycle;
+
+      const endTime = cycle.endDate ? getLocalDateOnly(cycle.endDate).getTime() : null;
+      const nextStartTime = getLocalDateOnly(nextCycle.startDate).getTime();
+      if (endTime && endTime < nextStartTime) return cycle;
+
+      return {
+        ...cycle,
+        endDate: getPreviousDateInputValue(nextCycle.startDate)
+      };
+    });
+  };
   const buildSubscriptionHistory = (entries = [], player = null) => {
     const cyclesByKey = new Map();
     const sortedEntries = [...entries].sort((first, second) => new Date(first.changedAt) - new Date(second.changedAt));
@@ -2094,8 +2138,7 @@ const AttendancePage = () => {
     if (player) {
       upsertSubscriptionCycle(cyclesByKey, player, new Date().toISOString(), cyclesByKey.size === 0);
     }
-    return [...cyclesByKey.values()]
-      .filter((cycle) => cycle.startDate)
+    return normalizeSubscriptionCycles([...cyclesByKey.values()])
       .sort((first, second) => new Date(second.startDate) - new Date(first.startDate));
   };
   const getAttendanceRecordsForSubscription = (records, cycle, cycles) => {
