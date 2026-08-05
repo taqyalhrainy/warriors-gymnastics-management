@@ -2701,6 +2701,16 @@ body.attendance-touch-dragging {
   font-size: 1.1rem;
 }
 
+.subscription-history-summary.is-current-subscription {
+  border-color: rgba(34, 197, 94, 0.5);
+  background:
+    linear-gradient(135deg, rgba(34, 197, 94, 0.18), rgba(187, 247, 208, 0.12)),
+    var(--surface-alt);
+  box-shadow:
+    inset 5px 0 0 rgba(34, 197, 94, 0.9),
+    0 0 18px rgba(34, 197, 94, 0.14);
+}
+
 .subscription-history-records {
   display: grid;
   gap: 8px;

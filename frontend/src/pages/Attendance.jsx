@@ -2620,9 +2620,10 @@ const AttendancePage = () => {
                           const records = getAttendanceRecordsForSubscription(selectedPlayerAttendanceHistory, cycle, selectedPlayerSubscriptionHistory);
                           const presentCount = records.filter((record) => record.status === 'present').length;
                           const isOpen = openSubscriptionHistoryKey === cycle.key;
+                          const isCurrentCycle = cycle.key === getDateInputValue(selectedPlayer.startDate);
                           return (
                             <div className="subscription-history-group" key={cycle.key}>
-                              <button type="button" className="subscription-history-summary" onClick={() => setOpenSubscriptionHistoryKey(isOpen ? '' : cycle.key)}>
+                              <button type="button" className={`subscription-history-summary${isCurrentCycle ? ' is-current-subscription' : ''}`} onClick={() => setOpenSubscriptionHistoryKey(isOpen ? '' : cycle.key)}>
                                 <span>
                                   <strong>{cycle.packageName || 'Subscription'}</strong>
                                   <small>{formatDate(cycle.startDate)} - {formatDate(cycle.endDate)}</small>
@@ -2631,25 +2632,33 @@ const AttendancePage = () => {
                               </button>
                               {isOpen && (
                                 <div className="subscription-history-records">
-                                  {records.length ? records.map((record) => (
-                                    <div className={`student-history-row${isCurrentSubscriptionAttendanceRecord(record) ? ' is-current-subscription' : ''} attendance-history-${record.status}`} key={record._id}>
-                                      <span>{new Date(record.date).toLocaleDateString()}</span>
-                                      <strong>{record.status}</strong>
-                                      <span>{record.checkInTime ? new Date(record.checkInTime).toLocaleTimeString() : '-'}</span>
-                                      <div className="student-history-actions">
-                                        {editingAttendanceHistoryId === record._id ? (
-                                          <>
-                                            <button type="button" className="btn-present compact" onClick={() => handleAttendanceHistoryStatusChange(record, 'present')} disabled={pendingAttendanceHistoryId === record._id}>{pendingAttendanceHistoryId === record._id ? 'Saving...' : 'Present'}</button>
-                                            <button type="button" className="btn-absent compact" onClick={() => handleAttendanceHistoryStatusChange(record, 'absent')} disabled={pendingAttendanceHistoryId === record._id}>Absent</button>
-                                            <button type="button" className="btn-secondary compact" onClick={() => handleAttendanceHistoryCancel(record)} disabled={pendingAttendanceHistoryId === record._id}>Delete</button>
-                                            <button type="button" className="btn-secondary compact" onClick={() => setEditingAttendanceHistoryId(null)} disabled={pendingAttendanceHistoryId === record._id}>Cancel</button>
-                                          </>
-                                        ) : (
-                                          <button type="button" className="btn-secondary compact" onClick={() => setEditingAttendanceHistoryId(record._id)} disabled={Boolean(pendingAttendanceHistoryId)}>Edit</button>
-                                        )}
+                                  {records.length ? records.map((record) => {
+                                    const isCurrentRecord = isCurrentSubscriptionAttendanceRecord(record);
+                                    return (
+                                      <div className={`student-history-row${isCurrentRecord ? ' is-current-subscription' : ''} attendance-history-${record.status}`} key={record._id}>
+                                        <span>{new Date(record.date).toLocaleDateString()}</span>
+                                        <strong>{record.status}</strong>
+                                        <span>{record.checkInTime ? new Date(record.checkInTime).toLocaleTimeString() : '-'}</span>
+                                        <div className="student-history-actions">
+                                          {editingAttendanceHistoryId === record._id ? (
+                                            <>
+                                              <button type="button" className="btn-present compact" onClick={() => handleAttendanceHistoryStatusChange(record, 'present')} disabled={pendingAttendanceHistoryId === record._id}>{pendingAttendanceHistoryId === record._id ? 'Saving...' : 'Present'}</button>
+                                              <button type="button" className="btn-absent compact" onClick={() => handleAttendanceHistoryStatusChange(record, 'absent')} disabled={pendingAttendanceHistoryId === record._id}>Absent</button>
+                                              <button type="button" className="btn-secondary compact" onClick={() => handleAttendanceHistoryCancel(record)} disabled={pendingAttendanceHistoryId === record._id}>Delete</button>
+                                              {isCurrentRecord ? (
+                                                <button type="button" className="btn-secondary compact" onClick={() => handleRemoveAttendanceFromCurrentSubscription(record)} disabled={pendingAttendanceHistoryId === record._id}>Remove from current sub</button>
+                                              ) : (
+                                                <button type="button" className="btn-secondary compact" onClick={() => handleCountAttendanceInCurrentSubscription(record)} disabled={pendingAttendanceHistoryId === record._id}>Count in current sub</button>
+                                              )}
+                                              <button type="button" className="btn-secondary compact" onClick={() => setEditingAttendanceHistoryId(null)} disabled={pendingAttendanceHistoryId === record._id}>Cancel</button>
+                                            </>
+                                          ) : (
+                                            <button type="button" className="btn-secondary compact" onClick={() => setEditingAttendanceHistoryId(record._id)} disabled={Boolean(pendingAttendanceHistoryId)}>Edit</button>
+                                          )}
+                                        </div>
                                       </div>
-                                    </div>
-                                  )) : <p className="empty-state">No attendance records in this subscription.</p>}
+                                    );
+                                  }) : <p className="empty-state">No attendance records in this subscription.</p>}
                                 </div>
                               )}
                             </div>
