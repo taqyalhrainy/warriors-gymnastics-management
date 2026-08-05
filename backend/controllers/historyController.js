@@ -2,6 +2,7 @@ const Player = require('../models/Player');
 const Payment = require('../models/Payment');
 const Parent = require('../models/Parent');
 const TrainingGroup = require('../models/TrainingGroup');
+const HistoryEntry = require('../models/HistoryEntry');
 const { validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { encrypt } = require('../utils/encryption');
@@ -311,6 +312,34 @@ const getHistorySnapshot = async (req, res, next) => {
   }
 };
 
+const getPlayerHistory = async (req, res, next) => {
+  try {
+    const { playerId } = req.params;
+    if (!validateObjectId(playerId)) {
+      return res.status(400).json({ message: 'Invalid player ID.' });
+    }
+
+    const entries = await HistoryEntry.find({
+      entityType: 'player',
+      entityId: playerId
+    })
+      .sort({ changedAt: 1, _id: 1 })
+      .select('action after changedAt')
+      .lean();
+
+    res.json({
+      playerId,
+      entries: entries.map((entry) => ({
+        action: entry.action,
+        changedAt: entry.changedAt,
+        after: entry.after || null
+      }))
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const runSnapshotRestore = async ({ jobId, asOf, reqMeta }) => {
   const job = snapshotRestoreJobs.get(jobId);
   if (!job) return;
@@ -404,4 +433,4 @@ const getSnapshotRestoreStatus = (req, res) => {
   res.json(job);
 };
 
-module.exports = { getHistorySnapshot, restoreHistorySnapshot, getSnapshotRestoreStatus };
+module.exports = { getHistorySnapshot, getPlayerHistory, restoreHistorySnapshot, getSnapshotRestoreStatus };

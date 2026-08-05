@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
 import { updateTodayAttendance, cancelTodayAttendance, fetchAttendanceByPlayer, fetchTodayAttendance } from '../services/attendance.js';
 import { fetchGroups, fetchGroupPlayers, reorderGroups as reorderGroupsRequest } from '../services/groups.js';
-import { fetchHistorySnapshot } from '../services/history.js';
+import { fetchHistorySnapshot, fetchPlayerHistory } from '../services/history.js';
 import { fetchParents } from '../services/parents.js';
 import { getPlayer, updatePlayer } from '../services/players.js';
 import { fetchPackageOptions } from '../services/packageOptions.js';
@@ -49,36 +49,7 @@ const DAY_INDEXES = {
 };
 
 const getScheduledEndDateValue = (startDate, player, availableGroups = []) => {
-  const totalClasses = Number(player?.packageClasses || 0);
-  const playerGroups = player?.groupIds?.length ? player.groupIds : [player?.groupId].filter(Boolean);
-  const groupsById = new Map(availableGroups.map((group) => [String(group?._id || ''), group]));
-  const resolvedGroups = playerGroups.map((group) => (
-    typeof group === 'object' && group?.days
-      ? group
-      : groupsById.get(String(group?._id || group || ''))
-  )).filter(Boolean);
-  const scheduledDays = new Set(
-    resolvedGroups
-      .flatMap((group) => group.days || [])
-      .map((day) => DAY_INDEXES[String(day).trim().toLowerCase()])
-      .filter((day) => Number.isInteger(day))
-  );
-
-  if (!startDate || totalClasses <= 0 || !scheduledDays.size) {
-    return getFourWeekEndDateValue(startDate);
-  }
-
-  const [year, month, day] = String(startDate).split('-').map(Number);
-  const date = new Date(year, month - 1, day);
-  if (Number.isNaN(date.getTime())) return '';
-
-  let scheduledClasses = 0;
-  while (scheduledClasses < totalClasses) {
-    if (scheduledDays.has(date.getDay())) scheduledClasses += 1;
-    if (scheduledClasses < totalClasses) date.setDate(date.getDate() + 1);
-  }
-
-  return getDateInputValue(date);
+  return getFourWeekEndDateValue(startDate);
 };
 
 const getLocalDateOnly = (date = new Date()) => {
@@ -94,7 +65,7 @@ const getLocalDateEnd = (date = new Date()) => {
 };
 
 const getPlayerAttendanceStartTime = (player) => {
-  const startSource = player?.startDate || player?.createdAt;
+  const startSource = player?.createdAt;
   if (!startSource) {
     return null;
   }
@@ -276,6 +247,8 @@ const AttendancePage = () => {
   const [groupColumns, setGroupColumns] = useState([]);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [selectedPlayerAttendanceHistory, setSelectedPlayerAttendanceHistory] = useState([]);
+  const [selectedPlayerSubscriptionHistory, setSelectedPlayerSubscriptionHistory] = useState([]);
+  const [openSubscriptionHistoryKey, setOpenSubscriptionHistoryKey] = useState('');
   const [showSelectedPlayerAttendanceHistory, setShowSelectedPlayerAttendanceHistory] = useState(false);
   const [editingAttendanceHistoryId, setEditingAttendanceHistoryId] = useState(null);
   const [pendingAttendanceHistoryId, setPendingAttendanceHistoryId] = useState(null);
@@ -1329,13 +1302,16 @@ const AttendancePage = () => {
       setSelectedPlayer(player);
       setSelectedPlayerForm(createSelectedPlayerForm(player));
       setSelectedPlayerAttendanceHistory([]);
+      setSelectedPlayerSubscriptionHistory([]);
+      setOpenSubscriptionHistoryKey('');
       setShowSelectedPlayerAttendanceHistory(false);
       setEditingAttendanceHistoryId(null);
       setIsEditingSelectedPlayer(false);
 
-      const [latestPlayer, attendanceRecords] = await Promise.all([
+      const [latestPlayer, attendanceRecords, playerHistory] = await Promise.all([
         getPlayer(player._id),
-        fetchAttendanceByPlayer(player._id)
+        fetchAttendanceByPlayer(player._id),
+        fetchPlayerHistory(player._id)
       ]);
 
       if (requestId !== selectedPlayerLoadRequestIdRef.current) {
@@ -1354,6 +1330,7 @@ const AttendancePage = () => {
         setSelectedPlayerForm(createSelectedPlayerForm(latestPlayerWithCount));
       }
       setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
+      setSelectedPlayerSubscriptionHistory(buildSubscriptionHistory(playerHistory.entries || [], latestPlayerWithCount));
     } catch (err) {
       setMessage(err.response?.data?.message || 'Unable to load student card');
     }
@@ -2065,6 +2042,64 @@ const AttendancePage = () => {
     threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
     return records.filter((record) => new Date(record.date) >= threeMonthsAgo);
   };
+  const getSubscriptionStartValue = (snapshot, fallbackDate = '') => (
+    snapshot?.currentSubscriptionStartedAt
+    || snapshot?.startDate
+    || fallbackDate
+    || snapshot?.createdAt
+    || ''
+  );
+  const getSubscriptionHistoryKey = (snapshot, fallbackDate = '') => [
+    getDateInputValue(getSubscriptionStartValue(snapshot, fallbackDate)),
+    getDateInputValue(snapshot?.endDate),
+    snapshot?.packageName || '',
+    Number(snapshot?.packageClasses || 0),
+    Number(snapshot?.payment || 0)
+  ].join('|');
+  const buildSubscriptionHistory = (entries = [], player = null) => {
+    const cyclesByKey = new Map();
+    entries.forEach((entry) => {
+      if (!entry.after) return;
+      const key = getSubscriptionHistoryKey(entry.after, entry.changedAt);
+      if (!cyclesByKey.has(key)) {
+        cyclesByKey.set(key, {
+          key,
+          changedAt: entry.changedAt,
+          startDate: getSubscriptionStartValue(entry.after, entry.changedAt),
+          endDate: entry.after.endDate,
+          packageName: entry.after.packageName || '',
+          packageClasses: Number(entry.after.packageClasses || 0),
+          payment: Number(entry.after.payment || 0)
+        });
+      }
+    });
+    if (player) {
+      const key = getSubscriptionHistoryKey(player);
+      cyclesByKey.set(key, {
+        key,
+        changedAt: new Date().toISOString(),
+        startDate: getSubscriptionStartValue(player),
+        endDate: player.endDate,
+        packageName: player.packageName || '',
+        packageClasses: Number(player.packageClasses || 0),
+        payment: Number(player.payment || 0)
+      });
+    }
+    return [...cyclesByKey.values()]
+      .filter((cycle) => cycle.startDate)
+      .sort((first, second) => new Date(second.startDate) - new Date(first.startDate));
+  };
+  const getAttendanceRecordsForSubscription = (records, cycle, cycles) => {
+    const sortedAsc = [...cycles].sort((first, second) => new Date(first.startDate) - new Date(second.startDate));
+    const cycleIndex = sortedAsc.findIndex((item) => item.key === cycle.key);
+    const nextCycle = sortedAsc[cycleIndex + 1];
+    const startTime = new Date(cycle.startDate).getTime();
+    const nextStartTime = nextCycle ? new Date(nextCycle.startDate).getTime() : null;
+    return records.filter((record) => {
+      const recordTime = new Date(record.checkInTime || record.date).getTime();
+      return recordTime >= startTime && (!nextStartTime || recordTime < nextStartTime);
+    });
+  };
   const isCurrentSubscriptionAttendanceRecord = (record) => {
     const preciseCycleStart = selectedPlayer?.currentSubscriptionStartedAt;
     const cycleStart = preciseCycleStart
@@ -2515,80 +2550,45 @@ const AttendancePage = () => {
                     </button>
                     {showSelectedPlayerAttendanceHistory && (
                       <div className="student-history-list">
-                        {selectedPlayerAttendanceHistory.length ? selectedPlayerAttendanceHistory.map((record) => (
-                          <div className={`student-history-row${isCurrentSubscriptionAttendanceRecord(record) ? ' is-current-subscription' : ''} attendance-history-${record.status}`} key={record._id}>
-                            <span>{new Date(record.date).toLocaleDateString()}</span>
-                            <strong>{record.status}</strong>
-                            <span>{record.checkInTime ? new Date(record.checkInTime).toLocaleTimeString() : '-'}</span>
-                            <div className="student-history-actions">
-                              {editingAttendanceHistoryId === record._id ? (
-                                <>
-                                  <button
-                                    type="button"
-                                    className="btn-present compact"
-                                    onClick={() => handleAttendanceHistoryStatusChange(record, 'present')}
-                                    disabled={pendingAttendanceHistoryId === record._id}
-                                  >
-                                    {pendingAttendanceHistoryId === record._id ? 'Saving...' : 'Present'}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="btn-absent compact"
-                                    onClick={() => handleAttendanceHistoryStatusChange(record, 'absent')}
-                                    disabled={pendingAttendanceHistoryId === record._id}
-                                  >
-                                    Absent
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="btn-secondary compact"
-                                    onClick={() => handleAttendanceHistoryCancel(record)}
-                                    disabled={pendingAttendanceHistoryId === record._id}
-                                  >
-                                    Delete
-                                  </button>
-                                  {['present', 'absent'].includes(record.status) && !isCurrentSubscriptionAttendanceRecord(record) && (
-                                    <button
-                                      type="button"
-                                      className="btn-secondary compact"
-                                      onClick={() => handleCountAttendanceInCurrentSubscription(record)}
-                                      disabled={pendingAttendanceHistoryId === record._id}
-                                    >
-                                      {record.status === 'absent' ? 'Move to current sub' : 'Count in current sub'}
-                                    </button>
-                                  )}
-                                  {['present', 'absent'].includes(record.status) && isCurrentSubscriptionAttendanceRecord(record) && (
-                                    <button
-                                      type="button"
-                                      className="btn-secondary compact"
-                                      onClick={() => handleRemoveAttendanceFromCurrentSubscription(record)}
-                                      disabled={pendingAttendanceHistoryId === record._id}
-                                    >
-                                      Remove from current sub
-                                    </button>
-                                  )}
-                                  <button
-                                    type="button"
-                                    className="btn-secondary compact"
-                                    onClick={() => setEditingAttendanceHistoryId(null)}
-                                    disabled={pendingAttendanceHistoryId === record._id}
-                                  >
-                                    Cancel
-                                  </button>
-                                </>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="btn-secondary compact"
-                                  onClick={() => setEditingAttendanceHistoryId(record._id)}
-                                  disabled={Boolean(pendingAttendanceHistoryId)}
-                                >
-                                  Edit
-                                </button>
+                        {selectedPlayerSubscriptionHistory.length ? selectedPlayerSubscriptionHistory.map((cycle) => {
+                          const records = getAttendanceRecordsForSubscription(selectedPlayerAttendanceHistory, cycle, selectedPlayerSubscriptionHistory);
+                          const presentCount = records.filter((record) => record.status === 'present').length;
+                          const isOpen = openSubscriptionHistoryKey === cycle.key;
+                          return (
+                            <div className="subscription-history-group" key={cycle.key}>
+                              <button type="button" className="subscription-history-summary" onClick={() => setOpenSubscriptionHistoryKey(isOpen ? '' : cycle.key)}>
+                                <span>
+                                  <strong>{cycle.packageName || 'Subscription'}</strong>
+                                  <small>{formatDate(cycle.startDate)} - {formatDate(cycle.endDate)}</small>
+                                </span>
+                                <b>{presentCount}/{cycle.packageClasses || 0}</b>
+                              </button>
+                              {isOpen && (
+                                <div className="subscription-history-records">
+                                  {records.length ? records.map((record) => (
+                                    <div className={`student-history-row${isCurrentSubscriptionAttendanceRecord(record) ? ' is-current-subscription' : ''} attendance-history-${record.status}`} key={record._id}>
+                                      <span>{new Date(record.date).toLocaleDateString()}</span>
+                                      <strong>{record.status}</strong>
+                                      <span>{record.checkInTime ? new Date(record.checkInTime).toLocaleTimeString() : '-'}</span>
+                                      <div className="student-history-actions">
+                                        {editingAttendanceHistoryId === record._id ? (
+                                          <>
+                                            <button type="button" className="btn-present compact" onClick={() => handleAttendanceHistoryStatusChange(record, 'present')} disabled={pendingAttendanceHistoryId === record._id}>{pendingAttendanceHistoryId === record._id ? 'Saving...' : 'Present'}</button>
+                                            <button type="button" className="btn-absent compact" onClick={() => handleAttendanceHistoryStatusChange(record, 'absent')} disabled={pendingAttendanceHistoryId === record._id}>Absent</button>
+                                            <button type="button" className="btn-secondary compact" onClick={() => handleAttendanceHistoryCancel(record)} disabled={pendingAttendanceHistoryId === record._id}>Delete</button>
+                                            <button type="button" className="btn-secondary compact" onClick={() => setEditingAttendanceHistoryId(null)} disabled={pendingAttendanceHistoryId === record._id}>Cancel</button>
+                                          </>
+                                        ) : (
+                                          <button type="button" className="btn-secondary compact" onClick={() => setEditingAttendanceHistoryId(record._id)} disabled={Boolean(pendingAttendanceHistoryId)}>Edit</button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )) : <p className="empty-state">No attendance records in this subscription.</p>}
+                                </div>
                               )}
                             </div>
-                          </div>
-                        )) : <p className="empty-state">No attendance history found for the last 3 months.</p>}
+                          );
+                        }) : <p className="empty-state">No subscription history found.</p>}
                       </div>
                     )}
                   </div>

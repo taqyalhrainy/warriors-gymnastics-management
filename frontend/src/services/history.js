@@ -8,6 +8,11 @@ export const fetchHistorySnapshot = async ({ entityType, at }) => {
   return response.data;
 };
 
+export const fetchPlayerHistory = async (playerId) => {
+  const response = await api.get(`/history/player/${playerId}`);
+  return response.data;
+};
+
 export const restoreHistorySnapshot = async ({ at }) => {
   const response = await api.post('/history/restore', {
     at,
