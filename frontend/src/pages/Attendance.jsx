@@ -2077,11 +2077,17 @@ const AttendancePage = () => {
   const buildSubscriptionHistory = (entries = [], player = null) => {
     const cyclesByKey = new Map();
     const sortedEntries = [...entries].sort((first, second) => new Date(first.changedAt) - new Date(second.changedAt));
-    const firstSnapshot = sortedEntries.find((entry) => entry.after)?.after;
-    const firstChangedAt = sortedEntries.find((entry) => entry.after)?.changedAt;
-    upsertSubscriptionCycle(cyclesByKey, firstSnapshot, firstChangedAt, true);
+    const initialEntry = sortedEntries.find((entry) => (
+      entry.after
+      && (entry.action === 'create' || Number(entry.after.packageClasses || 0) > 0 || entry.after.packageName)
+    ));
+    upsertSubscriptionCycle(cyclesByKey, initialEntry?.after || player, initialEntry?.changedAt || new Date().toISOString(), true);
     sortedEntries.forEach((entry) => {
-      if (entry.after?.currentSubscriptionStartedAt) {
+      const changedFields = entry.changedFields || [];
+      const isNewSubscriptionEntry = entry.after?.currentSubscriptionStartedAt
+        && changedFields.includes('currentSubscriptionStartedAt')
+        && changedFields.some((field) => ['startDate', 'endDate', 'packageName', 'packageClasses', 'packageHours', 'payment'].includes(field));
+      if (isNewSubscriptionEntry) {
         upsertSubscriptionCycle(cyclesByKey, entry.after, entry.changedAt);
       }
     });

@@ -325,7 +325,7 @@ const getPlayerHistory = async (req, res, next) => {
       entityId: playerId
     })
       .sort({ changedAt: 1, _id: 1 })
-      .select('action after changedAt')
+      .select('action before after changedFields changedAt')
       .lean();
 
     res.json({
@@ -333,6 +333,8 @@ const getPlayerHistory = async (req, res, next) => {
       entries: entries.map((entry) => ({
         action: entry.action,
         changedAt: entry.changedAt,
+        changedFields: entry.changedFields || [],
+        before: entry.before || null,
         after: entry.after || null
       }))
     });
