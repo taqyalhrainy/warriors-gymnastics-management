@@ -61,7 +61,35 @@ const DAY_INDEXES = {
 };
 
 const getScheduledEndDateValue = (startDate, player, availableGroups = []) => {
-  return getFourWeekEndDateValue(startDate);
+  const totalClasses = Number(player?.packageClasses || player?.subscriptionId?.totalSessions || 0);
+  const playerGroups = player?.groupIds?.length ? player.groupIds : [player?.groupId].filter(Boolean);
+  const groups = playerGroups.map((group) => {
+    if (group?.days) return group;
+    const groupId = getEntityId(group);
+    return availableGroups.find((availableGroup) => getEntityId(availableGroup._id) === groupId) || group;
+  });
+  const scheduledDays = new Set(
+    groups
+      .flatMap((group) => group?.days || [])
+      .map((day) => DAY_INDEXES[String(day).trim().toLowerCase()])
+      .filter((day) => Number.isInteger(day))
+  );
+
+  if (!startDate || totalClasses <= 0 || !scheduledDays.size) {
+    return getFourWeekEndDateValue(startDate);
+  }
+
+  const [year, month, day] = String(startDate).split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  if (Number.isNaN(date.getTime())) return '';
+
+  let scheduledClasses = 0;
+  while (scheduledClasses < totalClasses) {
+    if (scheduledDays.has(date.getDay())) scheduledClasses += 1;
+    if (scheduledClasses < totalClasses) date.setDate(date.getDate() + 1);
+  }
+
+  return getDateInputValue(date);
 };
 
 const getLocalDateOnly = (date = new Date()) => {
