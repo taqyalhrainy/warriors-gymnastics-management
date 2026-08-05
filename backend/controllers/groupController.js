@@ -27,6 +27,12 @@ const getDateOnly = (value) => {
   return date;
 };
 
+const getEarliestDate = (...values) => values
+  .filter(Boolean)
+  .map((value) => new Date(value))
+  .filter((date) => !Number.isNaN(date.getTime()))
+  .sort((first, second) => first - second)[0] || null;
+
 const normalizeGroupPayload = (payload) => {
   const normalized = {
     ...payload,
@@ -273,10 +279,7 @@ const getGroupPlayers = async (req, res, next) => {
     const playerIds = players.map((player) => player._id);
     const cycleStartByPlayerId = new Map(players.map((player) => [
       String(player._id),
-      {
-        start: player.currentSubscriptionStartedAt || player.subscriptionId?.startDate || player.startDate || new Date(0),
-        precise: Boolean(player.currentSubscriptionStartedAt)
-      }
+      getEarliestDate(player.startDate, player.subscriptionId?.startDate, player.currentSubscriptionStartedAt) || new Date(0)
     ]));
     const presentRecords = playerIds.length
       ? await Attendance.find({
@@ -288,16 +291,13 @@ const getGroupPlayers = async (req, res, next) => {
 
     presentRecords.forEach((record) => {
       const playerId = String(record.playerId);
-      const cycleInfo = cycleStartByPlayerId.get(playerId);
-      if (!cycleInfo?.start) {
+      const cycleStart = cycleStartByPlayerId.get(playerId);
+      if (!cycleStart) {
         presentCountByPlayerId.set(playerId, (presentCountByPlayerId.get(playerId) || 0) + 1);
         return;
       }
 
-      const recordTime = record.checkInTime || record.date;
-      const isInCurrentCycle = cycleInfo.precise
-        ? new Date(recordTime) >= new Date(cycleInfo.start)
-        : getDateOnly(record.date) >= getDateOnly(cycleInfo.start);
+      const isInCurrentCycle = getDateOnly(record.date) >= getDateOnly(cycleStart);
 
       if (isInCurrentCycle) {
         presentCountByPlayerId.set(playerId, (presentCountByPlayerId.get(playerId) || 0) + 1);
