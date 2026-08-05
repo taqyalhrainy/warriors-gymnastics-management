@@ -2084,13 +2084,10 @@ const AttendancePage = () => {
     upsertSubscriptionCycle(cyclesByKey, initialEntry?.after || player, initialEntry?.changedAt || new Date().toISOString(), true);
     sortedEntries.forEach((entry) => {
       const changedFields = entry.changedFields || [];
-      const beforeStart = getDateInputValue(entry.before?.startDate);
-      const afterStart = getDateInputValue(entry.after?.startDate);
-      const isNewSubscriptionEntry = entry.after
-        && changedFields.includes('startDate')
-        && afterStart
-        && afterStart !== beforeStart;
-      if (isNewSubscriptionEntry) {
+      const subscriptionFields = ['startDate', 'endDate', 'packageName', 'packageClasses', 'packageHours', 'payment'];
+      const isSubscriptionSnapshot = entry.after?.startDate
+        && changedFields.some((field) => subscriptionFields.includes(field));
+      if (isSubscriptionSnapshot) {
         upsertSubscriptionCycle(cyclesByKey, entry.after, entry.changedAt);
       }
     });
