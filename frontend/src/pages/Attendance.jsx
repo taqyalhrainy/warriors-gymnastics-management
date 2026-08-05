@@ -2042,48 +2042,43 @@ const AttendancePage = () => {
     threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
     return records.filter((record) => new Date(record.date) >= threeMonthsAgo);
   };
-  const getSubscriptionStartValue = (snapshot, fallbackDate = '') => (
+  const getSubscriptionStartValue = (snapshot) => (
     snapshot?.currentSubscriptionStartedAt
     || snapshot?.startDate
-    || fallbackDate
     || snapshot?.createdAt
     || ''
   );
-  const getSubscriptionHistoryKey = (snapshot, fallbackDate = '') => [
-    getDateInputValue(getSubscriptionStartValue(snapshot, fallbackDate)),
-    getDateInputValue(snapshot?.endDate),
-    snapshot?.packageName || '',
-    Number(snapshot?.packageClasses || 0),
-    Number(snapshot?.payment || 0)
-  ].join('|');
+  const getSubscriptionCycleStartDate = (snapshot) => getDateInputValue(getSubscriptionStartValue(snapshot));
+  const getSubscriptionHistoryKey = (snapshot) => getSubscriptionCycleStartDate(snapshot);
   const buildSubscriptionHistory = (entries = [], player = null) => {
     const cyclesByKey = new Map();
     entries.forEach((entry) => {
       if (!entry.after) return;
-      const key = getSubscriptionHistoryKey(entry.after, entry.changedAt);
-      if (!cyclesByKey.has(key)) {
-        cyclesByKey.set(key, {
-          key,
-          changedAt: entry.changedAt,
-          startDate: getSubscriptionStartValue(entry.after, entry.changedAt),
-          endDate: entry.after.endDate,
-          packageName: entry.after.packageName || '',
-          packageClasses: Number(entry.after.packageClasses || 0),
-          payment: Number(entry.after.payment || 0)
-        });
-      }
+      const key = getSubscriptionHistoryKey(entry.after);
+      if (!key) return;
+      cyclesByKey.set(key, {
+        key,
+        changedAt: entry.changedAt,
+        startDate: getSubscriptionStartValue(entry.after),
+        endDate: entry.after.endDate,
+        packageName: entry.after.packageName || '',
+        packageClasses: Number(entry.after.packageClasses || 0),
+        payment: Number(entry.after.payment || 0)
+      });
     });
     if (player) {
       const key = getSubscriptionHistoryKey(player);
-      cyclesByKey.set(key, {
-        key,
-        changedAt: new Date().toISOString(),
-        startDate: getSubscriptionStartValue(player),
-        endDate: player.endDate,
-        packageName: player.packageName || '',
-        packageClasses: Number(player.packageClasses || 0),
-        payment: Number(player.payment || 0)
-      });
+      if (key) {
+        cyclesByKey.set(key, {
+          key,
+          changedAt: new Date().toISOString(),
+          startDate: getSubscriptionStartValue(player),
+          endDate: player.endDate,
+          packageName: player.packageName || '',
+          packageClasses: Number(player.packageClasses || 0),
+          payment: Number(player.payment || 0)
+        });
+      }
     }
     return [...cyclesByKey.values()]
       .filter((cycle) => cycle.startDate)
@@ -2093,10 +2088,10 @@ const AttendancePage = () => {
     const sortedAsc = [...cycles].sort((first, second) => new Date(first.startDate) - new Date(second.startDate));
     const cycleIndex = sortedAsc.findIndex((item) => item.key === cycle.key);
     const nextCycle = sortedAsc[cycleIndex + 1];
-    const startTime = new Date(cycle.startDate).getTime();
-    const nextStartTime = nextCycle ? new Date(nextCycle.startDate).getTime() : null;
+    const startTime = getLocalDateOnly(cycle.startDate).getTime();
+    const nextStartTime = nextCycle ? getLocalDateOnly(nextCycle.startDate).getTime() : null;
     return records.filter((record) => {
-      const recordTime = new Date(record.checkInTime || record.date).getTime();
+      const recordTime = getLocalDateOnly(record.date).getTime();
       return recordTime >= startTime && (!nextStartTime || recordTime < nextStartTime);
     });
   };
