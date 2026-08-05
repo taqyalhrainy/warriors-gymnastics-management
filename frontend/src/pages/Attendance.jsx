@@ -357,6 +357,11 @@ const AttendancePage = () => {
 
       return {
         ...player,
+        fullName: currentPlayer.fullName || player.fullName,
+        parentId: currentPlayer.parentId || player.parentId,
+        parentPhone: currentPlayer.parentPhone || player.parentPhone,
+        note: currentPlayer.note ?? player.note,
+        profileImage: currentPlayer.profileImage || player.profileImage,
         attendanceGroupId: groupId,
         attendancePresentCount: currentPlayer.attendancePresentCount ?? player.attendancePresentCount,
         subscriptionId: currentPlayer.subscriptionId || player.subscriptionId
