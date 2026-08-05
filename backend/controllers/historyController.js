@@ -45,6 +45,7 @@ const buildPlayerRestorePayload = (snapshot) => ({
   packageHours: Number(snapshot.packageHours || 0),
   payment: Number(snapshot.payment || 0),
   note: snapshot.note || '',
+  freezeNote: snapshot.freezeNote || '',
   status: snapshot.status || 'active',
   showInAttendanceWhenFrozen: snapshot.showInAttendanceWhenFrozen !== false,
   subscriptionNeedsAttention: Boolean(snapshot.subscriptionNeedsAttention),

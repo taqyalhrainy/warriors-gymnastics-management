@@ -60,6 +60,7 @@ const snapshotPlayerDocument = (playerDocument) => {
     packageHours: Number(player?.packageHours || 0),
     payment: Number(player?.payment || 0),
     note: player?.note || '',
+    freezeNote: player?.freezeNote || '',
     status: player?.status || '',
     showInAttendanceWhenFrozen: player?.showInAttendanceWhenFrozen !== false,
     subscriptionNeedsAttention: Boolean(player?.subscriptionNeedsAttention),

@@ -31,6 +31,7 @@ const formatPlayerResponse = (player) => {
     obj.groupIds = [obj.groupId];
   }
   obj.note = decodeText(obj.note || '');
+  obj.freezeNote = decodeText(obj.freezeNote || '');
   delete obj.parentPhoneEncrypted;
   return obj;
 };
@@ -327,6 +328,7 @@ const updatePlayer = async (req, res, next) => {
     }
     if (updates.status && updates.status !== 'frozen') {
       updates.showInAttendanceWhenFrozen = true;
+      updates.freezeNote = '';
     }
     if (startsNewSubscription) {
       updates.currentSubscriptionStartedAt = getDateAtStartOfDay(updates.startDate) || new Date();

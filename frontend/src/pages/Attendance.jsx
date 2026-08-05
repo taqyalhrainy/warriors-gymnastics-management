@@ -237,6 +237,7 @@ const mapSnapshotPlayerToAttendancePlayer = (player) => {
     packageHours: Number(player.packageHours || 0),
     payment: Number(player.payment || 0),
     note: decodeDisplayText(player.note),
+    freezeNote: decodeDisplayText(player.freezeNote),
     status: player.status || '',
     profileImage: player.profileImage || '',
     createdAt: player.createdAt || null
@@ -250,6 +251,7 @@ const AttendancePage = () => {
   const [selectedPlayerSubscriptionHistory, setSelectedPlayerSubscriptionHistory] = useState([]);
   const [openSubscriptionHistoryKey, setOpenSubscriptionHistoryKey] = useState('');
   const [showSelectedPlayerAttendanceHistory, setShowSelectedPlayerAttendanceHistory] = useState(false);
+  const [showFreezeNoteDetails, setShowFreezeNoteDetails] = useState(false);
   const [editingAttendanceHistoryId, setEditingAttendanceHistoryId] = useState(null);
   const [pendingAttendanceHistoryId, setPendingAttendanceHistoryId] = useState(null);
   const [isEditingSelectedPlayer, setIsEditingSelectedPlayer] = useState(false);
@@ -361,6 +363,7 @@ const AttendancePage = () => {
         parentId: currentPlayer.parentId || player.parentId,
         parentPhone: currentPlayer.parentPhone || player.parentPhone,
         note: currentPlayer.note ?? player.note,
+        freezeNote: currentPlayer.freezeNote ?? player.freezeNote,
         profileImage: currentPlayer.profileImage || player.profileImage,
         attendanceGroupId: groupId,
         attendancePresentCount: currentPlayer.attendancePresentCount ?? player.attendancePresentCount,
@@ -1310,6 +1313,7 @@ const AttendancePage = () => {
       setSelectedPlayerSubscriptionHistory([]);
       setOpenSubscriptionHistoryKey('');
       setShowSelectedPlayerAttendanceHistory(false);
+      setShowFreezeNoteDetails(false);
       setEditingAttendanceHistoryId(null);
       setIsEditingSelectedPlayer(false);
 
@@ -1353,6 +1357,7 @@ const AttendancePage = () => {
     packageHours: player?.packageHours ?? '',
     payment: player?.payment ?? '',
     note: decodeDisplayText(player?.note),
+    freezeNote: decodeDisplayText(player?.freezeNote),
     status: player?.status || 'active',
     showInAttendanceWhenFrozen: player?.showInAttendanceWhenFrozen !== false
   });
@@ -1976,6 +1981,7 @@ const AttendancePage = () => {
       packageClasses: parseLocalizedNumber(selectedPlayerForm.packageClasses),
       packageHours: parseLocalizedNumber(selectedPlayerForm.packageHours),
       payment: parseLocalizedNumber(selectedPlayerForm.payment),
+      freezeNote: selectedPlayerForm.status === 'frozen' ? selectedPlayerForm.freezeNote : '',
       showInAttendanceWhenFrozen
     };
     const optimisticPlayer = {
@@ -1990,7 +1996,8 @@ const AttendancePage = () => {
       parentPhone: selectedPlayerForm.parentPhone,
       groupId: selectedGroupRefs[0] || null,
       groupIds: selectedGroupRefs,
-      note: selectedPlayerForm.note
+      note: selectedPlayerForm.note,
+      freezeNote: selectedPlayerForm.status === 'frozen' ? selectedPlayerForm.freezeNote : ''
     };
 
     try {
@@ -2503,7 +2510,21 @@ const AttendancePage = () => {
                     <div><span>{t('name')}</span><strong>{selectedPlayer.fullName || t('notSet')}</strong></div>
                     <div><span>{t('parent')}</span><strong>{selectedPlayer.parentId?.name || t('notSet')}</strong></div>
                     <div><span>{t('parentPhone')}</span><strong>{selectedPlayer.parentPhone || t('notSet')}</strong></div>
-                    <div><span>{t('status')}</span><strong>{selectedPlayer.status || t('notSet')}</strong></div>
+                    <div>
+                      <span>{t('status')}</span>
+                      <strong>{selectedPlayer.status || t('notSet')}</strong>
+                      {selectedPlayer.status === 'frozen' && selectedPlayer.freezeNote && (
+                        <button type="button" className="freeze-note-toggle" onClick={() => setShowFreezeNoteDetails((current) => !current)}>
+                          {showFreezeNoteDetails ? 'Hide freeze note' : 'Show freeze note'} ▾
+                        </button>
+                      )}
+                    </div>
+                    {selectedPlayer.status === 'frozen' && selectedPlayer.freezeNote && showFreezeNoteDetails && (
+                      <div className="student-info-grid-full freeze-note-panel">
+                        <span>Freeze note</span>
+                        <strong>{decodeDisplayText(selectedPlayer.freezeNote)}</strong>
+                      </div>
+                    )}
                     <div><span>{t('startDate')}</span><strong>{formatDate(selectedPlayer.startDate)}</strong></div>
                     <div><span>{t('endDate')}</span><strong>{formatDate(selectedPlayer.endDate)}</strong></div>
                     <div><span>{t('package')}</span><strong>{selectedPlayer.packageName ? (selectedPlayer.packageName === 'custom' ? t('customPackage') : selectedPlayer.packageName) : t('notSet')}</strong></div>
@@ -2622,6 +2643,17 @@ const AttendancePage = () => {
                 <h2>Where should this frozen player appear?</h2>
                 <p>Choose whether the player stays on the attendance board for quick check-in, or moves only to the Frozen list.</p>
               </div>
+              <label className="frozen-note-field">
+                <span>Freeze note</span>
+                <textarea
+                  value={selectedPlayerForm?.freezeNote || ''}
+                  onChange={(event) => {
+                    selectedPlayerFormDirtyRef.current = true;
+                    setSelectedPlayerForm((current) => ({ ...current, freezeNote: event.target.value }));
+                  }}
+                  placeholder="Write a private note for this freeze..."
+                />
+              </label>
               <div className="frozen-visibility-options">
                 <button
                   type="button"

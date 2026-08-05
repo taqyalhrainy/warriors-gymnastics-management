@@ -2439,6 +2439,20 @@ body.attendance-touch-dragging {
   line-height: 1.55;
 }
 
+.frozen-note-field {
+  display: grid;
+  gap: 8px;
+}
+
+.frozen-note-field span {
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.frozen-note-field textarea {
+  min-height: 86px;
+}
+
 .frozen-visibility-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2610,6 +2624,25 @@ body.attendance-touch-dragging {
 .student-info-grid strong,
 .student-history-row strong {
   overflow-wrap: anywhere;
+}
+
+.freeze-note-toggle {
+  width: fit-content;
+  min-height: 30px;
+  margin-top: 8px;
+  border: 1px solid rgba(14, 165, 233, 0.32);
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: rgba(14, 165, 233, 0.1);
+  color: #0ea5e9;
+  font-weight: 900;
+}
+
+.freeze-note-panel {
+  border-color: rgba(14, 165, 233, 0.32);
+  background:
+    linear-gradient(135deg, rgba(14, 165, 233, 0.1), transparent),
+    var(--surface-alt);
 }
 
 .student-history {
