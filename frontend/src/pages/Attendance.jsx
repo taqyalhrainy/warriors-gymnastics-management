@@ -104,16 +104,6 @@ const getLocalDateEnd = (date = new Date()) => {
   return value;
 };
 
-const getPlayerAttendanceStartTime = (player) => {
-  const startSource = player?.createdAt;
-  if (!startSource) {
-    return null;
-  }
-  const startDate = getLocalDateOnly(startSource);
-  const startTime = startDate.getTime();
-  return Number.isNaN(startTime) ? null : startTime;
-};
-
 const getObjectIdDate = (id) => {
   const value = String(id || '');
   if (!/^[a-f\d]{24}$/i.test(value)) {
@@ -377,7 +367,6 @@ const AttendancePage = () => {
     const groupsById = new Map();
     const fallbackGroupIds = [];
     const historicalPlayerIds = new Set();
-    const snapshotTime = new Date(`${snapshotDate}T23:59:59.999`).getTime();
     const currentPlayerById = new Map();
 
     currentGroupsWithPlayers.forEach((group) => {
@@ -458,10 +447,7 @@ const AttendancePage = () => {
     });
 
     playerSnapshots
-      .filter((player) => {
-        const attendanceStartTime = getPlayerAttendanceStartTime(player);
-        return isPlayerVisibleInAttendance(player, snapshotDate) && (!attendanceStartTime || attendanceStartTime <= snapshotTime);
-      })
+      .filter((player) => isPlayerVisibleInAttendance(player, snapshotDate))
       .forEach((player) => {
         const playerGroups = getSnapshotGroups(player);
         if (!playerGroups.length) {
@@ -479,11 +465,8 @@ const AttendancePage = () => {
     currentGroupsWithPlayers.forEach((group) => {
       group.players
         .filter((player) => {
-          const attendanceStartTime = getPlayerAttendanceStartTime(player);
           return !historicalPlayerIds.has(getEntityId(player))
-            && isPlayerVisibleInAttendance(player, snapshotDate)
-            && attendanceStartTime
-            && attendanceStartTime <= snapshotTime;
+            && isPlayerVisibleInAttendance(player, snapshotDate);
         })
         .forEach((player) => {
           addPlayerToGroup(String(group._id), group.name || 'Historical group', player);
@@ -975,10 +958,7 @@ const AttendancePage = () => {
       const existingPlayerByGroupId = new Map();
       const targetGroups = getSnapshotGroups(updatedPlayer);
       const targetGroupIds = new Set(targetGroups.map((group) => getEntityId(group._id)).filter(Boolean));
-      const playerStartTime = getPlayerAttendanceStartTime(updatedPlayer);
-      const selectedDateTime = new Date(`${selectedAttendanceDate}T23:59:59.999`).getTime();
-      const isVisibleForSelectedDate = isPlayerVisibleInAttendance(updatedPlayer)
-        && (!playerStartTime || playerStartTime <= selectedDateTime);
+      const isVisibleForSelectedDate = isPlayerVisibleInAttendance(updatedPlayer);
       const hasAttendanceOverride = Array.isArray(attendanceRecords);
       const selectedDateRecords = hasAttendanceOverride
         ? attendanceRecords.filter((record) => getDateInputValue(record.date) === selectedAttendanceDate)
