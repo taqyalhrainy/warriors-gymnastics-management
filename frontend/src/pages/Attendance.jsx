@@ -1384,10 +1384,11 @@ const AttendancePage = () => {
         return;
       }
 
+      const subscriptionHistory = buildSubscriptionHistory(playerHistory.entries || [], latestPlayer);
       const latestPlayerWithCount = withAttendancePresentCount(
         latestPlayer,
         attendanceRecords,
-        '',
+        getDateInputValue(subscriptionHistory[0]?.startDate),
         getPlayerAttendanceGroupId(player)
       );
 
@@ -1397,7 +1398,7 @@ const AttendancePage = () => {
         setSelectedPlayerForm(createSelectedPlayerForm(latestPlayerWithCount));
       }
       setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
-      setSelectedPlayerSubscriptionHistory(buildSubscriptionHistory(playerHistory.entries || [], latestPlayerWithCount));
+      setSelectedPlayerSubscriptionHistory(subscriptionHistory);
     } catch (err) {
       setMessage(err.response?.data?.message || 'Unable to load student card');
     }
