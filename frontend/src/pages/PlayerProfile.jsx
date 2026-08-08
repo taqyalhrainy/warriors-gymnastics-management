@@ -52,13 +52,29 @@ const DAY_INDEXES = {
   'السبت': 6
 };
 
+const getDayIndexFromText = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return null;
+  if (Number.isInteger(DAY_INDEXES[normalized])) return DAY_INDEXES[normalized];
+  const match = Object.entries(DAY_INDEXES).find(([dayName]) => normalized.includes(dayName));
+  return match ? match[1] : null;
+};
+
+const getGroupScheduledDayIndexes = (group) => {
+  const daySources = Array.isArray(group?.days) ? group.days : [group?.days].filter(Boolean);
+  if (group?.name) daySources.push(group.name);
+  return daySources
+    .flatMap((value) => String(value || '').split(/[\/,|]+/))
+    .map(getDayIndexFromText)
+    .filter((day) => Number.isInteger(day));
+};
+
 const getScheduledEndDateValue = (startDate, player) => {
   const totalClasses = Number(player?.packageClasses || 0);
   const groups = player?.groupIds?.length ? player.groupIds : [player?.groupId].filter(Boolean);
   const scheduledDays = new Set(
     groups
-      .flatMap((group) => group?.days || [])
-      .map((day) => DAY_INDEXES[String(day).trim().toLowerCase()])
+      .flatMap(getGroupScheduledDayIndexes)
       .filter((day) => Number.isInteger(day))
   );
 
