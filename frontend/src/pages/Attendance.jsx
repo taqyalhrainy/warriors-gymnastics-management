@@ -77,8 +77,8 @@ const getGroupScheduledDayIndexes = (group) => {
     .filter((day) => Number.isInteger(day));
 };
 
-const getScheduledEndDateValue = (startDate, player, availableGroups = []) => {
-  const totalClasses = Number(player?.packageClasses || player?.subscriptionId?.totalSessions || 0);
+const getScheduledEndDateValue = (startDate, player, availableGroups = [], options = {}) => {
+  const totalClasses = Number(options.totalClasses || player?.packageClasses || player?.subscriptionId?.totalSessions || 0);
   const playerGroups = player?.groupIds?.length ? player.groupIds : [player?.groupId].filter(Boolean);
   const groups = playerGroups.map((group) => {
     if (group?.days) return group;
@@ -86,9 +86,11 @@ const getScheduledEndDateValue = (startDate, player, availableGroups = []) => {
     return availableGroups.find((availableGroup) => getEntityId(availableGroup._id) === groupId) || group;
   });
   const scheduledDays = new Set(
-    groups
-      .flatMap(getGroupScheduledDayIndexes)
-      .filter((day) => Number.isInteger(day))
+    options.dayIndexes?.length
+      ? options.dayIndexes
+      : groups
+        .flatMap(getGroupScheduledDayIndexes)
+        .filter((day) => Number.isInteger(day))
   );
 
   if (!startDate || totalClasses <= 0 || !scheduledDays.size) {
@@ -305,7 +307,13 @@ const AttendancePage = () => {
   const [showUnsavedExitConfirm, setShowUnsavedExitConfirm] = useState(false);
   const [pendingFrozenVisibilitySave, setPendingFrozenVisibilitySave] = useState(null);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
-  const [subscriptionForm, setSubscriptionForm] = useState({ startDate: '', endDate: '' });
+  const [subscriptionForm, setSubscriptionForm] = useState({
+    startDate: '',
+    endDate: '',
+    scheduleMode: 'auto',
+    customDays: [],
+    customClasses: ''
+  });
   const [subscriptionMessage, setSubscriptionMessage] = useState('');
   const [isSavingSubscription, setIsSavingSubscription] = useState(false);
   const [pendingSelectedPlayerMutation, setPendingSelectedPlayerMutation] = useState('');
@@ -1562,29 +1570,68 @@ const AttendancePage = () => {
     const startDate = getDateInputValue();
     setSubscriptionForm({
       startDate,
-      endDate: getScheduledEndDateValue(startDate, selectedPlayer, groupColumns)
+      endDate: getScheduledEndDateValue(startDate, selectedPlayer, groupColumns),
+      scheduleMode: 'auto',
+      customDays: [],
+      customClasses: selectedPlayer?.packageClasses || selectedPlayer?.subscriptionId?.totalSessions || ''
     });
     setSubscriptionMessage('');
     setShowSubscriptionModal(true);
   };
 
+  const getSubscriptionEndDate = (form) => getScheduledEndDateValue(
+    form.startDate,
+    selectedPlayer,
+    groupColumns,
+    form.scheduleMode === 'custom'
+      ? {
+        dayIndexes: form.customDays,
+        totalClasses: form.customClasses
+      }
+      : {}
+  );
+
   const handleSubscriptionStartDateChange = (startDate) => {
     setSubscriptionForm((current) => ({
       ...current,
       startDate,
-      endDate: getScheduledEndDateValue(startDate, selectedPlayer, groupColumns)
+      endDate: getSubscriptionEndDate({ ...current, startDate })
     }));
+  };
+
+  const handleSubscriptionScheduleModeChange = (scheduleMode) => {
+    setSubscriptionForm((current) => {
+      const next = { ...current, scheduleMode };
+      return { ...next, endDate: getSubscriptionEndDate(next) };
+    });
+  };
+
+  const handleSubscriptionCustomDayToggle = (dayIndex) => {
+    setSubscriptionForm((current) => {
+      const customDays = current.customDays.includes(dayIndex)
+        ? current.customDays.filter((day) => day !== dayIndex)
+        : [...current.customDays, dayIndex].sort((first, second) => first - second);
+      const next = { ...current, customDays };
+      return { ...next, endDate: getSubscriptionEndDate(next) };
+    });
+  };
+
+  const handleSubscriptionCustomClassesChange = (customClasses) => {
+    setSubscriptionForm((current) => {
+      const next = { ...current, customClasses: normalizeDigits(customClasses) };
+      return { ...next, endDate: getSubscriptionEndDate(next) };
+    });
   };
 
   useEffect(() => {
     if (!showSubscriptionModal || !subscriptionForm.startDate) return;
-    const nextEndDate = getScheduledEndDateValue(subscriptionForm.startDate, selectedPlayer, groupColumns);
+    const nextEndDate = getSubscriptionEndDate(subscriptionForm);
     setSubscriptionForm((current) => (
       current.endDate === nextEndDate
         ? current
         : { ...current, endDate: nextEndDate }
     ));
-  }, [showSubscriptionModal, subscriptionForm.startDate, selectedPlayer, groupColumns]);
+  }, [showSubscriptionModal, subscriptionForm.startDate, subscriptionForm.scheduleMode, subscriptionForm.customDays, subscriptionForm.customClasses, selectedPlayer, groupColumns]);
 
   const handleSubscriptionSave = async (event, keepWarning = false) => {
     event.preventDefault();
@@ -2831,6 +2878,58 @@ const AttendancePage = () => {
                       required
                     />
                   </label>
+                </div>
+                <div className="subscription-schedule-box">
+                  <div className="subscription-schedule-toggle">
+                    <button
+                      type="button"
+                      className={subscriptionForm.scheduleMode === 'auto' ? 'is-active' : ''}
+                      onClick={() => handleSubscriptionScheduleModeChange('auto')}
+                    >
+                      Auto from groups
+                    </button>
+                    <button
+                      type="button"
+                      className={subscriptionForm.scheduleMode === 'custom' ? 'is-active' : ''}
+                      onClick={() => handleSubscriptionScheduleModeChange('custom')}
+                    >
+                      Custom days
+                    </button>
+                  </div>
+                  {subscriptionForm.scheduleMode === 'custom' && (
+                    <div className="subscription-custom-schedule">
+                      <label>
+                        <span>Classes</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={subscriptionForm.customClasses}
+                          onChange={(event) => handleSubscriptionCustomClassesChange(event.target.value)}
+                          placeholder="8"
+                        />
+                      </label>
+                      <div className="subscription-day-picker" aria-label="Subscription days">
+                        {[
+                          ['Sun', 0],
+                          ['Mon', 1],
+                          ['Tue', 2],
+                          ['Wed', 3],
+                          ['Thu', 4],
+                          ['Fri', 5],
+                          ['Sat', 6]
+                        ].map(([label, dayIndex]) => (
+                          <button
+                            key={dayIndex}
+                            type="button"
+                            className={subscriptionForm.customDays.includes(dayIndex) ? 'is-active' : ''}
+                            onClick={() => handleSubscriptionCustomDayToggle(dayIndex)}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="student-modal-edit-actions">
                   <button className="btn-primary" type="submit" disabled={isSavingSubscription}>

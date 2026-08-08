@@ -777,6 +777,67 @@ body.theme-light .new-subscription-warning {
   color: #991b1b;
 }
 
+.subscription-schedule-box {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, #14b8a6 34%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, #14b8a6 8%, var(--surface));
+}
+
+.subscription-schedule-toggle,
+.subscription-day-picker {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.subscription-schedule-toggle button,
+.subscription-day-picker button {
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.subscription-schedule-toggle button {
+  padding: 0 16px;
+}
+
+.subscription-day-picker button {
+  min-width: 56px;
+  padding: 0 12px;
+}
+
+.subscription-schedule-toggle button.is-active,
+.subscription-day-picker button.is-active {
+  border-color: #14b8a6;
+  background: linear-gradient(135deg, #0f766e, #16a34a);
+  color: #fff;
+  box-shadow: 0 14px 28px rgba(20, 184, 166, 0.2);
+}
+
+.subscription-custom-schedule {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) 1fr;
+  gap: 12px;
+  align-items: end;
+}
+
+.subscription-custom-schedule label {
+  display: grid;
+  gap: 6px;
+}
+
+.subscription-custom-schedule label span {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
