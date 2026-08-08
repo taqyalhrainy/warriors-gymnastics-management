@@ -649,20 +649,31 @@ const PaymentsPage = () => {
             <div className="payment-table-wrap">
               <table className="payment-database-table">
                 <thead>
-                  <tr>
-                    <th>Receipt no</th>
-                    <th>Member</th>
-                    <th>Phone</th>
-                    <th>Transaction</th>
-                    <th>Package</th>
-                    <th>Payment Date</th>
-                    <th>Payment Method</th>
-                    <th>Payment Amount</th>
-                    <th>Remaining Amount</th>
-                    <th>Last edited time</th>
-                    <th>Notes</th>
-                    <th>Actions</th>
-                  </tr>
+                  {activeView === 'pending' ? (
+                    <tr>
+                      <th>Receipt no</th>
+                      <th>Member</th>
+                      <th>Phone</th>
+                      <th>Transaction</th>
+                      <th>Package</th>
+                      <th>Remaining</th>
+                    </tr>
+                  ) : (
+                    <tr>
+                      <th>Receipt no</th>
+                      <th>Member</th>
+                      <th>Phone</th>
+                      <th>Transaction</th>
+                      <th>Package</th>
+                      <th>Payment Date</th>
+                      <th>Payment Method</th>
+                      <th>Payment Amount</th>
+                      <th>Remaining Amount</th>
+                      <th>Last edited time</th>
+                      <th>Notes</th>
+                      <th>Actions</th>
+                    </tr>
+                  )}
                 </thead>
                 <tbody>
                   {searchedPayments.length ? searchedPayments.map((payment, index) => {
@@ -673,29 +684,40 @@ const PaymentsPage = () => {
                     const deletedPlayer = isDeletedPlayerPayment(payment);
                     return (
                       <tr key={payment._id}>
-                        <td>{payment.receiptImage ? <a href={payment.receiptImage} target="_blank" rel="noreferrer">1</a> : index + 1}</td>
-                        <td className={`payment-member-cell${deletedPlayer ? ' payment-member-deleted' : ''}`}>{memberName}</td>
-                        <td>{parentPhone || '-'}</td>
-                        <td><span className="payment-pill transaction-pill">{getTransactionLabel(payment)}</span></td>
-                        <td><span className="payment-pill package-pill">{packageName}</span></td>
-                        <td>{formatDate(payment.paymentDate)}</td>
-                        <td><span className={`payment-pill method-${methodClass}`}>{payment.paymentMethod || '-'}</span></td>
-                        <td className="payment-amount-cell">{formatMoney(payment.paidAmount)}</td>
-                        <td className="payment-amount-cell">{formatMoney(payment.remainingAmount)}</td>
-                        <td>{payment.updatedAt ? `${formatDate(payment.updatedAt)} ${formatTime(payment.updatedAt)}` : '-'}</td>
-                        <td>{payment.notes ? payment.notes : '-'}</td>
-                        <td>
-                          {activeView === 'pending' ? '-' : (
-                            <div className="payment-row-actions">
-                              <button type="button" onClick={() => handleEditPayment(payment)}>Edit</button>
-                              <button type="button" onClick={() => handleDeletePayment(payment)}>Delete</button>
-                            </div>
-                          )}
-                        </td>
+                        {activeView === 'pending' ? (
+                          <>
+                            <td>{index + 1}</td>
+                            <td className={`payment-member-cell${deletedPlayer ? ' payment-member-deleted' : ''}`}>{memberName}</td>
+                            <td>{parentPhone || '-'}</td>
+                            <td><span className="payment-pill transaction-pill">{getTransactionLabel(payment)}</span></td>
+                            <td><span className="payment-pill package-pill">{packageName}</span></td>
+                            <td className="payment-amount-cell">{formatMoney(payment.remainingAmount)}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td>{payment.receiptImage ? <a href={payment.receiptImage} target="_blank" rel="noreferrer">1</a> : index + 1}</td>
+                            <td className={`payment-member-cell${deletedPlayer ? ' payment-member-deleted' : ''}`}>{memberName}</td>
+                            <td>{parentPhone || '-'}</td>
+                            <td><span className="payment-pill transaction-pill">{getTransactionLabel(payment)}</span></td>
+                            <td><span className="payment-pill package-pill">{packageName}</span></td>
+                            <td>{formatDate(payment.paymentDate)}</td>
+                            <td><span className={`payment-pill method-${methodClass}`}>{payment.paymentMethod || '-'}</span></td>
+                            <td className="payment-amount-cell">{formatMoney(payment.paidAmount)}</td>
+                            <td className="payment-amount-cell">{formatMoney(payment.remainingAmount)}</td>
+                            <td>{payment.updatedAt ? `${formatDate(payment.updatedAt)} ${formatTime(payment.updatedAt)}` : '-'}</td>
+                            <td>{payment.notes ? payment.notes : '-'}</td>
+                            <td>
+                              <div className="payment-row-actions">
+                                <button type="button" onClick={() => handleEditPayment(payment)}>Edit</button>
+                                <button type="button" onClick={() => handleDeletePayment(payment)}>Delete</button>
+                              </div>
+                            </td>
+                          </>
+                        )}
                       </tr>
                     );
                   }) : (
-                    <tr><td colSpan="12" className="payment-empty-row">{t('noPaymentsRecorded')}</td></tr>
+                    <tr><td colSpan={activeView === 'pending' ? 6 : 12} className="payment-empty-row">{t('noPaymentsRecorded')}</td></tr>
                   )}
                 </tbody>
               </table>
