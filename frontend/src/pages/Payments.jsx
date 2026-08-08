@@ -261,6 +261,19 @@ const PaymentsPage = () => {
     return { paid, remaining, fullPayments };
   }, [payments]);
 
+  const latestCurrentPaymentsByPlayer = useMemo(() => {
+    const latestPaymentsByPlayer = new Map();
+    sortPaymentsNewestFirst(payments).forEach((payment) => {
+      const player = payment.playerId && typeof payment.playerId === 'object' ? payment.playerId : null;
+      if (player && !isPaymentInCurrentSubscription(payment, player)) return;
+      const playerKey = getPaymentPlayerKey(payment);
+      if (!latestPaymentsByPlayer.has(playerKey)) {
+        latestPaymentsByPlayer.set(playerKey, payment);
+      }
+    });
+    return [...latestPaymentsByPlayer.values()];
+  }, [payments]);
+
   const monthOptions = useMemo(() => {
     const paymentMonths = payments.map((payment) => getPaymentMonthKey(payment.paymentDate));
     const months = [...new Set(paymentMonths.filter((key) => key !== 'undated'))];
@@ -280,6 +293,9 @@ const PaymentsPage = () => {
   }, [players, playerSearch]);
 
   const visiblePayments = useMemo(() => {
+    if (activeView === 'pending') {
+      return latestCurrentPaymentsByPlayer.filter((payment) => Number(payment.remainingAmount || 0) > 0);
+    }
     if (activeView === 'thisMonth') {
       const thisMonth = getPaymentMonthKey(new Date());
       return payments.filter((payment) => getPaymentMonthKey(payment.paymentDate) === thisMonth);
@@ -291,7 +307,7 @@ const PaymentsPage = () => {
       return payments.filter((payment) => getPaymentDayKey(payment.paymentDate) === selectedDay);
     }
     return payments;
-  }, [payments, activeView, selectedMonth, selectedDay]);
+  }, [payments, activeView, selectedMonth, selectedDay, latestCurrentPaymentsByPlayer]);
 
   const searchedPayments = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -416,7 +432,8 @@ const PaymentsPage = () => {
   const viewTabs = [
     { id: 'day', label: 'By Day' },
     { id: 'thisMonth', label: 'This Month' },
-    { id: 'month', label: 'By Month' }
+    { id: 'month', label: 'By Month' },
+    { id: 'pending', label: 'Pending Amounts' }
   ];
   const activeViewLabel = viewTabs.find((tab) => tab.id === activeView)?.label || 'payments';
   const activeRecordCount = searchedPayments.length;
@@ -597,8 +614,11 @@ const PaymentsPage = () => {
             </div>
 
             <div className="payment-view-panel payment-month-banner">
-              <span>{activeView === 'thisMonth' ? 'Showing this month' : activeView === 'day' ? `Showing ${selectedDay}` : `Showing ${selectedMonth}`}</span>
-              <strong>{searchedPayments.length} records / {formatMoney(searchedPayments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0))}</strong>
+              <span>{activeView === 'pending' ? 'Players with remaining amounts' : activeView === 'thisMonth' ? 'Showing this month' : activeView === 'day' ? `Showing ${selectedDay}` : `Showing ${selectedMonth}`}</span>
+              <strong>{activeView === 'pending'
+                ? `${searchedPayments.length} players / ${formatMoney(searchedPayments.reduce((sum, payment) => sum + Number(payment.remainingAmount || 0), 0))} remaining`
+                : `${searchedPayments.length} records / ${formatMoney(searchedPayments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0))}`}
+              </strong>
             </div>
 
             <div className="payment-table-wrap">
