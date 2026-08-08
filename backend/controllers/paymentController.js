@@ -76,9 +76,14 @@ const recalculatePlayerPayments = async (playerId) => {
     if (!subscriptionCycleStart && subscriptionStart && new Date(payment.paymentDate) < subscriptionStart) {
       continue;
     }
-    runningPaid += Number(payment.paidAmount || 0);
-    payment.totalAmount = totalAmount;
-    payment.remainingAmount = totalAmount ? Math.max(0, totalAmount - runningPaid) : 0;
+    if (isSubscriptionPaymentType(payment.transactionType)) {
+      runningPaid += Number(payment.paidAmount || 0);
+      payment.totalAmount = totalAmount;
+      payment.remainingAmount = totalAmount ? Math.max(0, totalAmount - runningPaid) : 0;
+    } else {
+      payment.totalAmount = 0;
+      payment.remainingAmount = 0;
+    }
     await payment.save();
   }
 };
@@ -98,6 +103,8 @@ const getTransactionType = (value, remainingAmount) => {
   if (value) return String(value).trim();
   return Number(remainingAmount || 0) <= 0 ? 'Full payment' : 'Partial payment';
 };
+
+const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
 
 const getCurrentSubscriptionPaymentMatch = (player) => {
   const match = { playerId: player._id };
@@ -145,14 +152,16 @@ const createPayment = async (req, res, next) => {
     if (!player) {
       return res.status(404).json({ message: 'Player not found.' });
     }
-    const previousPaid = await Payment.aggregate([
+    const subscriptionPayment = !transactionType || isSubscriptionPaymentType(transactionType);
+    const previousPaid = subscriptionPayment ? await Payment.aggregate([
       { $match: getCurrentSubscriptionPaymentMatch(player) },
+      { $match: { transactionType: { $in: ['Full payment', 'Partial payment'] } } },
       { $group: { _id: '$playerId', totalPaid: { $sum: '$paidAmount' } } }
-    ]);
+    ]) : [];
     const playerTotalAmount = Number(player.payment || 0);
     const totalPaidBefore = previousPaid[0]?.totalPaid || 0;
     const totalPaidAfter = totalPaidBefore + parseLocalizedNumber(paidAmount);
-    const remainingAmount = playerTotalAmount ? Math.max(0, playerTotalAmount - totalPaidAfter) : 0;
+    const remainingAmount = subscriptionPayment && playerTotalAmount ? Math.max(0, playerTotalAmount - totalPaidAfter) : 0;
     const parentRecord = await Parent.findById(player.parentId).populate('userId');
     const payment = await Payment.create({
       playerId,
@@ -162,7 +171,7 @@ const createPayment = async (req, res, next) => {
       packageNameSnapshot: player.packageName || '',
       packageClassesSnapshot: parseLocalizedNumber(player.packageClasses),
       packageHoursSnapshot: parseLocalizedNumber(player.packageHours),
-      totalAmount: playerTotalAmount,
+      totalAmount: subscriptionPayment ? playerTotalAmount : 0,
       paidAmount: parseLocalizedNumber(paidAmount),
       remainingAmount,
       transactionType: getTransactionType(transactionType, remainingAmount),

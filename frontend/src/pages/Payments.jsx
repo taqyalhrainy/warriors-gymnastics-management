@@ -83,6 +83,7 @@ const isPaymentInCurrentSubscription = (payment, player) => {
   if (!player?.startDate) return true;
   return new Date(payment.paymentDate || 0) >= new Date(player.startDate);
 };
+const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
 const getPackageName = (payment) => {
   const classes = payment.playerId?.packageClasses || payment.packageClassesSnapshot;
   const hours = payment.playerId?.packageHours || payment.packageHoursSnapshot;
@@ -197,6 +198,7 @@ const PaymentsPage = () => {
         String(payment.playerId?._id || payment.playerId) === String(playerId)
         && payment._id !== editingPaymentId
         && isPaymentInCurrentSubscription(payment, player)
+        && isSubscriptionPaymentType(getTransactionLabel(payment))
       ))
       .reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
     const remainingBefore = totalAmount ? Math.max(0, totalAmount - paidBefore) : 0;
@@ -210,11 +212,13 @@ const PaymentsPage = () => {
         String(payment.playerId?._id || payment.playerId) === String(payload.playerId)
         && payment._id !== editingPaymentId
         && isPaymentInCurrentSubscription(payment, player)
+        && isSubscriptionPaymentType(getTransactionLabel(payment))
       ))
       .reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
     const subscriptionPrice = Number(player?.payment || 0);
     const paidAmount = Number(payload.paidAmount || 0);
-    const remainingAmount = Math.max(0, subscriptionPrice - paidBefore - paidAmount);
+    const subscriptionPayment = isSubscriptionPaymentType(payload.transactionType);
+    const remainingAmount = subscriptionPayment ? Math.max(0, subscriptionPrice - paidBefore - paidAmount) : 0;
 
     return {
       ...(editingPaymentId ? payments.find((payment) => payment._id === editingPaymentId) : {}),
@@ -226,7 +230,7 @@ const PaymentsPage = () => {
       packageNameSnapshot: player?.packageName || '',
       packageClassesSnapshot: Number(player?.packageClasses || 0),
       packageHoursSnapshot: Number(player?.packageHours || 0),
-      totalAmount: subscriptionPrice,
+      totalAmount: subscriptionPayment ? subscriptionPrice : 0,
       paidAmount,
       remainingAmount,
       transactionType: payload.transactionType,
