@@ -55,6 +55,7 @@ const snapshotPlayerDocument = (playerDocument) => {
     startDate: player?.startDate || null,
     endDate: player?.endDate || null,
     currentSubscriptionStartedAt: player?.currentSubscriptionStartedAt || null,
+    currentSubscriptionAttendanceIds: (player?.currentSubscriptionAttendanceIds || []).map(normalizeId),
     packageName: player?.packageName || '',
     packageClasses: Number(player?.packageClasses || 0),
     packageHours: Number(player?.packageHours || 0),

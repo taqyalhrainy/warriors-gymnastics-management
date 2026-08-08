@@ -332,6 +332,7 @@ const updatePlayer = async (req, res, next) => {
     }
     if (startsNewSubscription) {
       updates.currentSubscriptionStartedAt = getDateAtStartOfDay(updates.startDate) || new Date();
+      updates.currentSubscriptionAttendanceIds = [];
     }
     Object.assign(player, updates);
     await player.save();

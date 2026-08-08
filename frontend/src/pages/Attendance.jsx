@@ -1152,16 +1152,33 @@ const AttendancePage = () => {
     };
   };
 
+  const getCurrentSubscriptionAttendanceIdSet = (player) => new Set(
+    (player?.currentSubscriptionAttendanceIds || []).map((id) => getEntityId(id))
+  );
+
+  const getCurrentSubscriptionCycleStartValue = (player = selectedPlayer) => (
+    getDateInputValue(selectedPlayerSubscriptionHistory[0]?.startDate)
+    || getDateInputValue(player?.startDate || player?.subscriptionId?.startDate)
+  );
+
+  const isRecordExplicitlyCountedInCurrentSubscription = (record, player = selectedPlayer) => (
+    Boolean(record?._id) && getCurrentSubscriptionAttendanceIdSet(player).has(getEntityId(record._id))
+  );
+
   const isAttendanceRecordInSubscriptionCycle = (record, player, cycleStartOverride = '') => {
     const preciseCycleStart = cycleStartOverride;
-    const cycleStart = preciseCycleStart || getEarliestDateValue(
-      player?.startDate,
-      player?.subscriptionId?.startDate,
-      player?.currentSubscriptionStartedAt
-    );
+    const cycleStart = preciseCycleStart || getCurrentSubscriptionCycleStartValue(player);
+
+    if (isRecordExplicitlyCountedInCurrentSubscription(record, player)) {
+      return true;
+    }
+
+    if (!cycleStart && !preciseCycleStart) {
+      return true;
+    }
 
     if (!cycleStart) {
-      return true;
+      return false;
     }
 
     if (preciseCycleStart) {
@@ -1892,12 +1909,15 @@ const AttendancePage = () => {
 
     const previousPlayer = selectedPlayer;
     const previousRecords = selectedPlayerAttendanceHistory;
-    const nextSubscriptionStart = getDateInputValue(record.date);
+    const nextCurrentSubscriptionAttendanceIds = [
+      ...getCurrentSubscriptionAttendanceIdSet(selectedPlayer),
+      getEntityId(record._id)
+    ];
     const groupId = getEntityId(record.groupId) || getPlayerAttendanceGroupId(selectedPlayer);
     const optimisticPlayer = withAttendancePresentCount({
       ...selectedPlayer,
-      currentSubscriptionStartedAt: nextSubscriptionStart
-    }, previousRecords, nextSubscriptionStart, groupId);
+      currentSubscriptionAttendanceIds: nextCurrentSubscriptionAttendanceIds
+    }, previousRecords, '', groupId);
 
     try {
       setMessage('');
@@ -1905,7 +1925,7 @@ const AttendancePage = () => {
       applyOptimisticSelectedPlayer(optimisticPlayer, previousRecords, groupId);
       setMessage('Attendance record counted in current subscription');
       await updatePlayer(selectedPlayer._id, {
-        currentSubscriptionStartedAt: nextSubscriptionStart
+        currentSubscriptionAttendanceIds: nextCurrentSubscriptionAttendanceIds
       });
 
       const [refreshedPlayer, attendanceRecords] = await Promise.all([
@@ -1943,16 +1963,15 @@ const AttendancePage = () => {
       return;
     }
 
-    const recordDate = new Date(record.checkInTime || record.date);
-    recordDate.setDate(recordDate.getDate() + 1);
     const previousPlayer = selectedPlayer;
     const previousRecords = selectedPlayerAttendanceHistory;
-    const nextSubscriptionStart = getDateInputValue(recordDate);
+    const nextCurrentSubscriptionAttendanceIds = [...getCurrentSubscriptionAttendanceIdSet(selectedPlayer)]
+      .filter((recordId) => recordId !== getEntityId(record._id));
     const groupId = getEntityId(record.groupId) || getPlayerAttendanceGroupId(selectedPlayer);
     const optimisticPlayer = withAttendancePresentCount({
       ...selectedPlayer,
-      currentSubscriptionStartedAt: nextSubscriptionStart
-    }, previousRecords, nextSubscriptionStart, groupId);
+      currentSubscriptionAttendanceIds: nextCurrentSubscriptionAttendanceIds
+    }, previousRecords, '', groupId);
 
     try {
       setMessage('');
@@ -1960,7 +1979,7 @@ const AttendancePage = () => {
       applyOptimisticSelectedPlayer(optimisticPlayer, previousRecords, groupId);
       setMessage('Attendance record removed from current subscription');
       await updatePlayer(selectedPlayer._id, {
-        currentSubscriptionStartedAt: nextSubscriptionStart
+        currentSubscriptionAttendanceIds: nextCurrentSubscriptionAttendanceIds
       });
 
       const [refreshedPlayer, attendanceRecords] = await Promise.all([
@@ -2186,17 +2205,22 @@ const AttendancePage = () => {
     const nextCycle = sortedAsc[cycleIndex + 1];
     const startTime = getLocalDateOnly(cycle.startDate).getTime();
     const nextStartTime = nextCycle ? getLocalDateOnly(nextCycle.startDate).getTime() : null;
+    const currentCycleKey = getCurrentSubscriptionCycleStartValue();
+    const isCurrentCycle = cycle.key === currentCycleKey;
     return records.filter((record) => {
+      if (isRecordExplicitlyCountedInCurrentSubscription(record)) {
+        return isCurrentCycle;
+      }
       const recordTime = getLocalDateOnly(record.date).getTime();
       return recordTime >= startTime && (!nextStartTime || recordTime < nextStartTime);
     });
   };
   const isCurrentSubscriptionAttendanceRecord = (record) => {
-    const cycleStart = getEarliestDateValue(
-      selectedPlayer?.startDate,
-      selectedPlayer?.subscriptionId?.startDate,
-      selectedPlayer?.currentSubscriptionStartedAt
-    );
+    if (isRecordExplicitlyCountedInCurrentSubscription(record)) {
+      return true;
+    }
+
+    const cycleStart = getCurrentSubscriptionCycleStartValue();
 
     if (!cycleStart) {
       return true;

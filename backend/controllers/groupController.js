@@ -279,7 +279,11 @@ const getGroupPlayers = async (req, res, next) => {
     const playerIds = players.map((player) => player._id);
     const cycleStartByPlayerId = new Map(players.map((player) => [
       String(player._id),
-      getEarliestDate(player.startDate, player.subscriptionId?.startDate, player.currentSubscriptionStartedAt) || new Date(0)
+      getEarliestDate(player.startDate, player.subscriptionId?.startDate) || new Date(0)
+    ]));
+    const explicitCurrentRecordIdsByPlayerId = new Map(players.map((player) => [
+      String(player._id),
+      new Set((player.currentSubscriptionAttendanceIds || []).map(String))
     ]));
     const presentRecords = playerIds.length
       ? await Attendance.find({
@@ -297,7 +301,8 @@ const getGroupPlayers = async (req, res, next) => {
         return;
       }
 
-      const isInCurrentCycle = getDateOnly(record.date) >= getDateOnly(cycleStart);
+      const isExplicitlyCounted = explicitCurrentRecordIdsByPlayerId.get(playerId)?.has(String(record._id));
+      const isInCurrentCycle = isExplicitlyCounted || getDateOnly(record.date) >= getDateOnly(cycleStart);
 
       if (isInCurrentCycle) {
         presentCountByPlayerId.set(playerId, (presentCountByPlayerId.get(playerId) || 0) + 1);
