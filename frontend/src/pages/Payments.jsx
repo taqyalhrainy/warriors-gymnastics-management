@@ -265,18 +265,39 @@ const PaymentsPage = () => {
     return { paid, remaining, fullPayments };
   }, [payments]);
 
-  const latestCurrentPaymentsByPlayer = useMemo(() => {
-    const latestPaymentsByPlayer = new Map();
-    sortPaymentsNewestFirst(payments).forEach((payment) => {
-      const player = payment.playerId && typeof payment.playerId === 'object' ? payment.playerId : null;
-      if (player && !isPaymentInCurrentSubscription(payment, player)) return;
-      const playerKey = getPaymentPlayerKey(payment);
-      if (!latestPaymentsByPlayer.has(playerKey)) {
-        latestPaymentsByPlayer.set(playerKey, payment);
-      }
-    });
-    return [...latestPaymentsByPlayer.values()];
-  }, [payments]);
+  const pendingAmountRows = useMemo(() => players
+    .map((player) => {
+      const totalAmount = Number(player.payment || 0);
+      if (!totalAmount) return null;
+      const paidAmount = payments
+        .filter((payment) => (
+          String(payment.playerId?._id || payment.playerId) === String(player._id)
+          && isPaymentInCurrentSubscription(payment, player)
+          && isSubscriptionPaymentType(getTransactionLabel(payment))
+        ))
+        .reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
+      const remainingAmount = Math.max(0, totalAmount - paidAmount);
+      if (!remainingAmount) return null;
+      return {
+        _id: `pending-${player._id}`,
+        playerId: player,
+        playerNameSnapshot: player.fullName,
+        parentNameSnapshot: player.parentId?.name || '',
+        parentPhoneSnapshot: player.parentId?.phone || player.parentPhone || '',
+        packageNameSnapshot: player.packageName || '',
+        packageClassesSnapshot: Number(player.packageClasses || 0),
+        packageHoursSnapshot: Number(player.packageHours || 0),
+        totalAmount,
+        paidAmount,
+        remainingAmount,
+        transactionType: 'Pending amount',
+        paymentMethod: '-',
+        paymentDate: player.startDate || '',
+        notes: ''
+      };
+    })
+    .filter(Boolean)
+    .sort((first, second) => second.remainingAmount - first.remainingAmount), [players, payments]);
 
   const monthOptions = useMemo(() => {
     const paymentMonths = payments.map((payment) => getPaymentMonthKey(payment.paymentDate));
@@ -298,7 +319,7 @@ const PaymentsPage = () => {
 
   const visiblePayments = useMemo(() => {
     if (activeView === 'pending') {
-      return latestCurrentPaymentsByPlayer.filter((payment) => Number(payment.remainingAmount || 0) > 0);
+      return pendingAmountRows;
     }
     if (activeView === 'thisMonth') {
       const thisMonth = getPaymentMonthKey(new Date());
@@ -311,7 +332,7 @@ const PaymentsPage = () => {
       return payments.filter((payment) => getPaymentDayKey(payment.paymentDate) === selectedDay);
     }
     return payments;
-  }, [payments, activeView, selectedMonth, selectedDay, latestCurrentPaymentsByPlayer]);
+  }, [payments, activeView, selectedMonth, selectedDay, pendingAmountRows]);
 
   const searchedPayments = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -664,10 +685,12 @@ const PaymentsPage = () => {
                         <td>{payment.updatedAt ? `${formatDate(payment.updatedAt)} ${formatTime(payment.updatedAt)}` : '-'}</td>
                         <td>{payment.notes ? payment.notes : '-'}</td>
                         <td>
-                          <div className="payment-row-actions">
-                            <button type="button" onClick={() => handleEditPayment(payment)}>Edit</button>
-                            <button type="button" onClick={() => handleDeletePayment(payment)}>Delete</button>
-                          </div>
+                          {activeView === 'pending' ? '-' : (
+                            <div className="payment-row-actions">
+                              <button type="button" onClick={() => handleEditPayment(payment)}>Edit</button>
+                              <button type="button" onClick={() => handleDeletePayment(payment)}>Delete</button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );
