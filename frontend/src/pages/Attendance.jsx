@@ -2235,11 +2235,6 @@ const AttendancePage = () => {
     || Number(cycle.packageClasses || 0) > 0
     || Number(cycle.payment || 0) > 0
   );
-  const cyclesHaveSamePackage = (first, second) => (
-    String(first?.packageName || '') === String(second?.packageName || '')
-    && Number(first?.packageClasses || 0) === Number(second?.packageClasses || 0)
-    && Number(first?.payment || 0) === Number(second?.payment || 0)
-  );
   const normalizeSubscriptionCycles = (cycles) => {
     const sortedAsc = [...cycles]
       .filter((cycle) => cycle.startDate)
@@ -2251,7 +2246,7 @@ const AttendancePage = () => {
       const startsInsidePrevious = previous?.endDate
         && getLocalDateOnly(cycle.startDate).getTime() <= getLocalDateOnly(previous.endDate).getTime();
 
-      if (startsInsidePrevious && (!cycleHasPackageDetails(cycle) || cyclesHaveSamePackage(previous, cycle))) {
+      if (startsInsidePrevious && !cycleHasPackageDetails(cycle)) {
         return;
       }
 
