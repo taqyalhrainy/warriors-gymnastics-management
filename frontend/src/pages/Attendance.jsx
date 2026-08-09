@@ -346,6 +346,8 @@ const AttendancePage = () => {
   const pendingAttendanceKeysRef = useRef(new Set());
   const attendanceActionSequenceRef = useRef(0);
   const latestAttendanceActionRef = useRef(new Map());
+  const localAttendanceOverridesRef = useRef(new Map());
+  const subscriptionSaveSequenceRef = useRef(0);
   const pendingAttendanceHistoryIdRef = useRef(null);
   const didRunInitialAttendanceLoadRef = useRef(false);
   const selectedPlayerRef = useRef(null);
@@ -359,6 +361,21 @@ const AttendancePage = () => {
   const attendanceRangeStartValue = getAttendanceRangeStartValue();
   const isViewingToday = selectedAttendanceDate === todayDateValue;
   const isAttendanceDateOutOfRange = selectedAttendanceDate < attendanceRangeStartValue || selectedAttendanceDate > todayDateValue;
+
+  const getLocalAttendanceOverrideKey = (date, playerId, groupId) => `${date}:${getEntityId(playerId)}:${getEntityId(groupId)}`;
+
+  const applyLocalAttendanceOverrides = (records, date) => {
+    const recordsByKey = new Map((records || []).map((record) => [
+      getLocalAttendanceOverrideKey(date, record.playerId, record.groupId),
+      record
+    ]));
+    localAttendanceOverridesRef.current.forEach((record, key) => {
+      if (key.startsWith(`${date}:`)) {
+        recordsByKey.set(key, record);
+      }
+    });
+    return [...recordsByKey.values()];
+  };
   const selectedAttendanceDateLabel = isViewingToday
     ? 'Today'
     : new Date(`${selectedAttendanceDate}T00:00:00`).toLocaleDateString();
@@ -549,7 +566,7 @@ const AttendancePage = () => {
       const groupsWithPlayers = viewingToday
         ? currentGroupsWithPlayers
         : buildHistoricalGroups(groups, playerSnapshotResult?.rows || [], date, currentGroupsWithPlayers);
-      const groupsWithTodayAttendance = applyTodayRecordsToGroups(groupsWithPlayers, todayRecords);
+      const groupsWithTodayAttendance = applyTodayRecordsToGroups(groupsWithPlayers, applyLocalAttendanceOverrides(todayRecords, date));
       if (requestId !== attendanceLoadRequestIdRef.current || getCacheVersion() !== startedCacheVersion) {
         return groupColumnsRef.current;
       }
@@ -1264,6 +1281,8 @@ const AttendancePage = () => {
       date: new Date(`${selectedAttendanceDate}T00:00:00`).toISOString(),
       checkInTime: status === 'present' ? new Date().toISOString() : undefined
     };
+    const overrideKey = getLocalAttendanceOverrideKey(selectedAttendanceDate, player._id, groupId);
+    localAttendanceOverridesRef.current.set(overrideKey, optimisticAttendance);
 
     setMessage('');
     setAttendanceActionPending(actionKey, true);
@@ -1281,6 +1300,7 @@ const AttendancePage = () => {
       if (latestAttendanceActionRef.current.get(playerDateKey) !== actionSequence) {
         return;
       }
+      localAttendanceOverridesRef.current.set(overrideKey, savedAttendance);
       setPlayerAttendanceInBoard(player._id, groupId, savedAttendance);
       if (selectedPlayer?._id === player._id) {
         setSelectedPlayer((currentPlayer) => currentPlayer ? {
@@ -1291,6 +1311,7 @@ const AttendancePage = () => {
       setMessage('Attendance recorded');
     } catch (err) {
       if (latestAttendanceActionRef.current.get(playerDateKey) === actionSequence) {
+        localAttendanceOverridesRef.current.delete(overrideKey);
         setPlayerAttendanceInBoard(player._id, groupId, previousAttendance);
 
         if (selectedPlayer?._id === player._id) {
@@ -1327,6 +1348,8 @@ const AttendancePage = () => {
     latestAttendanceActionRef.current.set(playerDateKey, actionSequence);
     const previousPlayerRecord = getAttendancePlayerFromBoard(groupColumnsRef.current, player._id, groupId);
     const previousAttendance = previousPlayerRecord?.todayAttendance || null;
+    const overrideKey = getLocalAttendanceOverrideKey(selectedAttendanceDate, player._id, groupId);
+    localAttendanceOverridesRef.current.delete(overrideKey);
     setMessage('');
     setAttendanceActionPending(actionKey, true);
     setPlayerAttendanceInBoard(player._id, groupId, null);
@@ -1347,6 +1370,9 @@ const AttendancePage = () => {
       setMessage('Attendance cancelled');
     } catch (err) {
       if (latestAttendanceActionRef.current.get(playerDateKey) === actionSequence) {
+        if (previousAttendance) {
+          localAttendanceOverridesRef.current.set(overrideKey, previousAttendance);
+        }
         setPlayerAttendanceInBoard(player._id, groupId, previousAttendance);
 
         if (selectedPlayer?._id === player._id) {
@@ -1635,13 +1661,16 @@ const AttendancePage = () => {
 
   const handleSubscriptionSave = async (event, keepWarning = false) => {
     event.preventDefault();
-    if (!selectedPlayer?._id) {
+    if (!selectedPlayer?._id || isSavingSubscription) {
       return;
     }
 
     const confirmed = window.confirm('This will start a new subscription cycle and cannot be undone. Continue?');
     if (!confirmed) return;
 
+    const saveSequence = subscriptionSaveSequenceRef.current + 1;
+    subscriptionSaveSequenceRef.current = saveSequence;
+    selectedPlayerLoadRequestIdRef.current += 1;
     const previousPlayer = selectedPlayer;
     const optimisticPlayerBase = {
       ...selectedPlayer,
@@ -1671,23 +1700,23 @@ const AttendancePage = () => {
       applyOptimisticSelectedPlayer(optimisticPlayer);
       setShowSubscriptionModal(false);
       setMessage('New subscription started');
-      await updatePlayer(selectedPlayer._id, {
+      const savedPlayer = await updatePlayer(selectedPlayer._id, {
         startDate: subscriptionForm.startDate,
         endDate: subscriptionForm.endDate,
         status: selectedPlayer.status === 'expired' ? 'active' : selectedPlayer.status,
         subscriptionNeedsAttention: keepWarning,
         newSubscription: true
       });
+      if (subscriptionSaveSequenceRef.current !== saveSequence) {
+        return;
+      }
 
-      const [refreshedPlayer, attendanceRecords] = await Promise.all([
-        getPlayer(selectedPlayer._id, { force: true }),
-        fetchAttendanceByPlayer(selectedPlayer._id)
-      ]);
+      const attendanceRecords = await fetchAttendanceByPlayer(selectedPlayer._id);
 
       const refreshedPlayerWithCount = withAttendancePresentCount(
-        refreshedPlayer,
+        savedPlayer,
         attendanceRecords,
-        '',
+        subscriptionForm.startDate,
         getPlayerAttendanceGroupId(selectedPlayer)
       );
 
@@ -1697,9 +1726,11 @@ const AttendancePage = () => {
         setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
       }
     } catch (error) {
-      applyOptimisticSelectedPlayer(previousPlayer);
-      if (isSelectedPlayerOpen(previousPlayer._id)) {
-        setShowSubscriptionModal(true);
+      if (subscriptionSaveSequenceRef.current === saveSequence) {
+        applyOptimisticSelectedPlayer(previousPlayer);
+        if (isSelectedPlayerOpen(previousPlayer._id)) {
+          setShowSubscriptionModal(true);
+        }
       }
       setSubscriptionMessage(error.response?.data?.message || 'Unable to start a new subscription.');
     } finally {

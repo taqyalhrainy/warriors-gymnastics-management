@@ -3,12 +3,27 @@ import { Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchPlayers, deletePlayer } from '../services/players.js';
 import { fetchGroups } from '../services/groups.js';
+import { createWaitingListEntry, deleteWaitingListEntry, fetchWaitingList, updateWaitingListEntry } from '../services/waitingList.js';
 import { confirmAction } from '../utils/confirmAction.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
+
+const initialWaitingForm = {
+  playerName: '',
+  playerAge: '',
+  parentName: '',
+  parentPhone: '',
+  desiredGroupId: '',
+  notes: ''
+};
 
 const PlayersPage = () => {
   const [players, setPlayers] = useState([]);
   const [groups, setGroups] = useState([]);
+  const [waitingList, setWaitingList] = useState([]);
+  const [waitingForm, setWaitingForm] = useState(initialWaitingForm);
+  const [editingWaitingEntryId, setEditingWaitingEntryId] = useState('');
+  const [isWaitingFormOpen, setIsWaitingFormOpen] = useState(false);
+  const [waitingMessage, setWaitingMessage] = useState('');
   const [search, setSearch] = useState('');
   const [statusView, setStatusView] = useState('all');
   const [groupFilter, setGroupFilter] = useState('all');
@@ -25,6 +40,7 @@ const PlayersPage = () => {
         setGroups(groupsData);
       })
       .catch(console.error);
+    fetchWaitingList().then(setWaitingList).catch(console.error);
   }, []);
 
   const handleDelete = async (id) => {
@@ -92,6 +108,66 @@ const PlayersPage = () => {
     setSubscriptionFilter('all');
   };
 
+  const handleWaitingFormChange = (event) => {
+    const { name, value } = event.target;
+    setWaitingForm((current) => ({ ...current, [name]: value }));
+  };
+
+  const handleWaitingSubmit = async (event) => {
+    event.preventDefault();
+    setWaitingMessage('');
+    try {
+      if (editingWaitingEntryId) {
+        const entry = await updateWaitingListEntry(editingWaitingEntryId, waitingForm);
+        setWaitingList((current) => current.map((item) => (item._id === entry._id ? entry : item)));
+        setWaitingMessage('Waiting list entry updated.');
+      } else {
+        const entry = await createWaitingListEntry(waitingForm);
+        setWaitingList((current) => [entry, ...current]);
+        setWaitingMessage('Player added to the waiting list.');
+      }
+      setWaitingForm(initialWaitingForm);
+      setEditingWaitingEntryId('');
+      if (!editingWaitingEntryId) setIsWaitingFormOpen(false);
+    } catch (error) {
+      setWaitingMessage(error.response?.data?.message || 'Unable to save waiting list entry.');
+    }
+  };
+
+  const handleWaitingEdit = (entry) => {
+    setWaitingForm({
+      playerName: entry.playerName || '',
+      playerAge: typeof entry.playerAge === 'number' ? String(entry.playerAge) : '',
+      parentName: entry.parentName || '',
+      parentPhone: entry.parentPhone || '',
+      desiredGroupId: entry.desiredGroupId?._id || entry.desiredGroupId || '',
+      notes: entry.notes || ''
+    });
+    setEditingWaitingEntryId(entry._id);
+    setWaitingMessage('');
+  };
+
+  const handleWaitingCancelEdit = () => {
+    setWaitingForm(initialWaitingForm);
+    setEditingWaitingEntryId('');
+    setWaitingMessage('');
+  };
+
+  const closeWaitingListModal = () => {
+    setIsWaitingFormOpen(false);
+    handleWaitingCancelEdit();
+  };
+
+  const handleWaitingDelete = async (id) => {
+    try {
+      await deleteWaitingListEntry(id);
+      setWaitingList((current) => current.filter((entry) => entry._id !== id));
+      setWaitingMessage('Waiting list entry deleted.');
+    } catch (error) {
+      setWaitingMessage(error.response?.data?.message || 'Unable to delete waiting list entry.');
+    }
+  };
+
   return (
     <div className="dashboard-layout">
       <Sidebar />
@@ -111,6 +187,9 @@ const PlayersPage = () => {
                 </button>
               ))}
             </div>
+            <button className="waiting-list-button" type="button" onClick={() => setIsWaitingFormOpen(true)}>
+              <span>Waiting List</span>
+            </button>
             <Link className="btn-primary" to="/players/new">{t('addPlayer')}</Link>
           </div>
         </div>
@@ -177,6 +256,98 @@ const PlayersPage = () => {
             </tbody>
           </table>
         </div>
+        {isWaitingFormOpen && (
+          <div className="student-modal-backdrop" role="presentation" onClick={closeWaitingListModal}>
+            <section className="student-modal waiting-list-modal" role="dialog" aria-modal="true" aria-label="Waiting List" onClick={(event) => event.stopPropagation()}>
+              <div className="student-modal-header">
+                <div className="waiting-list-heading">
+                  <div>
+                    <h2>Waiting List</h2>
+                    <p>Interested players without adding them to Players yet.</p>
+                  </div>
+                  <strong>{waitingList.length}</strong>
+                </div>
+                <button type="button" className="btn-secondary" onClick={closeWaitingListModal}>{t('close')}</button>
+              </div>
+
+              {waitingMessage && <p className="alert-info">{waitingMessage}</p>}
+
+              <form className="waiting-list-form" onSubmit={handleWaitingSubmit}>
+                <label>
+                  <span>Player name</span>
+                  <input name="playerName" value={waitingForm.playerName} onChange={handleWaitingFormChange} required />
+                </label>
+                <label>
+                  <span>Age</span>
+                  <input name="playerAge" type="number" min="0" max="120" value={waitingForm.playerAge} onChange={handleWaitingFormChange} />
+                </label>
+                <label>
+                  <span>Parent name</span>
+                  <input name="parentName" value={waitingForm.parentName} onChange={handleWaitingFormChange} required />
+                </label>
+                <label>
+                  <span>Parent phone</span>
+                  <input name="parentPhone" value={waitingForm.parentPhone} onChange={handleWaitingFormChange} required />
+                </label>
+                <label>
+                  <span>Desired group</span>
+                  <select name="desiredGroupId" value={waitingForm.desiredGroupId} onChange={handleWaitingFormChange} required>
+                    <option value="">Choose group</option>
+                    {groups.map((group) => (
+                      <option key={group._id} value={group._id}>{group.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="waiting-list-form-note">
+                  <span>Note</span>
+                  <input name="notes" value={waitingForm.notes} onChange={handleWaitingFormChange} />
+                </label>
+                <button className="btn-primary" type="submit">{editingWaitingEntryId ? 'Save changes' : 'Save to waiting list'}</button>
+                {editingWaitingEntryId && (
+                  <button className="btn-secondary" type="button" onClick={handleWaitingCancelEdit}>Cancel edit</button>
+                )}
+              </form>
+
+              <div className="waiting-list-table-wrap">
+                <table className="data-table waiting-list-table">
+                  <thead>
+                    <tr>
+                      <th>Player name</th>
+                      <th>Age</th>
+                      <th>Parent name</th>
+                      <th>Parent phone</th>
+                      <th>Desired group</th>
+                      <th>Note</th>
+                      <th>Added at</th>
+                      <th>{t('actions')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {waitingList.length ? waitingList.map((entry) => (
+                      <tr key={entry._id}>
+                        <td>{entry.playerName}</td>
+                        <td>{entry.playerAge ?? '-'}</td>
+                        <td>{entry.parentName}</td>
+                        <td><a href={`tel:${entry.parentPhone}`} className="waiting-phone-link">{entry.parentPhone}</a></td>
+                        <td>{entry.desiredGroupId?.name || t('notSet')}</td>
+                        <td>{entry.notes || '-'}</td>
+                        <td>{entry.createdAt ? new Date(entry.createdAt).toLocaleDateString() : '-'}</td>
+                        <td>
+                          <div className="table-actions">
+                            <button className="btn-secondary" type="button" onClick={() => handleWaitingEdit(entry)}>{t('edit')}</button>
+                            <button className="btn-secondary" type="button" onClick={() => handleWaitingDelete(entry._id)}>{t('delete')}</button>
+                          </div>
+                        </td>
+                      </tr>
+                    )) : (
+                      <tr><td colSpan="8">No waiting list entries yet.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        )}
       </main>
     </div>
   );

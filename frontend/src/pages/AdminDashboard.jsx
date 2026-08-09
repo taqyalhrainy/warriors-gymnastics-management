@@ -522,13 +522,6 @@ const AdminDashboard = () => {
                 </button>
               </>
             )}
-            <button
-              className="waiting-list-button"
-              type="button"
-              onClick={() => setIsWaitingFormOpen(true)}
-            >
-              <span>{copy.addWaiting}</span>
-            </button>
           </div>
         </div>
         {isDashboardLoading && !stats && (
