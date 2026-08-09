@@ -376,6 +376,19 @@ const AttendancePage = () => {
     });
     return [...recordsByKey.values()];
   };
+
+  const applyLocalPlayerAttendanceOverrides = (records, playerId) => {
+    const recordsById = new Map((records || []).map((record) => [
+      getEntityId(record._id) || getLocalAttendanceOverrideKey(getDateInputValue(record.date), record.playerId, record.groupId),
+      record
+    ]));
+    localAttendanceOverridesRef.current.forEach((record) => {
+      if (getEntityId(record.playerId) === getEntityId(playerId)) {
+        recordsById.set(getEntityId(record._id) || getLocalAttendanceOverrideKey(getDateInputValue(record.date), record.playerId, record.groupId), record);
+      }
+    });
+    return [...recordsById.values()];
+  };
   const selectedAttendanceDateLabel = isViewingToday
     ? 'Today'
     : new Date(`${selectedAttendanceDate}T00:00:00`).toLocaleDateString();
@@ -1679,6 +1692,7 @@ const AttendancePage = () => {
       status: selectedPlayer.status === 'expired' ? 'active' : selectedPlayer.status,
       subscriptionNeedsAttention: keepWarning,
       currentSubscriptionStartedAt: subscriptionForm.startDate,
+      currentSubscriptionAttendanceIds: [],
       subscriptionId: selectedPlayer.subscriptionId && typeof selectedPlayer.subscriptionId === 'object'
         ? {
           ...selectedPlayer.subscriptionId,
@@ -1711,7 +1725,10 @@ const AttendancePage = () => {
         return;
       }
 
-      const attendanceRecords = await fetchAttendanceByPlayer(selectedPlayer._id);
+      const attendanceRecords = applyLocalPlayerAttendanceOverrides(
+        await fetchAttendanceByPlayer(selectedPlayer._id),
+        selectedPlayer._id
+      );
 
       const refreshedPlayerWithCount = withAttendancePresentCount(
         savedPlayer,
