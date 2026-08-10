@@ -199,6 +199,8 @@ const getPlayerPackageCounter = (player) => {
   };
 };
 
+const formatCompactMoney = (value) => Number(value || 0).toLocaleString('en-US');
+
 const isPlayerSubscriptionExpired = (player) => {
   if (!player) {
     return false;
@@ -2522,6 +2524,7 @@ const AttendancePage = () => {
                     const isFrozen = isPlayerFrozen(player);
                     const isExpired = isPlayerSubscriptionExpired(player);
                     const packageCounter = getPlayerPackageCounter(player);
+                    const remainingAmount = Number(player.paymentRemainingAmount || 0);
                     const adminStatusLabel = isExpired
                       ? (player.subscriptionNeedsAttention ? 'Review' : 'Expired')
                       : (isFrozen ? t('frozenStatus') : (player.status && player.status !== 'active' ? player.status : ''));
@@ -2534,6 +2537,9 @@ const AttendancePage = () => {
                           <em className="attendance-package-counter">
                             {packageCounter.total > 0 ? `${packageCounter.used}/${packageCounter.total}` : packageCounter.used}
                           </em>
+                          {remainingAmount > 0 && (
+                            <em className="attendance-money-due">Due {formatCompactMoney(remainingAmount)}</em>
+                          )}
                           {isExpired && (
                             <em className="attendance-expired-badge">{player.subscriptionNeedsAttention ? 'Review' : 'Expired'}</em>
                           )}

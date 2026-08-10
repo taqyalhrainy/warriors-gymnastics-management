@@ -2,6 +2,7 @@ const TrainingGroup = require('../models/TrainingGroup');
 const Player = require('../models/Player');
 require('../models/Parent');
 const Attendance = require('../models/Attendance');
+const Payment = require('../models/Payment');
 const { sanitizeObject, decodeText, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { decrypt } = require('../utils/encryption');
@@ -26,6 +27,8 @@ const getDateOnly = (value) => {
   date.setHours(0, 0, 0, 0);
   return date;
 };
+
+const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
 
 const getEarliestDate = (...values) => values
   .filter(Boolean)
@@ -291,7 +294,14 @@ const getGroupPlayers = async (req, res, next) => {
         status: 'present'
       }).select('playerId date checkInTime').lean()
       : [];
+    const paymentRecords = playerIds.length
+      ? await Payment.find({
+        playerId: { $in: playerIds },
+        transactionType: { $in: ['Full payment', 'Partial payment'] }
+      }).select('playerId paidAmount paymentDate createdAt transactionType').lean()
+      : [];
     const presentCountByPlayerId = new Map();
+    const paidByPlayerId = new Map();
 
     presentRecords.forEach((record) => {
       const playerId = String(record.playerId);
@@ -309,10 +319,20 @@ const getGroupPlayers = async (req, res, next) => {
       }
     });
 
+    paymentRecords.forEach((payment) => {
+      if (!isSubscriptionPaymentType(payment.transactionType)) return;
+      const playerId = String(payment.playerId);
+      const cycleStart = cycleStartByPlayerId.get(playerId);
+      const paymentDate = getDateOnly(payment.paymentDate || payment.createdAt);
+      if (cycleStart && paymentDate < getDateOnly(cycleStart)) return;
+      paidByPlayerId.set(playerId, (paidByPlayerId.get(playerId) || 0) + Number(payment.paidAmount || 0));
+    });
+
     res.json(players.map((player) => ({
       ...formatPlayerResponse(player),
       attendanceGroupId: id,
-      attendancePresentCount: presentCountByPlayerId.get(String(player._id)) || 0
+      attendancePresentCount: presentCountByPlayerId.get(String(player._id)) || 0,
+      paymentRemainingAmount: Math.max(0, Number(player.payment || 0) - Number(paidByPlayerId.get(String(player._id)) || 0))
     })));
   } catch (error) {
     next(error);

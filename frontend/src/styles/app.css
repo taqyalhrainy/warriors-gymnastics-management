@@ -2148,9 +2148,16 @@ body.attendance-touch-dragging {
 }
 
 .attendance-package-counter,
+.attendance-money-due,
 .attendance-status-pill {
   grid-column: 1;
   justify-self: start;
+}
+
+.attendance-money-due {
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  background: rgba(254, 226, 226, 0.9);
+  color: #b91c1c;
 }
 
 .attendance-expired-badge,
