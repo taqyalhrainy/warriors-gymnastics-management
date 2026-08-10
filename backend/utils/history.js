@@ -61,6 +61,7 @@ const snapshotPlayerDocument = (playerDocument) => {
     packageHours: Number(player?.packageHours || 0),
     payment: Number(player?.payment || 0),
     accountBalance: Number(player?.accountBalance || 0),
+    accountBalanceInitialized: Boolean(player?.accountBalanceInitialized),
     note: player?.note || '',
     freezeNote: player?.freezeNote || '',
     status: player?.status || '',

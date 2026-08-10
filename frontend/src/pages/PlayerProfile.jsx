@@ -106,6 +106,7 @@ const PlayerProfilePage = () => {
   const [subscriptionMessage, setSubscriptionMessage] = useState('');
   const [isSavingSubscription, setIsSavingSubscription] = useState(false);
   const [balanceForm, setBalanceForm] = useState('');
+  const [balanceAction, setBalanceAction] = useState('add');
   const [balanceMessage, setBalanceMessage] = useState('');
   const [isSavingBalance, setIsSavingBalance] = useState(false);
   const { t } = useLanguage();
@@ -116,7 +117,7 @@ const PlayerProfilePage = () => {
         const threeMonthsAgo = new Date();
         threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
         setPlayer(playerData);
-        setBalanceForm(String(playerData.accountBalance ?? 0));
+        setBalanceForm('');
         setAttendanceHistory(attendanceData.filter((record) => new Date(record.date) >= threeMonthsAgo));
         setPaymentHistory(paymentData);
       })
@@ -144,9 +145,13 @@ const PlayerProfilePage = () => {
     setBalanceMessage('');
     setIsSavingBalance(true);
     try {
-      const updatedPlayer = await updatePlayer(id, { accountBalance: parseLocalizedNumber(balanceForm) });
+      const amount = parseLocalizedNumber(balanceForm);
+      const nextBalance = balanceAction === 'subtract'
+        ? accountBalance - amount
+        : accountBalance + amount;
+      const updatedPlayer = await updatePlayer(id, { accountBalance: nextBalance });
       setPlayer(updatedPlayer);
-      setBalanceForm(String(updatedPlayer.accountBalance ?? 0));
+      setBalanceForm('');
       setBalanceMessage('Balance updated.');
     } catch (error) {
       setBalanceMessage(error.response?.data?.message || 'Unable to update balance.');
@@ -247,16 +252,33 @@ const PlayerProfilePage = () => {
               </div>
               <form onSubmit={handleBalanceSave}>
                 <label>
-                  <span>Manual balance</span>
+                  <span>Manual adjustment</span>
                   <input
                     type="text"
                     inputMode="decimal"
                     value={balanceForm}
                     onChange={(event) => setBalanceForm(normalizeDigits(event.target.value))}
+                    placeholder="Amount"
                   />
                 </label>
-                <button className="btn-secondary" type="submit" disabled={isSavingBalance}>
-                  {isSavingBalance ? 'Saving...' : 'Save balance'}
+                <div className="player-balance-actions">
+                  <button
+                    className={balanceAction === 'add' ? 'active' : ''}
+                    type="button"
+                    onClick={() => setBalanceAction('add')}
+                  >
+                    Add
+                  </button>
+                  <button
+                    className={balanceAction === 'subtract' ? 'active' : ''}
+                    type="button"
+                    onClick={() => setBalanceAction('subtract')}
+                  >
+                    Subtract
+                  </button>
+                </div>
+                <button className="btn-secondary" type="submit" disabled={isSavingBalance || !parseLocalizedNumber(balanceForm)}>
+                  {isSavingBalance ? 'Saving...' : 'Apply'}
                 </button>
               </form>
               {balanceMessage && <p>{balanceMessage}</p>}

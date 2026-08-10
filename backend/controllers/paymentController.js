@@ -11,7 +11,7 @@ const { snapshotPaymentDocument, createHistoryEntry } = require('../utils/histor
 const populatePaymentQuery = (query) => query
   .populate({
     path: 'playerId',
-    select: 'fullName parentId parentPhoneEncrypted isDeleted deletedAt packageName packageClasses packageHours payment accountBalance startDate currentSubscriptionStartedAt',
+    select: 'fullName parentId parentPhoneEncrypted isDeleted deletedAt packageName packageClasses packageHours payment accountBalance accountBalanceInitialized startDate currentSubscriptionStartedAt',
     populate: {
       path: 'parentId',
       select: 'name email phoneEncrypted userId',
@@ -119,6 +119,19 @@ const getCurrentSubscriptionPaymentMatch = (player) => {
   return match;
 };
 
+const initializePlayerAccountBalance = async (player) => {
+  if (!player || player.accountBalanceInitialized) return player;
+  const paidRows = await Payment.aggregate([
+    { $match: getCurrentSubscriptionPaymentMatch(player) },
+    { $match: { transactionType: { $in: ['Full payment', 'Partial payment'] } } },
+    { $group: { _id: '$playerId', totalPaid: { $sum: '$paidAmount' } } }
+  ]);
+  player.accountBalance = Number(paidRows[0]?.totalPaid || 0) - Number(player.payment || 0);
+  player.accountBalanceInitialized = true;
+  await player.save();
+  return player;
+};
+
 const getPayments = async (req, res, next) => {
   try {
     const filter = {};
@@ -155,6 +168,7 @@ const createPayment = async (req, res, next) => {
     if (!player) {
       return res.status(404).json({ message: 'Player not found.' });
     }
+    await initializePlayerAccountBalance(player);
     const subscriptionPayment = !transactionType || isSubscriptionPaymentType(transactionType);
     const previousPaid = subscriptionPayment ? await Payment.aggregate([
       { $match: getCurrentSubscriptionPaymentMatch(player) },

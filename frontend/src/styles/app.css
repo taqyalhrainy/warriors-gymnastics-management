@@ -1345,6 +1345,33 @@ body.theme-light .new-subscription-warning {
   min-width: 180px;
 }
 
+.player-balance-actions {
+  display: inline-flex;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.player-balance-actions button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 7px;
+  padding: 0 14px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.player-balance-actions button.active {
+  color: #ffffff;
+  background: #111827;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+}
+
 .player-balance-card input {
   min-height: 48px;
   border: 1px solid var(--border);
