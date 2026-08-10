@@ -2374,9 +2374,7 @@ const AttendancePage = () => {
       ].join(' ').toLowerCase().includes(query);
       const players = group.players.filter((player) => [
         player.fullName,
-        player.parentId?.name,
-        player.status,
-        player.todayAttendance?.status
+        player.parentId?.name
       ].join(' ').toLowerCase().includes(query));
       return groupMatches ? group : { ...group, players };
     })
