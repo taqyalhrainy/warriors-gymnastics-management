@@ -200,6 +200,7 @@ const getPlayerPackageCounter = (player) => {
 };
 
 const formatCompactMoney = (value) => Number(value || 0).toLocaleString('en-US');
+const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
 
 const isPlayerSubscriptionExpired = (player) => {
   if (!player) {
@@ -632,12 +633,16 @@ const AttendancePage = () => {
   }, [selectedAttendanceDate]);
 
   useEffect(() => {
-    const handlePaymentsChanged = () => {
-      loadAttendanceBoard({ force: true, silent: true, date: selectedAttendanceDate });
+    const handlePaymentsChanged = (event) => {
+      const payment = event.detail || {};
+      const paymentType = payment.transactionType || payment.requestedPayment?.transactionType;
+      if (payment.action !== 'create' || !isSubscriptionPaymentType(paymentType)) return;
+      const playerId = payment.playerId?._id || payment.playerId || payment.requestedPayment?.playerId;
+      patchPlayerPaymentDueInAttendanceBoard(playerId, Number(payment.paidAmount || payment.requestedPayment?.paidAmount || 0));
     };
     window.addEventListener('payments:changed', handlePaymentsChanged);
     return () => window.removeEventListener('payments:changed', handlePaymentsChanged);
-  }, [selectedAttendanceDate]);
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -1124,6 +1129,27 @@ const AttendancePage = () => {
       attendanceBoardCacheTimestamp = Date.now();
       attendanceBoardCacheDate = selectedAttendanceDate;
       attendanceBoardCacheVersion = getCacheVersion();
+      groupColumnsRef.current = nextGroups;
+      return nextGroups;
+    });
+  };
+
+  const patchPlayerPaymentDueInAttendanceBoard = (playerId, paidAmount) => {
+    if (!playerId || !paidAmount) return;
+    setGroupColumns((currentGroups) => {
+      const nextGroups = currentGroups.map((group) => ({
+        ...group,
+        players: group.players.map((player) => (
+          getEntityId(player._id) === getEntityId(playerId)
+            ? {
+              ...player,
+              paymentRemainingAmount: Math.max(0, Number(player.paymentRemainingAmount || 0) - Number(paidAmount || 0))
+            }
+            : player
+        ))
+      }));
+
+      attendanceBoardCache = nextGroups;
       groupColumnsRef.current = nextGroups;
       return nextGroups;
     });
