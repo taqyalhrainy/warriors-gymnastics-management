@@ -5,6 +5,7 @@ import { getPlayer, updatePlayer } from '../services/players.js';
 import { fetchAttendanceByPlayer } from '../services/attendance.js';
 import { fetchPaymentsByPlayer } from '../services/payments.js';
 import { formatCurrency } from '../utils/format.js';
+import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
 const getDateInputValue = (date = new Date()) => {
@@ -104,6 +105,9 @@ const PlayerProfilePage = () => {
   const [subscriptionForm, setSubscriptionForm] = useState({ startDate: '', endDate: '' });
   const [subscriptionMessage, setSubscriptionMessage] = useState('');
   const [isSavingSubscription, setIsSavingSubscription] = useState(false);
+  const [balanceForm, setBalanceForm] = useState('');
+  const [balanceMessage, setBalanceMessage] = useState('');
+  const [isSavingBalance, setIsSavingBalance] = useState(false);
   const { t } = useLanguage();
 
   useEffect(() => {
@@ -112,6 +116,7 @@ const PlayerProfilePage = () => {
         const threeMonthsAgo = new Date();
         threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
         setPlayer(playerData);
+        setBalanceForm(String(playerData.accountBalance ?? 0));
         setAttendanceHistory(attendanceData.filter((record) => new Date(record.date) >= threeMonthsAgo));
         setPaymentHistory(paymentData);
       })
@@ -131,6 +136,24 @@ const PlayerProfilePage = () => {
     return new Date(payment.paymentDate || 0) >= new Date(player.startDate);
   });
   const totalPaid = currentSubscriptionPayments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
+  const accountBalance = Number(player?.accountBalance || 0);
+  const balanceState = accountBalance > 0 ? 'credit' : accountBalance < 0 ? 'due' : 'settled';
+
+  const handleBalanceSave = async (event) => {
+    event.preventDefault();
+    setBalanceMessage('');
+    setIsSavingBalance(true);
+    try {
+      const updatedPlayer = await updatePlayer(id, { accountBalance: parseLocalizedNumber(balanceForm) });
+      setPlayer(updatedPlayer);
+      setBalanceForm(String(updatedPlayer.accountBalance ?? 0));
+      setBalanceMessage('Balance updated.');
+    } catch (error) {
+      setBalanceMessage(error.response?.data?.message || 'Unable to update balance.');
+    } finally {
+      setIsSavingBalance(false);
+    }
+  };
 
   const openSubscriptionModal = () => {
     const startDate = getDateInputValue();
@@ -212,6 +235,32 @@ const PlayerProfilePage = () => {
             <div><strong>{t('payment')}:</strong> {formatCurrency(player.payment || 0)}</div>
             <div><strong>Total Paid:</strong> {formatCurrency(totalPaid)}</div>
             <div><strong>{t('note')}:</strong> {player.note || t('notSet')}</div>
+            <section className={`player-balance-card is-${balanceState}`}>
+              <div>
+                <span>Player account</span>
+                <strong>{formatCurrency(accountBalance)}</strong>
+                <small>
+                  {balanceState === 'credit' && 'Credit available'}
+                  {balanceState === 'due' && 'Amount due'}
+                  {balanceState === 'settled' && 'Settled'}
+                </small>
+              </div>
+              <form onSubmit={handleBalanceSave}>
+                <label>
+                  <span>Manual balance</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={balanceForm}
+                    onChange={(event) => setBalanceForm(normalizeDigits(event.target.value))}
+                  />
+                </label>
+                <button className="btn-secondary" type="submit" disabled={isSavingBalance}>
+                  {isSavingBalance ? 'Saving...' : 'Save balance'}
+                </button>
+              </form>
+              {balanceMessage && <p>{balanceMessage}</p>}
+            </section>
             <div className="profile-attendance-history">
               <h2>Attendance History</h2>
               <div className="student-history-list">

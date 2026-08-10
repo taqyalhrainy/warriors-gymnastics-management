@@ -55,6 +55,8 @@ const getPlayerGroupIds = (player) => {
   return normalizeGroupIds({ groupId: player.groupId ? String(player.groupId) : '' });
 };
 
+const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
+
 const cleanPlayerPayload = (payload) => {
   optionalObjectIdFields.forEach((field) => {
     if (payload[field] === '') {
@@ -76,6 +78,9 @@ const cleanPlayerPayload = (payload) => {
   }
   if (payload.payment === '') {
     payload.payment = 0;
+  }
+  if (payload.accountBalance === '') {
+    payload.accountBalance = 0;
   }
   if (payload.packageClasses === '') {
     payload.packageClasses = 0;
@@ -126,9 +131,14 @@ const recalculatePlayerPayments = async (player) => {
     if (!subscriptionCycleStart && subscriptionStart && new Date(payment.paymentDate) < subscriptionStart) {
       continue;
     }
-    runningPaid += Number(payment.paidAmount || 0);
-    payment.totalAmount = totalAmount;
-    payment.remainingAmount = totalAmount ? Math.max(0, totalAmount - runningPaid) : 0;
+    if (isSubscriptionPaymentType(payment.transactionType)) {
+      runningPaid += Number(payment.paidAmount || 0);
+      payment.totalAmount = totalAmount;
+      payment.remainingAmount = totalAmount ? Math.max(0, totalAmount - runningPaid) : 0;
+    } else {
+      payment.totalAmount = 0;
+      payment.remainingAmount = 0;
+    }
     await payment.save();
   }
 };
@@ -178,7 +188,7 @@ const createPlayer = async (req, res, next) => {
   try {
     const data = cleanPlayerPayload(sanitizeObject(req.body));
     const groupIds = normalizeGroupIds(data);
-    const { fullName, dateOfBirth, parentId, parentPhone, programId, coachId, level, startDate, endDate, packageName, packageClasses, packageHours, payment, note, profileImage, status = 'active' } = data;
+    const { fullName, dateOfBirth, parentId, parentPhone, programId, coachId, level, startDate, endDate, packageName, packageClasses, packageHours, payment, accountBalance, note, profileImage, status = 'active' } = data;
     if (!fullName || !parentId) {
       return res.status(400).json({ message: 'Required player fields are missing.' });
     }
@@ -214,6 +224,7 @@ const createPlayer = async (req, res, next) => {
       packageClasses: parseLocalizedNumber(packageClasses),
       packageHours: parseLocalizedNumber(packageHours),
       payment: parseLocalizedNumber(payment),
+      accountBalance: typeof accountBalance !== 'undefined' ? parseLocalizedNumber(accountBalance) : -parseLocalizedNumber(payment),
       note: note || '',
       status,
       profileImage: profileImage || ''
@@ -320,6 +331,9 @@ const updatePlayer = async (req, res, next) => {
     if (typeof updates.payment !== 'undefined') {
       updates.payment = parseLocalizedNumber(updates.payment);
     }
+    if (typeof updates.accountBalance !== 'undefined') {
+      updates.accountBalance = parseLocalizedNumber(updates.accountBalance);
+    }
     if (typeof updates.packageClasses !== 'undefined') {
       updates.packageClasses = parseLocalizedNumber(updates.packageClasses);
     }
@@ -333,6 +347,9 @@ const updatePlayer = async (req, res, next) => {
     if (startsNewSubscription) {
       updates.currentSubscriptionStartedAt = getDateAtStartOfDay(updates.startDate) || new Date();
       updates.currentSubscriptionAttendanceIds = [];
+      const subscriptionCharge = Number(typeof updates.payment !== 'undefined' ? updates.payment : player.payment || 0);
+      const currentBalance = Number(typeof updates.accountBalance !== 'undefined' ? updates.accountBalance : player.accountBalance || 0);
+      updates.accountBalance = currentBalance - subscriptionCharge;
     }
     Object.assign(player, updates);
     await player.save();
