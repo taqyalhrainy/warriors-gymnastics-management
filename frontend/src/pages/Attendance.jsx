@@ -632,6 +632,14 @@ const AttendancePage = () => {
   }, [selectedAttendanceDate]);
 
   useEffect(() => {
+    const handlePaymentsChanged = () => {
+      loadAttendanceBoard({ force: true, silent: true, date: selectedAttendanceDate });
+    };
+    window.addEventListener('payments:changed', handlePaymentsChanged);
+    return () => window.removeEventListener('payments:changed', handlePaymentsChanged);
+  }, [selectedAttendanceDate]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') {
       return undefined;
     }

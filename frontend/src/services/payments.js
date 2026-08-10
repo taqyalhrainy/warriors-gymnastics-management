@@ -15,19 +15,22 @@ export const fetchPayments = async (params = {}) => {
 
 export const createPayment = async (data) => {
   const response = await api.post('/payments', data);
-  invalidateCache(['payments:', 'players:', 'history:', 'reports:', 'notifications:']);
+  invalidateCache(['payments:', 'players:', 'attendance:', 'history:', 'reports:', 'notifications:']);
+  window.dispatchEvent(new CustomEvent('payments:changed', { detail: response.data }));
   return response.data;
 };
 
 export const updatePayment = async (id, data) => {
   const response = await api.put(`/payments/${id}`, data);
-  invalidateCache(['payments:', 'players:', 'history:', 'reports:']);
+  invalidateCache(['payments:', 'players:', 'attendance:', 'history:', 'reports:']);
+  window.dispatchEvent(new CustomEvent('payments:changed', { detail: response.data }));
   return response.data;
 };
 
 export const deletePayment = async (id) => {
   const response = await api.delete(`/payments/${id}`);
-  invalidateCache(['payments:', 'players:', 'history:', 'reports:']);
+  invalidateCache(['payments:', 'players:', 'attendance:', 'history:', 'reports:']);
+  window.dispatchEvent(new CustomEvent('payments:changed', { detail: response.data }));
   return response.data;
 };
 
