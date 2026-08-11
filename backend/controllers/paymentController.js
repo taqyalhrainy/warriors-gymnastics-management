@@ -11,7 +11,7 @@ const { snapshotPaymentDocument, createHistoryEntry } = require('../utils/histor
 const populatePaymentQuery = (query) => query
   .populate({
     path: 'playerId',
-    select: 'fullName parentId parentPhoneEncrypted isDeleted deletedAt packageName packageClasses packageHours payment accountBalance startDate currentSubscriptionStartedAt',
+    select: 'fullName parentId parentPhoneEncrypted isDeleted deletedAt packageName packageClasses packageHours payment accountBalance accountBalanceInitialized startDate currentSubscriptionStartedAt',
     populate: {
       path: 'parentId',
       select: 'name email phoneEncrypted userId',
@@ -105,6 +105,10 @@ const getTransactionType = (value, remainingAmount) => {
 };
 
 const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
+const getSubscriptionPaymentBalanceAmount = (payment) => (
+  isSubscriptionPaymentType(payment?.transactionType) ? Number(payment?.paidAmount || 0) : 0
+);
+
 const getCurrentSubscriptionPaymentMatch = (player) => {
   const match = { playerId: player._id };
   if (player.currentSubscriptionStartedAt) {
@@ -113,6 +117,19 @@ const getCurrentSubscriptionPaymentMatch = (player) => {
     match.paymentDate = { $gte: new Date(player.startDate) };
   }
   return match;
+};
+
+const initializePlayerAccountBalance = async (player) => {
+  if (!player || player.accountBalanceInitialized) return player;
+  const paidRows = await Payment.aggregate([
+    { $match: getCurrentSubscriptionPaymentMatch(player) },
+    { $match: { transactionType: { $in: ['Full payment', 'Partial payment'] } } },
+    { $group: { _id: '$playerId', totalPaid: { $sum: '$paidAmount' } } }
+  ]);
+  player.accountBalance = Number(paidRows[0]?.totalPaid || 0) - Number(player.payment || 0);
+  player.accountBalanceInitialized = true;
+  await player.save();
+  return player;
 };
 
 const getPayments = async (req, res, next) => {
@@ -151,6 +168,7 @@ const createPayment = async (req, res, next) => {
     if (!player) {
       return res.status(404).json({ message: 'Player not found.' });
     }
+    await initializePlayerAccountBalance(player);
     const subscriptionPayment = !transactionType || isSubscriptionPaymentType(transactionType);
     const previousPaid = subscriptionPayment ? await Payment.aggregate([
       { $match: getCurrentSubscriptionPaymentMatch(player) },
@@ -199,6 +217,9 @@ const createPayment = async (req, res, next) => {
     });
     await createAuditLog({ userId: req.user._id, action: 'create payment', entity: 'Payment', entityId: payment._id, req });
     await recalculatePlayerPayments(player._id);
+    if (isSubscriptionPaymentType(payment.transactionType)) {
+      await Player.updateOne({ _id: player._id }, { $inc: { accountBalance: Number(payment.paidAmount || 0) } });
+    }
     const createdPayment = await populatePaymentQuery(Payment.findById(payment._id));
     res.status(201).json(formatPaymentResponse(createdPayment));
   } catch (error) {
@@ -221,6 +242,7 @@ const updatePayment = async (req, res, next) => {
     }
     const beforePayment = await loadPaymentForHistory(id);
     const beforeSnapshot = snapshotPaymentDocument(beforePayment);
+    const previousBalanceAmount = getSubscriptionPaymentBalanceAmount(payment);
 
     if (payload.paidAmount != null) {
       payment.paidAmount = parseLocalizedNumber(payload.paidAmount);
@@ -244,6 +266,11 @@ const updatePayment = async (req, res, next) => {
     payment.updatedAt = new Date();
     await payment.save();
     await recalculatePlayerPayments(payment.playerId);
+    const nextBalanceAmount = getSubscriptionPaymentBalanceAmount(payment);
+    const balanceDelta = nextBalanceAmount - previousBalanceAmount;
+    if (balanceDelta) {
+      await Player.updateOne({ _id: payment.playerId }, { $inc: { accountBalance: balanceDelta } });
+    }
     const afterPayment = await loadPaymentForHistory(id);
     await createHistoryEntry({
       entityType: 'payment',
@@ -276,8 +303,12 @@ const deletePayment = async (req, res, next) => {
     const paymentForHistory = await loadPaymentForHistory(id);
     const beforeSnapshot = snapshotPaymentDocument(paymentForHistory);
     const { playerId } = payment;
+    const balanceDelta = -getSubscriptionPaymentBalanceAmount(payment);
     await payment.deleteOne();
     await recalculatePlayerPayments(playerId);
+    if (balanceDelta) {
+      await Player.updateOne({ _id: playerId }, { $inc: { accountBalance: balanceDelta } });
+    }
     await createHistoryEntry({
       entityType: 'payment',
       entityId: payment._id,
