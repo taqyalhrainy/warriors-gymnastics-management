@@ -332,7 +332,7 @@ const getGroupPlayers = async (req, res, next) => {
       ...formatPlayerResponse(player),
       attendanceGroupId: id,
       attendancePresentCount: presentCountByPlayerId.get(String(player._id)) || 0,
-      paymentRemainingAmount: Math.max(0, -Number(player.accountBalance || 0))
+      paymentRemainingAmount: Math.max(0, Number(player.payment || 0) - Number(paidByPlayerId.get(String(player._id)) || 0))
     })));
   } catch (error) {
     next(error);
