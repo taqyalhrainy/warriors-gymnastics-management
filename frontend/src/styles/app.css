@@ -2396,6 +2396,13 @@ body.attendance-touch-dragging {
   z-index: 1;
 }
 
+.attendance-player-card.is-attention-alert .attendance-review-pulse,
+.attendance-player-card.is-expired.is-attention-alert .attendance-review-pulse,
+.attendance-player-card.is-frozen.is-attention-alert .attendance-review-pulse {
+  position: absolute;
+  z-index: 12;
+}
+
 .attendance-frozen-badge {
   width: fit-content;
   padding: 3px 9px;
