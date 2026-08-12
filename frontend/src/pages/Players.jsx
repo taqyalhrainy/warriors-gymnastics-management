@@ -10,9 +10,8 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 const initialWaitingForm = {
   playerName: '',
   playerAge: '',
-  parentName: '',
   parentPhone: '',
-  desiredGroupId: '',
+  desiredGroupIds: [],
   notes: ''
 };
 
@@ -23,7 +22,10 @@ const PlayersPage = () => {
   const [waitingForm, setWaitingForm] = useState(initialWaitingForm);
   const [editingWaitingEntryId, setEditingWaitingEntryId] = useState('');
   const [isWaitingFormOpen, setIsWaitingFormOpen] = useState(false);
+  const [isWaitingExpanded, setIsWaitingExpanded] = useState(false);
   const [waitingMessage, setWaitingMessage] = useState('');
+  const [waitingDayFilter, setWaitingDayFilter] = useState('all');
+  const [waitingAgeFilter, setWaitingAgeFilter] = useState('');
   const [search, setSearch] = useState('');
   const [statusView, setStatusView] = useState('all');
   const [groupFilter, setGroupFilter] = useState('all');
@@ -113,6 +115,15 @@ const PlayersPage = () => {
     setWaitingForm((current) => ({ ...current, [name]: value }));
   };
 
+  const handleWaitingGroupToggle = (groupId) => {
+    setWaitingForm((current) => {
+      const groupIds = current.desiredGroupIds.includes(groupId)
+        ? current.desiredGroupIds.filter((id) => id !== groupId)
+        : [...current.desiredGroupIds, groupId];
+      return { ...current, desiredGroupIds: groupIds };
+    });
+  };
+
   const handleWaitingSubmit = async (event) => {
     event.preventDefault();
     setWaitingMessage('');
@@ -123,7 +134,7 @@ const PlayersPage = () => {
         setWaitingMessage('Waiting list entry updated.');
       } else {
         const entry = await createWaitingListEntry(waitingForm);
-        setWaitingList((current) => [entry, ...current]);
+        setWaitingList((current) => [...current, entry]);
         setWaitingMessage('Player added to the waiting list.');
       }
       setWaitingForm(initialWaitingForm);
@@ -138,9 +149,10 @@ const PlayersPage = () => {
     setWaitingForm({
       playerName: entry.playerName || '',
       playerAge: typeof entry.playerAge === 'number' ? String(entry.playerAge) : '',
-      parentName: entry.parentName || '',
       parentPhone: entry.parentPhone || '',
-      desiredGroupId: entry.desiredGroupId?._id || entry.desiredGroupId || '',
+      desiredGroupIds: (entry.desiredGroupIds?.length ? entry.desiredGroupIds : [entry.desiredGroupId].filter(Boolean))
+        .map((group) => group?._id || group)
+        .filter(Boolean),
       notes: entry.notes || ''
     });
     setEditingWaitingEntryId(entry._id);
@@ -155,6 +167,7 @@ const PlayersPage = () => {
 
   const closeWaitingListModal = () => {
     setIsWaitingFormOpen(false);
+    setIsWaitingExpanded(false);
     handleWaitingCancelEdit();
   };
 
@@ -167,6 +180,24 @@ const PlayersPage = () => {
       setWaitingMessage(error.response?.data?.message || 'Unable to delete waiting list entry.');
     }
   };
+
+  const getWaitingEntryGroups = (entry) => (
+    entry.desiredGroupIds?.length ? entry.desiredGroupIds : [entry.desiredGroupId].filter(Boolean)
+  );
+
+  const getWaitingEntryGroupText = (entry) => getWaitingEntryGroups(entry)
+    .map((group) => group?.name)
+    .filter(Boolean)
+    .join(', ') || t('notSet');
+
+  const getWaitingEntryDays = (entry) => new Set(getWaitingEntryGroups(entry)
+    .flatMap((group) => group?.days || [])
+    .filter(Boolean));
+
+  const waitingDayOptions = [...new Set(groups.flatMap((group) => group.days || []))];
+  const filteredWaitingList = waitingList
+    .filter((entry) => waitingDayFilter === 'all' || getWaitingEntryDays(entry).has(waitingDayFilter))
+    .filter((entry) => !waitingAgeFilter || Number(entry.playerAge) === Number(waitingAgeFilter));
 
   return (
     <div className="dashboard-layout">
@@ -258,7 +289,7 @@ const PlayersPage = () => {
         </div>
         {isWaitingFormOpen && (
           <div className="student-modal-backdrop" role="presentation" onClick={closeWaitingListModal}>
-            <section className="student-modal waiting-list-modal" role="dialog" aria-modal="true" aria-label="Waiting List" onClick={(event) => event.stopPropagation()}>
+            <section className={`student-modal waiting-list-modal${isWaitingExpanded ? ' is-expanded' : ''}`} role="dialog" aria-modal="true" aria-label="Waiting List" onClick={(event) => event.stopPropagation()}>
               <div className="student-modal-header">
                 <div className="waiting-list-heading">
                   <div>
@@ -267,7 +298,12 @@ const PlayersPage = () => {
                   </div>
                   <strong>{waitingList.length}</strong>
                 </div>
-                <button type="button" className="btn-secondary" onClick={closeWaitingListModal}>{t('close')}</button>
+                <div className="student-modal-actions">
+                  <button type="button" className="btn-secondary" onClick={() => setIsWaitingExpanded((current) => !current)}>
+                    {isWaitingExpanded ? 'Compact' : 'Expand'}
+                  </button>
+                  <button type="button" className="btn-secondary" onClick={closeWaitingListModal}>{t('close')}</button>
+                </div>
               </div>
 
               {waitingMessage && <p className="alert-info">{waitingMessage}</p>}
@@ -275,29 +311,32 @@ const PlayersPage = () => {
               <form className="waiting-list-form" onSubmit={handleWaitingSubmit}>
                 <label>
                   <span>Player name</span>
-                  <input name="playerName" value={waitingForm.playerName} onChange={handleWaitingFormChange} required />
+                  <input name="playerName" value={waitingForm.playerName} onChange={handleWaitingFormChange} />
                 </label>
                 <label>
                   <span>Age</span>
                   <input name="playerAge" type="number" min="0" max="120" value={waitingForm.playerAge} onChange={handleWaitingFormChange} />
                 </label>
                 <label>
-                  <span>Parent name</span>
-                  <input name="parentName" value={waitingForm.parentName} onChange={handleWaitingFormChange} required />
-                </label>
-                <label>
                   <span>Parent phone</span>
-                  <input name="parentPhone" value={waitingForm.parentPhone} onChange={handleWaitingFormChange} required />
+                  <input name="parentPhone" value={waitingForm.parentPhone} onChange={handleWaitingFormChange} />
                 </label>
-                <label>
-                  <span>Desired group</span>
-                  <select name="desiredGroupId" value={waitingForm.desiredGroupId} onChange={handleWaitingFormChange} required>
-                    <option value="">Choose group</option>
+                <div className="waiting-list-group-picker">
+                  <span>Desired times</span>
+                  <div>
                     {groups.map((group) => (
-                      <option key={group._id} value={group._id}>{group.name}</option>
+                      <label key={group._id}>
+                        <input
+                          type="checkbox"
+                          checked={waitingForm.desiredGroupIds.includes(group._id)}
+                          onChange={() => handleWaitingGroupToggle(group._id)}
+                        />
+                        <b>{group.name}</b>
+                        <small>{group.days?.join(', ')} {group.startTime} - {group.endTime}</small>
+                      </label>
                     ))}
-                  </select>
-                </label>
+                  </div>
+                </div>
                 <label className="waiting-list-form-note">
                   <span>Note</span>
                   <input name="notes" value={waitingForm.notes} onChange={handleWaitingFormChange} />
@@ -308,28 +347,40 @@ const PlayersPage = () => {
                 )}
               </form>
 
+              <div className="waiting-list-filters">
+                <label>
+                  <span>Day</span>
+                  <select value={waitingDayFilter} onChange={(event) => setWaitingDayFilter(event.target.value)}>
+                    <option value="all">All days</option>
+                    {waitingDayOptions.map((day) => <option key={day} value={day}>{day}</option>)}
+                  </select>
+                </label>
+                <label>
+                  <span>Age</span>
+                  <input type="number" min="0" max="120" value={waitingAgeFilter} onChange={(event) => setWaitingAgeFilter(event.target.value)} placeholder="All ages" />
+                </label>
+              </div>
+
               <div className="waiting-list-table-wrap">
                 <table className="data-table waiting-list-table">
                   <thead>
                     <tr>
                       <th>Player name</th>
                       <th>Age</th>
-                      <th>Parent name</th>
                       <th>Parent phone</th>
-                      <th>Desired group</th>
+                      <th>Desired times</th>
                       <th>Note</th>
                       <th>Added at</th>
                       <th>{t('actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {waitingList.length ? waitingList.map((entry) => (
+                    {filteredWaitingList.length ? filteredWaitingList.map((entry) => (
                       <tr key={entry._id}>
-                        <td>{entry.playerName}</td>
+                        <td>{entry.playerName || '-'}</td>
                         <td>{entry.playerAge ?? '-'}</td>
-                        <td>{entry.parentName}</td>
-                        <td><a href={`tel:${entry.parentPhone}`} className="waiting-phone-link">{entry.parentPhone}</a></td>
-                        <td>{entry.desiredGroupId?.name || t('notSet')}</td>
+                        <td>{entry.parentPhone ? <a href={`tel:${entry.parentPhone}`} className="waiting-phone-link">{entry.parentPhone}</a> : '-'}</td>
+                        <td>{getWaitingEntryGroupText(entry)}</td>
                         <td>{entry.notes || '-'}</td>
                         <td>{entry.createdAt ? new Date(entry.createdAt).toLocaleDateString() : '-'}</td>
                         <td>
@@ -340,7 +391,7 @@ const PlayersPage = () => {
                         </td>
                       </tr>
                     )) : (
-                      <tr><td colSpan="8">No waiting list entries yet.</td></tr>
+                      <tr><td colSpan="7">No waiting list entries yet.</td></tr>
                     )}
                   </tbody>
                 </table>

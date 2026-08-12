@@ -5,12 +5,13 @@ const { createAuditLog } = require('../utils/audit');
 
 const populateWaitingListEntry = (query) => query
   .populate('desiredGroupId', 'name days startTime endTime currentCount maxCapacity color')
+  .populate('desiredGroupIds', 'name days startTime endTime currentCount maxCapacity color')
   .populate('createdBy', 'name');
 
 const getWaitingListEntries = async (req, res, next) => {
   try {
     const entries = await populateWaitingListEntry(
-      WaitingListEntry.find().sort({ createdAt: -1, _id: -1 })
+      WaitingListEntry.find().sort({ createdAt: 1, _id: 1 })
     );
     res.json(entries);
   } catch (error) {
@@ -20,28 +21,31 @@ const getWaitingListEntries = async (req, res, next) => {
 
 const validateWaitingListPayload = async (payload) => {
   const { playerName, playerAge, parentName, parentPhone, desiredGroupId, notes } = payload;
-
-  if (!playerName || !parentName || !parentPhone || !validateObjectId(desiredGroupId)) {
-    return { error: { status: 400, message: 'Player name, parent name, parent phone, and desired group are required.' } };
-  }
+  const rawGroupIds = Array.isArray(payload.desiredGroupIds)
+    ? payload.desiredGroupIds
+    : [desiredGroupId].filter(Boolean);
+  const desiredGroupIds = [...new Set(rawGroupIds.filter(validateObjectId).map(String))];
 
   const parsedPlayerAge = playerAge === '' || typeof playerAge === 'undefined' ? undefined : Number(playerAge);
   if (typeof parsedPlayerAge !== 'undefined' && (!Number.isFinite(parsedPlayerAge) || parsedPlayerAge < 0 || parsedPlayerAge > 120)) {
     return { error: { status: 400, message: 'Player age must be a valid number.' } };
   }
 
-  const group = await TrainingGroup.findById(desiredGroupId);
-  if (!group) {
-    return { error: { status: 404, message: 'Group not found.' } };
+  if (desiredGroupIds.length) {
+    const groups = await TrainingGroup.find({ _id: { $in: desiredGroupIds } });
+    if (groups.length !== desiredGroupIds.length) {
+      return { error: { status: 404, message: 'Group not found.' } };
+    }
   }
 
   return {
     data: {
-      playerName,
+      playerName: playerName || '',
       playerAge: parsedPlayerAge,
-      parentName,
-      parentPhone,
-      desiredGroupId,
+      parentName: parentName || '',
+      parentPhone: parentPhone || '',
+      desiredGroupId: desiredGroupIds[0] || undefined,
+      desiredGroupIds,
       notes: notes || ''
     }
   };

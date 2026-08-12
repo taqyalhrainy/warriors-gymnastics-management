@@ -1954,15 +1954,22 @@ const AttendancePage = () => {
     const amount = parseLocalizedNumber(dueAdjustmentForm);
     if (!amount && mode !== 'clear') return;
     const currentAdjustment = Number(selectedPlayer.dueAdjustment || 0);
+    const currentPreviousDue = Number(selectedPlayer.previousDueBalance || 0);
     const currentDue = Number(selectedPlayer.paymentRemainingAmount || 0);
     const naturalDue = currentDue + currentAdjustment;
     const nextAdjustment = mode === 'clear'
       ? 0
-      : Math.max(0, currentAdjustment + Math.min(amount, currentDue));
+      : (mode === 'increase' ? currentAdjustment : Math.max(0, currentAdjustment + Math.min(amount, currentDue)));
+    const nextPreviousDue = mode === 'increase'
+      ? currentPreviousDue + amount
+      : currentPreviousDue;
     const optimisticPlayer = {
       ...selectedPlayer,
+      previousDueBalance: nextPreviousDue,
       dueAdjustment: nextAdjustment,
-      paymentRemainingAmount: Math.max(0, naturalDue - nextAdjustment)
+      paymentRemainingAmount: mode === 'increase'
+        ? currentDue + amount
+        : Math.max(0, naturalDue - nextAdjustment)
     };
     const previousPlayer = selectedPlayer;
 
@@ -1972,7 +1979,10 @@ const AttendancePage = () => {
       patchExistingPlayerInAttendanceBoard(optimisticPlayer);
       setSelectedPlayerIfOpen(optimisticPlayer);
       setDueAdjustmentForm('');
-      await updatePlayer(selectedPlayer._id, { dueAdjustment: nextAdjustment });
+      await updatePlayer(selectedPlayer._id, {
+        previousDueBalance: nextPreviousDue,
+        dueAdjustment: nextAdjustment
+      });
       const refreshedPlayer = await getPlayer(selectedPlayer._id, { force: true });
       const attendanceRecords = await fetchAttendanceByPlayer(selectedPlayer._id);
       const refreshedPlayerWithCount = withAttendancePresentCount(refreshedPlayer, attendanceRecords);
@@ -1982,7 +1992,7 @@ const AttendancePage = () => {
       };
       patchExistingPlayerInAttendanceBoard(confirmedPlayer);
       setSelectedPlayerIfOpen(confirmedPlayer);
-      setMessage(mode === 'clear' ? 'Due adjustment cleared' : 'Due reduced');
+      setMessage(mode === 'increase' ? 'Due increased' : (mode === 'clear' ? 'Due adjustment cleared' : 'Due reduced'));
     } catch (error) {
       patchExistingPlayerInAttendanceBoard(previousPlayer);
       setSelectedPlayerIfOpen(previousPlayer);
@@ -2923,8 +2933,16 @@ const AttendancePage = () => {
                           inputMode="decimal"
                           value={dueAdjustmentForm}
                           onChange={(event) => setDueAdjustmentForm(normalizeDigits(event.target.value))}
-                          placeholder="Amount to reduce"
+                          placeholder="Amount"
                         />
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => handleApplyDueAdjustment('increase')}
+                          disabled={isSavingDueAdjustment || !parseLocalizedNumber(dueAdjustmentForm)}
+                        >
+                          {isSavingDueAdjustment ? 'Saving...' : 'Add due'}
+                        </button>
                         <button
                           type="button"
                           className="btn-secondary"
