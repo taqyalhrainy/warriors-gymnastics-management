@@ -143,6 +143,37 @@ const recalculatePlayerPayments = async (player) => {
   }
 };
 
+const getPlayerCycleStart = (player) => (
+  player.currentSubscriptionStartedAt
+  || player.startDate
+  || player.subscriptionId?.startDate
+  || null
+);
+
+const getPlayerRemainingAmount = async (player) => {
+  const cycleStart = getPlayerCycleStart(player);
+  const filter = {
+    playerId: player._id,
+    transactionType: { $in: ['Full payment', 'Partial payment'] }
+  };
+
+  if (cycleStart) {
+    filter.paymentDate = { $gte: getDateAtStartOfDay(cycleStart) };
+  }
+
+  const paidRows = await Payment.aggregate([
+    { $match: filter },
+    { $group: { _id: null, totalPaid: { $sum: '$paidAmount' } } }
+  ]);
+
+  return Math.max(
+    0,
+    Number(player.payment || 0)
+      - Number(paidRows[0]?.totalPaid || 0)
+      - Number(player.dueAdjustment || 0)
+  );
+};
+
 const getDateAtStartOfDay = (value) => {
   if (!value) return null;
   const date = new Date(value);
@@ -270,6 +301,7 @@ const getPlayerById = async (req, res, next) => {
       return res.status(404).json({ message: 'Player not found.' });
     }
     const playerData = formatPlayerResponse(player);
+    playerData.paymentRemainingAmount = await getPlayerRemainingAmount(player);
     res.json(playerData);
   } catch (error) {
     next(error);
@@ -365,7 +397,9 @@ const updatePlayer = async (req, res, next) => {
       req
     });
     await createAuditLog({ userId: req.user._id, action: 'edit player', entity: 'Player', entityId: player._id, req });
-    res.json(formatPlayerResponse(afterPlayer));
+    const responsePlayer = formatPlayerResponse(afterPlayer);
+    responsePlayer.paymentRemainingAmount = await getPlayerRemainingAmount(afterPlayer);
+    res.json(responsePlayer);
   } catch (error) {
     if (error.statusCode) {
       return res.status(error.statusCode).json({ message: error.message });

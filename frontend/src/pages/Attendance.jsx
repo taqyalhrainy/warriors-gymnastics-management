@@ -30,13 +30,6 @@ const getDateInputValue = (date = new Date()) => {
   return getLocalDateValue(value);
 };
 
-const getPreviousDateInputValue = (date) => {
-  const value = new Date(date);
-  if (Number.isNaN(value.getTime())) return '';
-  value.setDate(value.getDate() - 1);
-  return getDateInputValue(value);
-};
-
 const getEarliestDateValue = (...dates) => dates
   .map((date) => getDateInputValue(date))
   .filter(Boolean)
@@ -1234,8 +1227,8 @@ const AttendancePage = () => {
   );
 
   const getCurrentSubscriptionCycleStartValue = (player = selectedPlayer) => (
-    getDateInputValue(selectedPlayerSubscriptionHistory[0]?.startDate)
-    || getDateInputValue(player?.startDate || player?.subscriptionId?.startDate)
+    getDateInputValue(player?.startDate || player?.subscriptionId?.startDate)
+    || getDateInputValue(selectedPlayerSubscriptionHistory[0]?.startDate)
   );
 
   const isRecordExplicitlyCountedInCurrentSubscription = (record, player = selectedPlayer) => (
@@ -1473,8 +1466,11 @@ const AttendancePage = () => {
 
       const subscriptionHistory = buildSubscriptionHistory(playerHistory.entries || [], latestPlayer)
         .filter((cycle) => !latestPlayer.startDate || getLocalDateOnly(cycle.startDate).getTime() <= getLocalDateOnly(latestPlayer.startDate).getTime());
+      const latestRemainingAmount = typeof latestPlayer.paymentRemainingAmount !== 'undefined'
+        ? latestPlayer.paymentRemainingAmount
+        : player.paymentRemainingAmount;
       const latestPlayerWithCount = withAttendancePresentCount(
-        { ...latestPlayer, paymentRemainingAmount: player.paymentRemainingAmount, dueAdjustment: latestPlayer.dueAdjustment || 0 },
+        { ...latestPlayer, paymentRemainingAmount: latestRemainingAmount, dueAdjustment: latestPlayer.dueAdjustment || 0 },
         attendanceRecords,
         getDateInputValue(subscriptionHistory[0]?.startDate),
         getPlayerAttendanceGroupId(player)
@@ -1733,6 +1729,8 @@ const AttendancePage = () => {
       endDate: subscriptionForm.endDate,
       status: selectedPlayer.status === 'expired' ? 'active' : selectedPlayer.status,
       subscriptionNeedsAttention: keepWarning,
+      dueAdjustment: 0,
+      paymentRemainingAmount: Number(selectedPlayer.payment || 0),
       currentSubscriptionStartedAt: subscriptionForm.startDate,
       currentSubscriptionAttendanceIds: [],
       subscriptionId: selectedPlayer.subscriptionId && typeof selectedPlayer.subscriptionId === 'object'
@@ -1753,7 +1751,22 @@ const AttendancePage = () => {
     setSubscriptionMessage('');
     setIsSavingSubscription(true);
     try {
+      const optimisticCycle = {
+        key: subscriptionForm.startDate,
+        changedAt: new Date().toISOString(),
+        startDate: subscriptionForm.startDate,
+        endDate: subscriptionForm.endDate,
+        packageName: selectedPlayer.packageName || '',
+        packageClasses: Number(selectedPlayer.packageClasses || 0),
+        packageHours: Number(selectedPlayer.packageHours || 0),
+        payment: Number(selectedPlayer.payment || 0)
+      };
       applyOptimisticSelectedPlayer(optimisticPlayer);
+      setSelectedPlayerSubscriptionHistory((current) => [
+        optimisticCycle,
+        ...current.filter((cycle) => cycle.key !== optimisticCycle.key)
+      ].sort((first, second) => new Date(second.startDate) - new Date(first.startDate)));
+      setOpenSubscriptionHistoryKey(optimisticCycle.key);
       setShowSubscriptionModal(false);
       setMessage('New subscription started');
       const savedPlayer = await updatePlayer(selectedPlayer._id, {
@@ -1767,22 +1780,34 @@ const AttendancePage = () => {
         return;
       }
 
-      const attendanceRecords = applyLocalPlayerAttendanceOverrides(
-        await fetchAttendanceByPlayer(selectedPlayer._id),
-        selectedPlayer._id
-      );
+      const [attendanceData, playerHistory] = await Promise.all([
+        fetchAttendanceByPlayer(selectedPlayer._id),
+        fetchPlayerHistory(selectedPlayer._id)
+      ]);
+      const attendanceRecords = applyLocalPlayerAttendanceOverrides(attendanceData, selectedPlayer._id);
+      const refreshedHistory = buildSubscriptionHistory(playerHistory.entries || [], savedPlayer)
+        .filter((cycle) => !savedPlayer.startDate || getLocalDateOnly(cycle.startDate).getTime() <= getLocalDateOnly(savedPlayer.startDate).getTime());
 
-      const refreshedPlayerWithCount = withAttendancePresentCount(
+      const countedPlayer = withAttendancePresentCount(
         savedPlayer,
         attendanceRecords,
         subscriptionForm.startDate,
         getPlayerAttendanceGroupId(selectedPlayer)
       );
+      const refreshedPlayerWithCount = {
+        ...countedPlayer,
+        dueAdjustment: Number(savedPlayer.dueAdjustment || 0),
+        paymentRemainingAmount: typeof savedPlayer.paymentRemainingAmount !== 'undefined'
+          ? savedPlayer.paymentRemainingAmount
+          : Math.max(0, Number(savedPlayer.payment || 0) - Number(savedPlayer.dueAdjustment || 0))
+      };
 
       syncPlayerInAttendanceBoard(refreshedPlayerWithCount, attendanceRecords, getPlayerAttendanceGroupId(selectedPlayer));
       setSelectedPlayerIfOpen(refreshedPlayerWithCount);
       if (isSelectedPlayerOpen(refreshedPlayerWithCount._id)) {
         setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
+        setSelectedPlayerSubscriptionHistory(refreshedHistory);
+        setOpenSubscriptionHistoryKey(getDateInputValue(refreshedHistory[0]?.startDate) || subscriptionForm.startDate);
       }
     } catch (error) {
       if (subscriptionSaveSequenceRef.current === saveSequence) {
@@ -2327,7 +2352,10 @@ const AttendancePage = () => {
         return;
       }
 
-      const attendanceRecords = await fetchAttendanceByPlayer(selectedPlayer._id);
+      const [attendanceRecords, playerHistory] = await Promise.all([
+        fetchAttendanceByPlayer(selectedPlayer._id),
+        fetchPlayerHistory(selectedPlayer._id)
+      ]);
       const confirmedPlayer = {
         ...optimisticPlayer,
         ...savedPlayer,
@@ -2336,10 +2364,15 @@ const AttendancePage = () => {
         groupIds: optimisticPlayer.groupIds
       };
       const refreshedPlayerWithCount = withAttendancePresentCount(confirmedPlayer, attendanceRecords);
+      const refreshedHistory = buildSubscriptionHistory(playerHistory.entries || [], confirmedPlayer)
+        .filter((cycle) => !confirmedPlayer.startDate || getLocalDateOnly(cycle.startDate).getTime() <= getLocalDateOnly(confirmedPlayer.startDate).getTime());
 
       syncPlayerInAttendanceBoard(refreshedPlayerWithCount, attendanceRecords);
       if (!shouldCloseAfterSave) {
         setSelectedPlayerIfOpen(refreshedPlayerWithCount);
+        setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
+        setSelectedPlayerSubscriptionHistory(refreshedHistory);
+        setOpenSubscriptionHistoryKey(getDateInputValue(refreshedHistory[0]?.startDate) || getCurrentSubscriptionCycleStartValue(refreshedPlayerWithCount));
       }
     } catch (err) {
       if (isLatestSelectedPlayerMutation(mutation)) {
@@ -2408,19 +2441,7 @@ const AttendancePage = () => {
       meaningfulCycles.push(cycle);
     });
 
-    return meaningfulCycles.map((cycle, index) => {
-      const nextCycle = meaningfulCycles[index + 1];
-      if (!nextCycle) return cycle;
-
-      const endTime = cycle.endDate ? getLocalDateOnly(cycle.endDate).getTime() : null;
-      const nextStartTime = getLocalDateOnly(nextCycle.startDate).getTime();
-      if (endTime && endTime < nextStartTime) return cycle;
-
-      return {
-        ...cycle,
-        endDate: getPreviousDateInputValue(nextCycle.startDate)
-      };
-    });
+    return meaningfulCycles;
   };
   const buildSubscriptionHistory = (entries = [], player = null) => {
     const cyclesByKey = new Map();
@@ -2955,6 +2976,14 @@ const AttendancePage = () => {
                         onClick={() => setShowSelectedPlayerAttendanceHistory((current) => !current)}
                       >
                         Attendance History
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={handleStartEditSelectedPlayer}
+                        disabled={Boolean(pendingSelectedPlayerMutation)}
+                      >
+                        Edit current class dates
                       </button>
                       {selectedPlayerSubscriptionHistory.length > 1 && (
                         <button

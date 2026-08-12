@@ -30,11 +30,12 @@ const getDateOnly = (value) => {
 
 const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
 
-const getEarliestDate = (...values) => values
-  .filter(Boolean)
-  .map((value) => new Date(value))
-  .filter((date) => !Number.isNaN(date.getTime()))
-  .sort((first, second) => first - second)[0] || null;
+const getCurrentSubscriptionStart = (player) => {
+  const rawDate = player.currentSubscriptionStartedAt || player.startDate || player.subscriptionId?.startDate;
+  if (!rawDate) return null;
+  const date = new Date(rawDate);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
 
 const normalizeGroupPayload = (payload) => {
   const normalized = {
@@ -282,7 +283,7 @@ const getGroupPlayers = async (req, res, next) => {
     const playerIds = players.map((player) => player._id);
     const cycleStartByPlayerId = new Map(players.map((player) => [
       String(player._id),
-      getEarliestDate(player.startDate, player.subscriptionId?.startDate) || new Date(0)
+      getCurrentSubscriptionStart(player) || new Date(0)
     ]));
     const explicitCurrentRecordIdsByPlayerId = new Map(players.map((player) => [
       String(player._id),
