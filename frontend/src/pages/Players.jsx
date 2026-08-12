@@ -23,6 +23,7 @@ const PlayersPage = () => {
   const [editingWaitingEntryId, setEditingWaitingEntryId] = useState('');
   const [isWaitingFormOpen, setIsWaitingFormOpen] = useState(false);
   const [isWaitingExpanded, setIsWaitingExpanded] = useState(false);
+  const [isWaitingGroupPickerOpen, setIsWaitingGroupPickerOpen] = useState(false);
   const [waitingMessage, setWaitingMessage] = useState('');
   const [waitingDayFilter, setWaitingDayFilter] = useState('all');
   const [waitingAgeFilter, setWaitingAgeFilter] = useState('');
@@ -168,6 +169,7 @@ const PlayersPage = () => {
   const closeWaitingListModal = () => {
     setIsWaitingFormOpen(false);
     setIsWaitingExpanded(false);
+    setIsWaitingGroupPickerOpen(false);
     handleWaitingCancelEdit();
   };
 
@@ -189,6 +191,10 @@ const PlayersPage = () => {
     .map((group) => group?.name)
     .filter(Boolean)
     .join(', ') || t('notSet');
+
+  const selectedWaitingGroupNames = groups
+    .filter((group) => waitingForm.desiredGroupIds.includes(group._id))
+    .map((group) => group.name);
 
   const getWaitingEntryDays = (entry) => new Set(getWaitingEntryGroups(entry)
     .flatMap((group) => group?.days || [])
@@ -298,11 +304,11 @@ const PlayersPage = () => {
                   </div>
                   <strong>{waitingList.length}</strong>
                 </div>
-                <div className="student-modal-actions">
-                  <button type="button" className="btn-secondary" onClick={() => setIsWaitingExpanded((current) => !current)}>
-                    {isWaitingExpanded ? 'Compact' : 'Expand'}
+                <div className="waiting-modal-actions">
+                  <button type="button" className="waiting-icon-button" onClick={() => setIsWaitingExpanded((current) => !current)}>
+                    {isWaitingExpanded ? 'Exit full screen' : 'Full screen'}
                   </button>
-                  <button type="button" className="btn-secondary" onClick={closeWaitingListModal}>{t('close')}</button>
+                  <button type="button" className="waiting-icon-button is-close" onClick={closeWaitingListModal}>{t('close')}</button>
                 </div>
               </div>
 
@@ -323,19 +329,29 @@ const PlayersPage = () => {
                 </label>
                 <div className="waiting-list-group-picker">
                   <span>Desired times</span>
-                  <div>
-                    {groups.map((group) => (
-                      <label key={group._id}>
-                        <input
-                          type="checkbox"
-                          checked={waitingForm.desiredGroupIds.includes(group._id)}
-                          onChange={() => handleWaitingGroupToggle(group._id)}
-                        />
-                        <b>{group.name}</b>
-                        <small>{group.days?.join(', ')} {group.startTime} - {group.endTime}</small>
-                      </label>
-                    ))}
-                  </div>
+                  <button
+                    type="button"
+                    className="waiting-picker-trigger"
+                    onClick={() => setIsWaitingGroupPickerOpen((current) => !current)}
+                  >
+                    <b>{selectedWaitingGroupNames.length ? `${selectedWaitingGroupNames.length} selected` : 'Choose desired times'}</b>
+                    <small>{selectedWaitingGroupNames.slice(0, 2).join(', ') || 'Tap to show options'}</small>
+                  </button>
+                  {isWaitingGroupPickerOpen && (
+                    <div className="waiting-picker-menu">
+                      {groups.map((group) => (
+                        <label key={group._id}>
+                          <input
+                            type="checkbox"
+                            checked={waitingForm.desiredGroupIds.includes(group._id)}
+                            onChange={() => handleWaitingGroupToggle(group._id)}
+                          />
+                          <b>{group.name}</b>
+                          <small>{group.days?.join(', ')} {group.startTime} - {group.endTime}</small>
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <label className="waiting-list-form-note">
                   <span>Note</span>
