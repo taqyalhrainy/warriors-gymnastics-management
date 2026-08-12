@@ -280,6 +280,7 @@ const mapSnapshotPlayerToAttendancePlayer = (player) => {
     packageClasses: Number(player.packageClasses || 0),
     packageHours: Number(player.packageHours || 0),
     payment: Number(player.payment || 0),
+    previousDueBalance: Number(player.previousDueBalance || 0),
     dueAdjustment: Number(player.dueAdjustment || 0),
     note: decodeDisplayText(player.note),
     freezeNote: decodeDisplayText(player.freezeNote),
@@ -1729,8 +1730,9 @@ const AttendancePage = () => {
       endDate: subscriptionForm.endDate,
       status: selectedPlayer.status === 'expired' ? 'active' : selectedPlayer.status,
       subscriptionNeedsAttention: keepWarning,
+      previousDueBalance: Number(selectedPlayer.paymentRemainingAmount || 0),
       dueAdjustment: 0,
-      paymentRemainingAmount: Number(selectedPlayer.payment || 0),
+      paymentRemainingAmount: Number(selectedPlayer.paymentRemainingAmount || 0) + Number(selectedPlayer.payment || 0),
       currentSubscriptionStartedAt: subscriptionForm.startDate,
       currentSubscriptionAttendanceIds: [],
       subscriptionId: selectedPlayer.subscriptionId && typeof selectedPlayer.subscriptionId === 'object'
@@ -1799,7 +1801,12 @@ const AttendancePage = () => {
         dueAdjustment: Number(savedPlayer.dueAdjustment || 0),
         paymentRemainingAmount: typeof savedPlayer.paymentRemainingAmount !== 'undefined'
           ? savedPlayer.paymentRemainingAmount
-          : Math.max(0, Number(savedPlayer.payment || 0) - Number(savedPlayer.dueAdjustment || 0))
+          : Math.max(
+            0,
+            Number(savedPlayer.previousDueBalance || 0)
+              + Number(savedPlayer.payment || 0)
+              - Number(savedPlayer.dueAdjustment || 0)
+          )
       };
 
       syncPlayerInAttendanceBoard(refreshedPlayerWithCount, attendanceRecords, getPlayerAttendanceGroupId(selectedPlayer));

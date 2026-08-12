@@ -119,7 +119,7 @@ const incrementGroups = async (groupIds, amount) => {
 
 const recalculatePlayerPayments = async (player) => {
   const payments = await Payment.find({ playerId: player._id }).sort({ paymentDate: 1, _id: 1 });
-  const totalAmount = Number(player.payment || 0);
+  const totalAmount = Number(player.previousDueBalance || 0) + Number(player.payment || 0);
   const subscriptionStart = player.startDate ? new Date(player.startDate) : null;
   const subscriptionCycleStart = player.currentSubscriptionStartedAt ? new Date(player.currentSubscriptionStartedAt) : null;
   let runningPaid = 0;
@@ -168,7 +168,8 @@ const getPlayerRemainingAmount = async (player) => {
 
   return Math.max(
     0,
-    Number(player.payment || 0)
+    Number(player.previousDueBalance || 0)
+      + Number(player.payment || 0)
       - Number(paidRows[0]?.totalPaid || 0)
       - Number(player.dueAdjustment || 0)
   );
@@ -363,6 +364,9 @@ const updatePlayer = async (req, res, next) => {
     if (typeof updates.payment !== 'undefined') {
       updates.payment = parseLocalizedNumber(updates.payment);
     }
+    if (typeof updates.previousDueBalance !== 'undefined') {
+      updates.previousDueBalance = Math.max(0, parseLocalizedNumber(updates.previousDueBalance));
+    }
     if (typeof updates.dueAdjustment !== 'undefined') {
       updates.dueAdjustment = Math.max(0, parseLocalizedNumber(updates.dueAdjustment));
     }
@@ -377,6 +381,7 @@ const updatePlayer = async (req, res, next) => {
       updates.freezeNote = '';
     }
     if (startsNewSubscription) {
+      updates.previousDueBalance = await getPlayerRemainingAmount(player);
       updates.currentSubscriptionStartedAt = getDateAtStartOfDay(updates.startDate) || new Date();
       updates.currentSubscriptionAttendanceIds = [];
       updates.dueAdjustment = 0;

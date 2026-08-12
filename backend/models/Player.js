@@ -19,6 +19,7 @@ const playerSchema = new mongoose.Schema({
   packageClasses: { type: Number, min: 0, default: 0 },
   packageHours: { type: Number, min: 0, default: 0 },
   payment: { type: Number, default: 0, min: 0 },
+  previousDueBalance: { type: Number, default: 0, min: 0 },
   dueAdjustment: { type: Number, default: 0, min: 0 },
   note: { type: String, trim: true, default: '' },
   freezeNote: { type: String, trim: true, default: '' },

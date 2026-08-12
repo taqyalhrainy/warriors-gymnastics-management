@@ -335,7 +335,8 @@ const getGroupPlayers = async (req, res, next) => {
       attendancePresentCount: presentCountByPlayerId.get(String(player._id)) || 0,
       paymentRemainingAmount: Math.max(
         0,
-        Number(player.payment || 0)
+        Number(player.previousDueBalance || 0)
+          + Number(player.payment || 0)
           - Number(paidByPlayerId.get(String(player._id)) || 0)
           - Number(player.dueAdjustment || 0)
       )

@@ -60,6 +60,7 @@ const snapshotPlayerDocument = (playerDocument) => {
     packageClasses: Number(player?.packageClasses || 0),
     packageHours: Number(player?.packageHours || 0),
     payment: Number(player?.payment || 0),
+    previousDueBalance: Number(player?.previousDueBalance || 0),
     dueAdjustment: Number(player?.dueAdjustment || 0),
     note: player?.note || '',
     freezeNote: player?.freezeNote || '',

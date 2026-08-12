@@ -11,7 +11,7 @@ const { snapshotPaymentDocument, createHistoryEntry } = require('../utils/histor
 const populatePaymentQuery = (query) => query
   .populate({
     path: 'playerId',
-    select: 'fullName parentId parentPhoneEncrypted isDeleted deletedAt packageName packageClasses packageHours payment dueAdjustment startDate currentSubscriptionStartedAt',
+    select: 'fullName parentId parentPhoneEncrypted isDeleted deletedAt packageName packageClasses packageHours payment previousDueBalance dueAdjustment startDate currentSubscriptionStartedAt',
     populate: {
       path: 'parentId',
       select: 'name email phoneEncrypted userId',
@@ -64,7 +64,7 @@ const recalculatePlayerPayments = async (playerId) => {
   if (!player) return;
 
   const payments = await Payment.find({ playerId }).sort({ paymentDate: 1, _id: 1 });
-  const totalAmount = Number(player.payment || 0);
+  const totalAmount = Number(player.previousDueBalance || 0) + Number(player.payment || 0);
   const subscriptionStart = player.startDate ? new Date(player.startDate) : null;
   const subscriptionCycleStart = player.currentSubscriptionStartedAt ? new Date(player.currentSubscriptionStartedAt) : null;
   let runningPaid = 0;
@@ -158,7 +158,7 @@ const createPayment = async (req, res, next) => {
       { $match: { transactionType: { $in: ['Full payment', 'Partial payment'] } } },
       { $group: { _id: '$playerId', totalPaid: { $sum: '$paidAmount' } } }
     ]) : [];
-    const playerTotalAmount = Number(player.payment || 0);
+    const playerTotalAmount = Number(player.previousDueBalance || 0) + Number(player.payment || 0) - Number(player.dueAdjustment || 0);
     const totalPaidBefore = previousPaid[0]?.totalPaid || 0;
     const totalPaidAfter = totalPaidBefore + parseLocalizedNumber(paidAmount);
     const remainingAmount = subscriptionPayment && playerTotalAmount ? Math.max(0, playerTotalAmount - totalPaidAfter) : 0;

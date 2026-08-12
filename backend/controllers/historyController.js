@@ -44,6 +44,7 @@ const buildPlayerRestorePayload = (snapshot) => ({
   packageClasses: Number(snapshot.packageClasses || 0),
   packageHours: Number(snapshot.packageHours || 0),
   payment: Number(snapshot.payment || 0),
+  previousDueBalance: Number(snapshot.previousDueBalance || 0),
   dueAdjustment: Number(snapshot.dueAdjustment || 0),
   note: snapshot.note || '',
   freezeNote: snapshot.freezeNote || '',
