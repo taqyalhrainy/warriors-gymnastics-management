@@ -1303,111 +1303,40 @@ body.theme-light .new-subscription-warning {
   border-top: 3px solid rgba(237, 28, 36, 0.75);
 }
 
-.player-balance-card {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.4fr);
-  gap: 18px;
+.due-adjustment-box {
+  display: flex;
   align-items: center;
-  padding: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  border-radius: 8px;
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.04), rgba(255, 255, 255, 0.78));
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  background: linear-gradient(135deg, rgba(254, 242, 242, 0.78), rgba(255, 255, 255, 0.7));
 }
 
-.player-balance-card > div {
-  display: grid;
-  gap: 6px;
-}
-
-.player-balance-card span,
-.player-balance-card small {
+.due-adjustment-box small {
+  display: block;
+  margin-top: 4px;
   color: var(--muted);
   font-weight: 800;
 }
 
-.player-balance-card strong {
-  font-size: clamp(2rem, 5vw, 3.4rem);
-  line-height: 1;
-}
-
-.player-balance-card form {
+.due-adjustment-actions,
+.subscription-history-toolbar {
   display: flex;
-  gap: 10px;
-  align-items: end;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
-.player-balance-card label {
-  display: grid;
-  gap: 6px;
-  min-width: 180px;
-}
-
-.player-balance-actions {
-  display: inline-flex;
-  gap: 6px;
-  padding: 5px;
+.due-adjustment-actions input {
+  min-height: 44px;
+  width: 170px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.58);
-}
-
-.player-balance-actions button {
-  min-height: 40px;
-  border: 0;
-  border-radius: 7px;
-  padding: 0 14px;
-  color: var(--muted);
-  background: transparent;
-  font: inherit;
-  font-weight: 900;
-  cursor: pointer;
-}
-
-.player-balance-actions button.active {
-  color: #ffffff;
-  background: #111827;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
-}
-
-.player-balance-card input {
-  min-height: 48px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 14px;
+  padding: 8px 12px;
   font: inherit;
   font-weight: 800;
   background: var(--input-bg);
   color: var(--text);
-}
-
-.player-balance-card p {
-  grid-column: 1 / -1;
-  margin: 0;
-  color: var(--muted);
-  font-weight: 800;
-}
-
-.player-balance-card.is-credit {
-  border-color: rgba(34, 197, 94, 0.45);
-  background: linear-gradient(135deg, rgba(22, 163, 74, 0.14), rgba(240, 253, 244, 0.72));
-}
-
-.player-balance-card.is-credit strong,
-.player-balance-card.is-credit small {
-  color: #059669;
-}
-
-.player-balance-card.is-due {
-  border-color: rgba(239, 68, 68, 0.45);
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.14), rgba(254, 242, 242, 0.75));
-}
-
-.player-balance-card.is-due strong,
-.player-balance-card.is-due small {
-  color: #dc2626;
 }
 
 .table-card {

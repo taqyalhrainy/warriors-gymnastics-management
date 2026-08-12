@@ -287,6 +287,7 @@ const mapSnapshotPlayerToAttendancePlayer = (player) => {
     packageClasses: Number(player.packageClasses || 0),
     packageHours: Number(player.packageHours || 0),
     payment: Number(player.payment || 0),
+    dueAdjustment: Number(player.dueAdjustment || 0),
     note: decodeDisplayText(player.note),
     freezeNote: decodeDisplayText(player.freezeNote),
     status: player.status || '',
@@ -305,6 +306,8 @@ const AttendancePage = () => {
   const [showFreezeNoteDetails, setShowFreezeNoteDetails] = useState(false);
   const [editingAttendanceHistoryId, setEditingAttendanceHistoryId] = useState(null);
   const [pendingAttendanceHistoryId, setPendingAttendanceHistoryId] = useState(null);
+  const [dueAdjustmentForm, setDueAdjustmentForm] = useState('');
+  const [isSavingDueAdjustment, setIsSavingDueAdjustment] = useState(false);
   const [isEditingSelectedPlayer, setIsEditingSelectedPlayer] = useState(false);
   const [selectedPlayerForm, setSelectedPlayerForm] = useState(null);
   const [showUnsavedExitConfirm, setShowUnsavedExitConfirm] = useState(false);
@@ -1454,6 +1457,7 @@ const AttendancePage = () => {
       setOpenSubscriptionHistoryKey('');
       setShowSelectedPlayerAttendanceHistory(false);
       setShowFreezeNoteDetails(false);
+      setDueAdjustmentForm('');
       setEditingAttendanceHistoryId(null);
       setIsEditingSelectedPlayer(false);
 
@@ -1467,9 +1471,10 @@ const AttendancePage = () => {
         return;
       }
 
-      const subscriptionHistory = buildSubscriptionHistory(playerHistory.entries || [], latestPlayer);
+      const subscriptionHistory = buildSubscriptionHistory(playerHistory.entries || [], latestPlayer)
+        .filter((cycle) => !latestPlayer.startDate || getLocalDateOnly(cycle.startDate).getTime() <= getLocalDateOnly(latestPlayer.startDate).getTime());
       const latestPlayerWithCount = withAttendancePresentCount(
-        latestPlayer,
+        { ...latestPlayer, paymentRemainingAmount: player.paymentRemainingAmount, dueAdjustment: latestPlayer.dueAdjustment || 0 },
         attendanceRecords,
         getDateInputValue(subscriptionHistory[0]?.startDate),
         getPlayerAttendanceGroupId(player)
@@ -1498,6 +1503,7 @@ const AttendancePage = () => {
     packageClasses: player?.packageClasses ?? '',
     packageHours: player?.packageHours ?? '',
     payment: player?.payment ?? '',
+    dueAdjustment: player?.dueAdjustment ?? 0,
     note: decodeDisplayText(player?.note),
     freezeNote: decodeDisplayText(player?.freezeNote),
     status: player?.status || 'active',
@@ -1911,6 +1917,49 @@ const AttendancePage = () => {
     }
   };
 
+  const handleApplyDueAdjustment = async (mode = 'add') => {
+    if (!selectedPlayer?._id) return;
+    const amount = parseLocalizedNumber(dueAdjustmentForm);
+    if (!amount && mode !== 'clear') return;
+    const currentAdjustment = Number(selectedPlayer.dueAdjustment || 0);
+    const currentDue = Number(selectedPlayer.paymentRemainingAmount || 0);
+    const naturalDue = currentDue + currentAdjustment;
+    const nextAdjustment = mode === 'clear'
+      ? 0
+      : Math.max(0, currentAdjustment + Math.min(amount, currentDue));
+    const optimisticPlayer = {
+      ...selectedPlayer,
+      dueAdjustment: nextAdjustment,
+      paymentRemainingAmount: Math.max(0, naturalDue - nextAdjustment)
+    };
+    const previousPlayer = selectedPlayer;
+
+    try {
+      setMessage('');
+      setIsSavingDueAdjustment(true);
+      patchExistingPlayerInAttendanceBoard(optimisticPlayer);
+      setSelectedPlayerIfOpen(optimisticPlayer);
+      setDueAdjustmentForm('');
+      await updatePlayer(selectedPlayer._id, { dueAdjustment: nextAdjustment });
+      const refreshedPlayer = await getPlayer(selectedPlayer._id, { force: true });
+      const attendanceRecords = await fetchAttendanceByPlayer(selectedPlayer._id);
+      const refreshedPlayerWithCount = withAttendancePresentCount(refreshedPlayer, attendanceRecords);
+      const confirmedPlayer = {
+        ...refreshedPlayerWithCount,
+        paymentRemainingAmount: optimisticPlayer.paymentRemainingAmount
+      };
+      patchExistingPlayerInAttendanceBoard(confirmedPlayer);
+      setSelectedPlayerIfOpen(confirmedPlayer);
+      setMessage(mode === 'clear' ? 'Due adjustment cleared' : 'Due reduced');
+    } catch (error) {
+      patchExistingPlayerInAttendanceBoard(previousPlayer);
+      setSelectedPlayerIfOpen(previousPlayer);
+      setMessage(error.response?.data?.message || 'Unable to update due');
+    } finally {
+      setIsSavingDueAdjustment(false);
+    }
+  };
+
   const handleAttendanceHistoryStatusChange = async (record, status) => {
     if (!selectedPlayer?._id || !record?._id || !['present', 'absent'].includes(status)) {
       return;
@@ -2136,6 +2185,75 @@ const AttendancePage = () => {
     }
   };
 
+  const handleRevertCurrentSubscription = async () => {
+    if (!selectedPlayer?._id || pendingSelectedPlayerMutationRef.current) return;
+    const currentKey = getDateInputValue(selectedPlayer.startDate);
+    const currentIndex = selectedPlayerSubscriptionHistory.findIndex((cycle) => cycle.key === currentKey);
+    const previousCycle = selectedPlayerSubscriptionHistory[(currentIndex >= 0 ? currentIndex : 0) + 1];
+
+    if (!previousCycle) {
+      setMessage('No previous subscription found.');
+      return;
+    }
+
+    const confirmed = window.confirm('Revert this player to the previous subscription and remove the current subscription setup?');
+    if (!confirmed) return;
+
+    const mutation = beginSelectedPlayerMutation('revert-subscription');
+    const previousPlayer = selectedPlayer;
+    const payload = {
+      startDate: getDateInputValue(previousCycle.startDate),
+      endDate: getDateInputValue(previousCycle.endDate),
+      packageName: previousCycle.packageName || '',
+      packageClasses: Number(previousCycle.packageClasses || 0),
+      packageHours: Number(previousCycle.packageHours || 0),
+      payment: Number(previousCycle.payment || 0),
+      dueAdjustment: 0,
+      currentSubscriptionStartedAt: getDateInputValue(previousCycle.startDate),
+      currentSubscriptionAttendanceIds: []
+    };
+    const optimisticPlayer = {
+      ...selectedPlayer,
+      ...payload
+    };
+
+    try {
+      setMessage('');
+      applyOptimisticSelectedPlayer(optimisticPlayer);
+      setMessage('Subscription reverted');
+      await updatePlayer(selectedPlayer._id, payload);
+
+      const [refreshedPlayer, attendanceRecords, playerHistory] = await Promise.all([
+        getPlayer(selectedPlayer._id, { force: true }),
+        fetchAttendanceByPlayer(selectedPlayer._id),
+        fetchPlayerHistory(selectedPlayer._id)
+      ]);
+
+      if (!isLatestSelectedPlayerMutation(mutation)) return;
+
+      const refreshedHistory = buildSubscriptionHistory(playerHistory.entries || [], refreshedPlayer)
+        .filter((cycle) => getLocalDateOnly(cycle.startDate).getTime() <= getLocalDateOnly(refreshedPlayer.startDate).getTime());
+      const refreshedPlayerWithCount = withAttendancePresentCount(
+        refreshedPlayer,
+        attendanceRecords,
+        getDateInputValue(refreshedHistory[0]?.startDate)
+      );
+
+      syncPlayerInAttendanceBoard(refreshedPlayerWithCount, attendanceRecords);
+      setSelectedPlayerIfOpen(refreshedPlayerWithCount);
+      setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
+      setSelectedPlayerSubscriptionHistory(refreshedHistory);
+      setOpenSubscriptionHistoryKey(getDateInputValue(refreshedHistory[0]?.startDate));
+    } catch (error) {
+      if (isLatestSelectedPlayerMutation(mutation)) {
+        applyOptimisticSelectedPlayer(previousPlayer);
+        setMessage(error.response?.data?.message || 'Unable to revert subscription');
+      }
+    } finally {
+      finishSelectedPlayerMutation(mutation);
+    }
+  };
+
   const handleSaveSelectedPlayerEdit = async (event, options = {}) => {
     event?.preventDefault();
     if (!selectedPlayer?._id || !selectedPlayerForm) {
@@ -2263,6 +2381,7 @@ const AttendancePage = () => {
       endDate: snapshot.endDate,
       packageName: snapshot.packageName || '',
       packageClasses: Number(snapshot.packageClasses || 0),
+      packageHours: Number(snapshot.packageHours || 0),
       payment: Number(snapshot.payment || 0)
     });
   };
@@ -2764,6 +2883,40 @@ const AttendancePage = () => {
                     <div><span>{t('payment')}</span><strong>{selectedPlayer.payment ?? 0}</strong></div>
                     <div><span>{t('classes')}</span><strong>{selectedPlayer.packageClasses ?? 0}</strong></div>
                     <div><span>{t('hours')}</span><strong>{selectedPlayer.packageHours ?? 0}</strong></div>
+                    <div className="student-info-grid-full due-adjustment-box">
+                      <div>
+                        <span>Attendance due</span>
+                        <strong>Due {formatCompactMoney(selectedPlayer.paymentRemainingAmount || 0)}</strong>
+                        <small>Manual reduction {formatCompactMoney(selectedPlayer.dueAdjustment || 0)}</small>
+                      </div>
+                      <div className="due-adjustment-actions">
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={dueAdjustmentForm}
+                          onChange={(event) => setDueAdjustmentForm(normalizeDigits(event.target.value))}
+                          placeholder="Amount to reduce"
+                        />
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => handleApplyDueAdjustment('add')}
+                          disabled={isSavingDueAdjustment || !parseLocalizedNumber(dueAdjustmentForm)}
+                        >
+                          {isSavingDueAdjustment ? 'Saving...' : 'Reduce due'}
+                        </button>
+                        {Number(selectedPlayer.dueAdjustment || 0) > 0 && (
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            onClick={() => handleApplyDueAdjustment('clear')}
+                            disabled={isSavingDueAdjustment}
+                          >
+                            Clear reduction
+                          </button>
+                        )}
+                      </div>
+                    </div>
                     <div className={`student-info-grid-full subscription-attention-box${selectedPlayer.subscriptionNeedsAttention ? ' is-active' : ''}`}>
                       <span>Subscription highlight</span>
                       <strong>
@@ -2795,13 +2948,25 @@ const AttendancePage = () => {
                     )}
                   </div>
                   <div className="student-modal-history-panel">
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      onClick={() => setShowSelectedPlayerAttendanceHistory((current) => !current)}
-                    >
-                      Attendance History
-                    </button>
+                    <div className="subscription-history-toolbar">
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => setShowSelectedPlayerAttendanceHistory((current) => !current)}
+                      >
+                        Attendance History
+                      </button>
+                      {selectedPlayerSubscriptionHistory.length > 1 && (
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={handleRevertCurrentSubscription}
+                          disabled={Boolean(pendingSelectedPlayerMutation)}
+                        >
+                          Revert to previous class
+                        </button>
+                      )}
+                    </div>
                     {showSelectedPlayerAttendanceHistory && (
                       <div className="student-history-list">
                         {selectedPlayerSubscriptionHistory.length ? selectedPlayerSubscriptionHistory.map((cycle) => {

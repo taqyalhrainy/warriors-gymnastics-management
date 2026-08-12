@@ -79,8 +79,8 @@ const cleanPlayerPayload = (payload) => {
   if (payload.payment === '') {
     payload.payment = 0;
   }
-  if (payload.accountBalance === '') {
-    payload.accountBalance = 0;
+  if (payload.dueAdjustment === '') {
+    payload.dueAdjustment = 0;
   }
   if (payload.packageClasses === '') {
     payload.packageClasses = 0;
@@ -143,29 +143,6 @@ const recalculatePlayerPayments = async (player) => {
   }
 };
 
-const getCurrentSubscriptionPaymentMatch = (player) => {
-  const match = { playerId: player._id };
-  if (player.currentSubscriptionStartedAt) {
-    match.createdAt = { $gte: new Date(player.currentSubscriptionStartedAt) };
-  } else if (player.startDate) {
-    match.paymentDate = { $gte: new Date(player.startDate) };
-  }
-  return match;
-};
-
-const initializePlayerAccountBalance = async (player) => {
-  if (!player || player.accountBalanceInitialized) return player;
-  const paidRows = await Payment.aggregate([
-    { $match: getCurrentSubscriptionPaymentMatch(player) },
-    { $match: { transactionType: { $in: ['Full payment', 'Partial payment'] } } },
-    { $group: { _id: '$playerId', totalPaid: { $sum: '$paidAmount' } } }
-  ]);
-  player.accountBalance = Number(paidRows[0]?.totalPaid || 0) - Number(player.payment || 0);
-  player.accountBalanceInitialized = true;
-  await player.save();
-  return player;
-};
-
 const getDateAtStartOfDay = (value) => {
   if (!value) return null;
   const date = new Date(value);
@@ -211,7 +188,7 @@ const createPlayer = async (req, res, next) => {
   try {
     const data = cleanPlayerPayload(sanitizeObject(req.body));
     const groupIds = normalizeGroupIds(data);
-    const { fullName, dateOfBirth, parentId, parentPhone, programId, coachId, level, startDate, endDate, packageName, packageClasses, packageHours, payment, accountBalance, note, profileImage, status = 'active' } = data;
+    const { fullName, dateOfBirth, parentId, parentPhone, programId, coachId, level, startDate, endDate, packageName, packageClasses, packageHours, payment, dueAdjustment, note, profileImage, status = 'active' } = data;
     if (!fullName || !parentId) {
       return res.status(400).json({ message: 'Required player fields are missing.' });
     }
@@ -247,8 +224,7 @@ const createPlayer = async (req, res, next) => {
       packageClasses: parseLocalizedNumber(packageClasses),
       packageHours: parseLocalizedNumber(packageHours),
       payment: parseLocalizedNumber(payment),
-      accountBalance: typeof accountBalance !== 'undefined' ? parseLocalizedNumber(accountBalance) : -parseLocalizedNumber(payment),
-      accountBalanceInitialized: true,
+      dueAdjustment: typeof dueAdjustment !== 'undefined' ? parseLocalizedNumber(dueAdjustment) : 0,
       note: note || '',
       status,
       profileImage: profileImage || ''
@@ -293,7 +269,6 @@ const getPlayerById = async (req, res, next) => {
     if (!player) {
       return res.status(404).json({ message: 'Player not found.' });
     }
-    await initializePlayerAccountBalance(player);
     const playerData = formatPlayerResponse(player);
     res.json(playerData);
   } catch (error) {
@@ -356,9 +331,8 @@ const updatePlayer = async (req, res, next) => {
     if (typeof updates.payment !== 'undefined') {
       updates.payment = parseLocalizedNumber(updates.payment);
     }
-    if (typeof updates.accountBalance !== 'undefined') {
-      updates.accountBalance = parseLocalizedNumber(updates.accountBalance);
-      updates.accountBalanceInitialized = true;
+    if (typeof updates.dueAdjustment !== 'undefined') {
+      updates.dueAdjustment = Math.max(0, parseLocalizedNumber(updates.dueAdjustment));
     }
     if (typeof updates.packageClasses !== 'undefined') {
       updates.packageClasses = parseLocalizedNumber(updates.packageClasses);
@@ -373,10 +347,7 @@ const updatePlayer = async (req, res, next) => {
     if (startsNewSubscription) {
       updates.currentSubscriptionStartedAt = getDateAtStartOfDay(updates.startDate) || new Date();
       updates.currentSubscriptionAttendanceIds = [];
-      const subscriptionCharge = Number(typeof updates.payment !== 'undefined' ? updates.payment : player.payment || 0);
-      const currentBalance = Number(typeof updates.accountBalance !== 'undefined' ? updates.accountBalance : player.accountBalance || 0);
-      updates.accountBalance = currentBalance - subscriptionCharge;
-      updates.accountBalanceInitialized = true;
+      updates.dueAdjustment = 0;
     }
     Object.assign(player, updates);
     await player.save();
