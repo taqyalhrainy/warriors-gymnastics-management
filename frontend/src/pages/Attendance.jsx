@@ -2496,8 +2496,7 @@ const AttendancePage = () => {
       const isSubscriptionSnapshot = entry.after?.startDate
         && changedFields.some((field) => subscriptionFields.includes(field));
       if (isSubscriptionSnapshot) {
-        const startsNewSubscription = changedFields.includes('currentSubscriptionStartedAt')
-          && changedFields.includes('currentSubscriptionAttendanceIds');
+        const startsNewSubscription = changedFields.includes('currentSubscriptionStartedAt');
         if (startsNewSubscription) {
           upsertSubscriptionCycle(cyclesByKey, entry.after, entry.changedAt);
           return;
