@@ -2,7 +2,7 @@ import api from './api.js';
 import { fetchCached, invalidateCache } from './cache.js';
 
 const invalidateAttendanceRelatedCache = () => {
-  invalidateCache(['attendance:', 'players:', 'reports:', 'notifications:']);
+  invalidateCache(['attendance:', 'players:', 'groups:', 'reports:', 'notifications:']);
 };
 
 export const markPresent = async (data) => {

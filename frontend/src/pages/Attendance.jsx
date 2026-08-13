@@ -1297,6 +1297,27 @@ const AttendancePage = () => {
     };
   };
 
+  const refreshPlayerAttendanceCount = async (playerId, groupId) => {
+    try {
+      const attendanceRecords = applyLocalPlayerAttendanceOverrides(
+        await fetchAttendanceByPlayer(playerId),
+        playerId
+      );
+      const boardPlayer = getAttendancePlayerFromBoard(groupColumnsRef.current, playerId, groupId)
+        || (isSelectedPlayerOpen(playerId) ? selectedPlayerRef.current : null);
+      if (!boardPlayer) return;
+
+      const refreshedPlayer = withAttendancePresentCount(boardPlayer, attendanceRecords, '', groupId);
+      syncPlayerInAttendanceBoard(refreshedPlayer, attendanceRecords, groupId);
+      setSelectedPlayerIfOpen(refreshedPlayer);
+      if (isSelectedPlayerOpen(playerId)) {
+        setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   const setAttendanceHistoryPending = (recordId) => {
     pendingAttendanceHistoryIdRef.current = recordId;
     setPendingAttendanceHistoryId(recordId);
@@ -1346,7 +1367,7 @@ const AttendancePage = () => {
       if (latestAttendanceActionRef.current.get(playerDateKey) !== actionSequence) {
         return;
       }
-      localAttendanceOverridesRef.current.set(overrideKey, savedAttendance);
+      localAttendanceOverridesRef.current.delete(overrideKey);
       setPlayerAttendanceInBoard(player._id, groupId, savedAttendance);
       if (selectedPlayer?._id === player._id) {
         setSelectedPlayer((currentPlayer) => currentPlayer ? {
@@ -1354,6 +1375,7 @@ const AttendancePage = () => {
           todayAttendance: savedAttendance
         } : currentPlayer);
       }
+      await refreshPlayerAttendanceCount(player._id, groupId);
       setMessage('Attendance recorded');
     } catch (err) {
       if (latestAttendanceActionRef.current.get(playerDateKey) === actionSequence) {
@@ -1413,6 +1435,7 @@ const AttendancePage = () => {
       if (latestAttendanceActionRef.current.get(playerDateKey) !== actionSequence) {
         return;
       }
+      await refreshPlayerAttendanceCount(player._id, attendanceGroupId);
       setMessage('Attendance cancelled');
     } catch (err) {
       if (latestAttendanceActionRef.current.get(playerDateKey) === actionSequence) {
