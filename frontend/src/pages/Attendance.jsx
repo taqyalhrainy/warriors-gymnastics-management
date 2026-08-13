@@ -2486,34 +2486,66 @@ const AttendancePage = () => {
     return meaningfulCycles;
   };
   const buildSubscriptionHistory = (entries = [], player = null) => {
-    const cyclesByKey = new Map();
     const sortedEntries = [...entries].sort((first, second) => new Date(first.changedAt) - new Date(second.changedAt));
     const initialEntry = sortedEntries.find((entry) => entry.after && entry.action === 'create');
-    upsertSubscriptionCycle(cyclesByKey, initialEntry?.after || player, initialEntry?.changedAt || new Date().toISOString(), true);
+    const cycles = [];
+    const makeCycle = (snapshot, changedAt, allowInitialFallback = false) => {
+      const key = getSubscriptionHistoryKey(snapshot, allowInitialFallback);
+      if (!snapshot || !key) return null;
+      return {
+        key,
+        changedAt,
+        startDate: getSubscriptionStartValue(snapshot, allowInitialFallback),
+        endDate: snapshot.endDate,
+        packageName: snapshot.packageName || '',
+        packageClasses: Number(snapshot.packageClasses || 0),
+        packageHours: Number(snapshot.packageHours || 0),
+        payment: Number(snapshot.payment || 0)
+      };
+    };
+    const initialCycle = makeCycle(initialEntry?.after || player, initialEntry?.changedAt || new Date().toISOString(), true);
+    if (initialCycle) {
+      cycles.push(initialCycle);
+    }
+
     sortedEntries.forEach((entry) => {
+      if (entry.action === 'create') return;
       const changedFields = entry.changedFields || [];
       const subscriptionFields = ['startDate', 'endDate', 'packageName', 'packageClasses', 'packageHours', 'payment'];
       const isSubscriptionSnapshot = entry.after?.startDate
         && changedFields.some((field) => subscriptionFields.includes(field));
       if (isSubscriptionSnapshot) {
         const startsNewSubscription = changedFields.includes('currentSubscriptionStartedAt');
+        const nextCycle = makeCycle(entry.after, entry.changedAt);
+        if (!nextCycle) return;
+
         if (startsNewSubscription) {
-          upsertSubscriptionCycle(cyclesByKey, entry.after, entry.changedAt);
+          const existingIndex = cycles.findIndex((cycle) => cycle.key === nextCycle.key);
+          if (existingIndex >= 0) {
+            cycles[existingIndex] = nextCycle;
+          } else {
+            cycles.push(nextCycle);
+          }
           return;
         }
 
-        const updatedExistingCycle = entry.before?.startDate
-          ? deleteSubscriptionCycle(cyclesByKey, entry.before)
-          : cyclesByKey.has(getSubscriptionHistoryKey(entry.after));
-        if (updatedExistingCycle) {
-          upsertSubscriptionCycle(cyclesByKey, entry.after, entry.changedAt);
+        if (cycles.length) {
+          cycles[cycles.length - 1] = nextCycle;
         }
       }
     });
-    if (player) {
-      upsertSubscriptionCycle(cyclesByKey, player, new Date().toISOString(), cyclesByKey.size === 0);
+
+    const currentCycle = makeCycle(player, new Date().toISOString(), cycles.length === 0);
+    if (currentCycle) {
+      const existingIndex = cycles.findIndex((cycle) => cycle.key === currentCycle.key);
+      if (existingIndex >= 0) {
+        cycles[existingIndex] = currentCycle;
+      } else if (!cycles.length) {
+        cycles.push(currentCycle);
+      }
     }
-    return normalizeSubscriptionCycles([...cyclesByKey.values()])
+
+    return normalizeSubscriptionCycles(cycles)
       .sort((first, second) => new Date(second.startDate) - new Date(first.startDate));
   };
   const getAttendanceRecordsForSubscription = (records, cycle, cycles) => {
