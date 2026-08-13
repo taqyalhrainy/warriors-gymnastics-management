@@ -1972,27 +1972,22 @@ const AttendancePage = () => {
     }
   };
 
-  const handleApplyDueAdjustment = async (mode = 'add') => {
+  const handleSetAttendanceDue = async () => {
     if (!selectedPlayer?._id) return;
-    const amount = parseLocalizedNumber(dueAdjustmentForm);
-    if (!amount && mode !== 'clear') return;
+    const targetDue = Math.max(0, parseLocalizedNumber(dueAdjustmentForm));
     const currentAdjustment = Number(selectedPlayer.dueAdjustment || 0);
     const currentPreviousDue = Number(selectedPlayer.previousDueBalance || 0);
     const currentDue = Number(selectedPlayer.paymentRemainingAmount || 0);
     const naturalDue = currentDue + currentAdjustment;
-    const nextAdjustment = mode === 'clear'
-      ? 0
-      : (mode === 'increase' ? currentAdjustment : Math.max(0, currentAdjustment + Math.min(amount, currentDue)));
-    const nextPreviousDue = mode === 'increase'
-      ? currentPreviousDue + amount
-      : currentPreviousDue;
+    const nextAdjustment = targetDue <= naturalDue ? naturalDue - targetDue : 0;
+    const nextPreviousDue = targetDue <= naturalDue
+      ? currentPreviousDue
+      : currentPreviousDue + (targetDue - naturalDue);
     const optimisticPlayer = {
       ...selectedPlayer,
       previousDueBalance: nextPreviousDue,
       dueAdjustment: nextAdjustment,
-      paymentRemainingAmount: mode === 'increase'
-        ? currentDue + amount
-        : Math.max(0, naturalDue - nextAdjustment)
+      paymentRemainingAmount: targetDue
     };
     const previousPlayer = selectedPlayer;
 
@@ -2015,7 +2010,7 @@ const AttendancePage = () => {
       };
       patchExistingPlayerInAttendanceBoard(confirmedPlayer);
       setSelectedPlayerIfOpen(confirmedPlayer);
-      setMessage(mode === 'increase' ? 'Due increased' : (mode === 'clear' ? 'Due adjustment cleared' : 'Due reduced'));
+      setMessage('Due updated');
     } catch (error) {
       patchExistingPlayerInAttendanceBoard(previousPlayer);
       setSelectedPlayerIfOpen(previousPlayer);
@@ -2458,6 +2453,12 @@ const AttendancePage = () => {
       payment: Number(snapshot.payment || 0)
     });
   };
+  const deleteSubscriptionCycle = (cyclesByKey, snapshot, allowInitialFallback = false) => {
+    const key = getSubscriptionHistoryKey(snapshot, allowInitialFallback);
+    if (key) {
+      cyclesByKey.delete(key);
+    }
+  };
   const cycleHasPackageDetails = (cycle) => (
     Boolean(cycle.packageName)
     || Number(cycle.packageClasses || 0) > 0
@@ -2497,6 +2498,12 @@ const AttendancePage = () => {
       const isSubscriptionSnapshot = entry.after?.startDate
         && changedFields.some((field) => subscriptionFields.includes(field));
       if (isSubscriptionSnapshot) {
+        const startsNewSubscription = changedFields.includes('currentSubscriptionStartedAt')
+          || changedFields.includes('currentSubscriptionAttendanceIds')
+          || changedFields.includes('previousDueBalance');
+        if (!startsNewSubscription && entry.before?.startDate) {
+          deleteSubscriptionCycle(cyclesByKey, entry.before);
+        }
         upsertSubscriptionCycle(cyclesByKey, entry.after, entry.changedAt);
       }
     });
@@ -2948,7 +2955,6 @@ const AttendancePage = () => {
                       <div>
                         <span>Attendance due</span>
                         <strong>Due {formatCompactMoney(selectedPlayer.paymentRemainingAmount || 0)}</strong>
-                        <small>Manual reduction {formatCompactMoney(selectedPlayer.dueAdjustment || 0)}</small>
                       </div>
                       <div className="due-adjustment-actions">
                         <input
@@ -2956,34 +2962,16 @@ const AttendancePage = () => {
                           inputMode="decimal"
                           value={dueAdjustmentForm}
                           onChange={(event) => setDueAdjustmentForm(normalizeDigits(event.target.value))}
-                          placeholder="Amount"
+                          placeholder="New due amount"
                         />
                         <button
                           type="button"
                           className="btn-secondary"
-                          onClick={() => handleApplyDueAdjustment('increase')}
-                          disabled={isSavingDueAdjustment || !parseLocalizedNumber(dueAdjustmentForm)}
+                          onClick={handleSetAttendanceDue}
+                          disabled={isSavingDueAdjustment || dueAdjustmentForm === ''}
                         >
-                          {isSavingDueAdjustment ? 'Saving...' : 'Add due'}
+                          {isSavingDueAdjustment ? 'Saving...' : 'Edit due'}
                         </button>
-                        <button
-                          type="button"
-                          className="btn-secondary"
-                          onClick={() => handleApplyDueAdjustment('add')}
-                          disabled={isSavingDueAdjustment || !parseLocalizedNumber(dueAdjustmentForm)}
-                        >
-                          {isSavingDueAdjustment ? 'Saving...' : 'Reduce due'}
-                        </button>
-                        {Number(selectedPlayer.dueAdjustment || 0) > 0 && (
-                          <button
-                            type="button"
-                            className="btn-secondary"
-                            onClick={() => handleApplyDueAdjustment('clear')}
-                            disabled={isSavingDueAdjustment}
-                          >
-                            Clear reduction
-                          </button>
-                        )}
                       </div>
                     </div>
                     <div className={`student-info-grid-full subscription-attention-box${selectedPlayer.subscriptionNeedsAttention ? ' is-active' : ''}`}>
@@ -3024,14 +3012,6 @@ const AttendancePage = () => {
                         onClick={() => setShowSelectedPlayerAttendanceHistory((current) => !current)}
                       >
                         Attendance History
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        onClick={handleStartEditSelectedPlayer}
-                        disabled={Boolean(pendingSelectedPlayerMutation)}
-                      >
-                        Edit current class dates
                       </button>
                       {selectedPlayerSubscriptionHistory.length > 1 && (
                         <button
