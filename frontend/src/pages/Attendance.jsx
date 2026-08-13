@@ -2456,8 +2456,9 @@ const AttendancePage = () => {
   const deleteSubscriptionCycle = (cyclesByKey, snapshot, allowInitialFallback = false) => {
     const key = getSubscriptionHistoryKey(snapshot, allowInitialFallback);
     if (key) {
-      cyclesByKey.delete(key);
+      return cyclesByKey.delete(key);
     }
+    return false;
   };
   const cycleHasPackageDetails = (cycle) => (
     Boolean(cycle.packageName)
@@ -2487,10 +2488,7 @@ const AttendancePage = () => {
   const buildSubscriptionHistory = (entries = [], player = null) => {
     const cyclesByKey = new Map();
     const sortedEntries = [...entries].sort((first, second) => new Date(first.changedAt) - new Date(second.changedAt));
-    const initialEntry = sortedEntries.find((entry) => (
-      entry.after
-      && (entry.action === 'create' || Number(entry.after.packageClasses || 0) > 0 || entry.after.packageName)
-    ));
+    const initialEntry = sortedEntries.find((entry) => entry.after && entry.action === 'create');
     upsertSubscriptionCycle(cyclesByKey, initialEntry?.after || player, initialEntry?.changedAt || new Date().toISOString(), true);
     sortedEntries.forEach((entry) => {
       const changedFields = entry.changedFields || [];
@@ -2499,12 +2497,18 @@ const AttendancePage = () => {
         && changedFields.some((field) => subscriptionFields.includes(field));
       if (isSubscriptionSnapshot) {
         const startsNewSubscription = changedFields.includes('currentSubscriptionStartedAt')
-          || changedFields.includes('currentSubscriptionAttendanceIds')
-          || changedFields.includes('previousDueBalance');
-        if (!startsNewSubscription && entry.before?.startDate) {
-          deleteSubscriptionCycle(cyclesByKey, entry.before);
+          && changedFields.includes('currentSubscriptionAttendanceIds');
+        if (startsNewSubscription) {
+          upsertSubscriptionCycle(cyclesByKey, entry.after, entry.changedAt);
+          return;
         }
-        upsertSubscriptionCycle(cyclesByKey, entry.after, entry.changedAt);
+
+        const updatedExistingCycle = entry.before?.startDate
+          ? deleteSubscriptionCycle(cyclesByKey, entry.before)
+          : cyclesByKey.has(getSubscriptionHistoryKey(entry.after));
+        if (updatedExistingCycle) {
+          upsertSubscriptionCycle(cyclesByKey, entry.after, entry.changedAt);
+        }
       }
     });
     if (player) {
