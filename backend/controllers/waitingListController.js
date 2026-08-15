@@ -21,6 +21,7 @@ const getWaitingListEntries = async (req, res, next) => {
 
 const validateWaitingListPayload = async (payload) => {
   const { playerName, playerAge, parentName, parentPhone, desiredGroupId, notes } = payload;
+  const listType = payload.listType === 'data' ? 'data' : 'waiting';
   const rawGroupIds = Array.isArray(payload.desiredGroupIds)
     ? payload.desiredGroupIds
     : [desiredGroupId].filter(Boolean);
@@ -46,6 +47,7 @@ const validateWaitingListPayload = async (payload) => {
       parentPhone: parentPhone || '',
       desiredGroupId: desiredGroupIds[0] || undefined,
       desiredGroupIds,
+      listType,
       notes: notes || ''
     }
   };

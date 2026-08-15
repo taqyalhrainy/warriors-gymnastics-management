@@ -12,6 +12,7 @@ const initialWaitingForm = {
   playerAge: '',
   parentPhone: '',
   desiredGroupIds: [],
+  listType: 'waiting',
   notes: ''
 };
 
@@ -25,6 +26,7 @@ const PlayersPage = () => {
   const [isWaitingExpanded, setIsWaitingExpanded] = useState(false);
   const [isWaitingGroupPickerOpen, setIsWaitingGroupPickerOpen] = useState(false);
   const [waitingMessage, setWaitingMessage] = useState('');
+  const [waitingView, setWaitingView] = useState('waiting');
   const [waitingDayFilter, setWaitingDayFilter] = useState('all');
   const [waitingAgeFilter, setWaitingAgeFilter] = useState('');
   const [search, setSearch] = useState('');
@@ -134,7 +136,7 @@ const PlayersPage = () => {
         setWaitingList((current) => current.map((item) => (item._id === entry._id ? entry : item)));
         setWaitingMessage('Waiting list entry updated.');
       } else {
-        const entry = await createWaitingListEntry(waitingForm);
+        const entry = await createWaitingListEntry({ ...waitingForm, listType: 'waiting' });
         setWaitingList((current) => [...current, entry]);
         setWaitingMessage('Player added to the waiting list.');
       }
@@ -154,6 +156,7 @@ const PlayersPage = () => {
       desiredGroupIds: (entry.desiredGroupIds?.length ? entry.desiredGroupIds : [entry.desiredGroupId].filter(Boolean))
         .map((group) => group?._id || group)
         .filter(Boolean),
+      listType: entry.listType || 'waiting',
       notes: entry.notes || ''
     });
     setEditingWaitingEntryId(entry._id);
@@ -164,6 +167,21 @@ const PlayersPage = () => {
     setWaitingForm(initialWaitingForm);
     setEditingWaitingEntryId('');
     setWaitingMessage('');
+  };
+
+  const handleMoveWaitingToData = async () => {
+    if (!editingWaitingEntryId) return;
+    setWaitingMessage('');
+    try {
+      const entry = await updateWaitingListEntry(editingWaitingEntryId, { ...waitingForm, listType: 'data' });
+      setWaitingList((current) => current.map((item) => (item._id === entry._id ? entry : item)));
+      setWaitingForm(initialWaitingForm);
+      setEditingWaitingEntryId('');
+      setWaitingView('data');
+      setWaitingMessage('Moved to Data list.');
+    } catch (error) {
+      setWaitingMessage(error.response?.data?.message || 'Unable to move entry to Data list.');
+    }
   };
 
   const closeWaitingListModal = () => {
@@ -201,7 +219,9 @@ const PlayersPage = () => {
     .filter(Boolean));
 
   const waitingDayOptions = [...new Set(groups.flatMap((group) => group.days || []))];
+  const waitingViewEntries = waitingList.filter((entry) => (entry.listType || 'waiting') === waitingView);
   const filteredWaitingList = waitingList
+    .filter((entry) => (entry.listType || 'waiting') === waitingView)
     .filter((entry) => waitingDayFilter === 'all' || getWaitingEntryDays(entry).has(waitingDayFilter))
     .filter((entry) => !waitingAgeFilter || Number(entry.playerAge) === Number(waitingAgeFilter));
 
@@ -302,7 +322,7 @@ const PlayersPage = () => {
                     <h2>Waiting List</h2>
                     <p>Interested players without adding them to Players yet.</p>
                   </div>
-                  <strong>{waitingList.length}</strong>
+                  <strong>{waitingViewEntries.length}</strong>
                 </div>
                 <div className="waiting-modal-actions">
                   <button type="button" className="waiting-icon-button" onClick={() => setIsWaitingExpanded((current) => !current)}>
@@ -314,6 +334,23 @@ const PlayersPage = () => {
 
               {waitingMessage && <p className="alert-info">{waitingMessage}</p>}
 
+              <div className="waiting-list-tabs" role="tablist" aria-label="Waiting list views">
+                <button
+                  type="button"
+                  className={waitingView === 'waiting' ? 'is-active' : ''}
+                  onClick={() => setWaitingView('waiting')}
+                >
+                  Waiting
+                </button>
+                <button
+                  type="button"
+                  className={waitingView === 'data' ? 'is-active' : ''}
+                  onClick={() => setWaitingView('data')}
+                >
+                  Data
+                </button>
+              </div>
+
               <form className="waiting-list-form" onSubmit={handleWaitingSubmit}>
                 <label>
                   <span>Player name</span>
@@ -321,7 +358,7 @@ const PlayersPage = () => {
                 </label>
                 <label>
                   <span>Age</span>
-                  <input name="playerAge" type="number" min="0" max="120" value={waitingForm.playerAge} onChange={handleWaitingFormChange} />
+                  <input name="playerAge" type="number" min="0" max="120" step="0.1" value={waitingForm.playerAge} onChange={handleWaitingFormChange} />
                 </label>
                 <label>
                   <span>Parent phone</span>
@@ -358,6 +395,9 @@ const PlayersPage = () => {
                   <input name="notes" value={waitingForm.notes} onChange={handleWaitingFormChange} />
                 </label>
                 <button className="btn-primary" type="submit">{editingWaitingEntryId ? 'Save changes' : 'Save to waiting list'}</button>
+                {editingWaitingEntryId && waitingForm.listType !== 'data' && (
+                  <button className="btn-secondary" type="button" onClick={handleMoveWaitingToData}>Move to Data list</button>
+                )}
                 {editingWaitingEntryId && (
                   <button className="btn-secondary" type="button" onClick={handleWaitingCancelEdit}>Cancel edit</button>
                 )}
@@ -373,7 +413,7 @@ const PlayersPage = () => {
                 </label>
                 <label>
                   <span>Age</span>
-                  <input type="number" min="0" max="120" value={waitingAgeFilter} onChange={(event) => setWaitingAgeFilter(event.target.value)} placeholder="All ages" />
+                  <input type="number" min="0" max="120" step="0.1" value={waitingAgeFilter} onChange={(event) => setWaitingAgeFilter(event.target.value)} placeholder="All ages" />
                 </label>
               </div>
 
@@ -407,7 +447,7 @@ const PlayersPage = () => {
                         </td>
                       </tr>
                     )) : (
-                      <tr><td colSpan="7">No waiting list entries yet.</td></tr>
+                      <tr><td colSpan="7">No {waitingView === 'data' ? 'data' : 'waiting list'} entries yet.</td></tr>
                     )}
                   </tbody>
                 </table>

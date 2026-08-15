@@ -999,6 +999,33 @@ body.theme-light .new-subscription-warning {
   background: var(--surface);
 }
 
+.waiting-list-tabs {
+  display: inline-flex;
+  gap: 6px;
+  padding: 5px;
+  margin: 0 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-alt) 78%, transparent);
+}
+
+.waiting-list-tabs button {
+  min-height: 38px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+  font-weight: 900;
+  box-shadow: none;
+}
+
+.waiting-list-tabs button.is-active {
+  color: #fff;
+  background: linear-gradient(135deg, #ef4444, #111827);
+  box-shadow: 0 12px 28px rgba(239, 68, 68, 0.22);
+}
+
 .waiting-list-form {
   display: grid;
   grid-template-columns: repeat(4, minmax(140px, 1fr));
