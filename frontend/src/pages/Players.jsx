@@ -151,7 +151,7 @@ const PlayersPage = () => {
   const handleWaitingEdit = (entry) => {
     setWaitingForm({
       playerName: entry.playerName || '',
-      playerAge: typeof entry.playerAge === 'number' ? String(entry.playerAge) : '',
+      playerAge: entry.playerAge ?? '',
       parentPhone: entry.parentPhone || '',
       desiredGroupIds: (entry.desiredGroupIds?.length ? entry.desiredGroupIds : [entry.desiredGroupId].filter(Boolean))
         .map((group) => group?._id || group)
@@ -169,18 +169,18 @@ const PlayersPage = () => {
     setWaitingMessage('');
   };
 
-  const handleMoveWaitingToData = async () => {
+  const handleMoveWaitingEntry = async (listType) => {
     if (!editingWaitingEntryId) return;
     setWaitingMessage('');
     try {
-      const entry = await updateWaitingListEntry(editingWaitingEntryId, { ...waitingForm, listType: 'data' });
+      const entry = await updateWaitingListEntry(editingWaitingEntryId, { ...waitingForm, listType });
       setWaitingList((current) => current.map((item) => (item._id === entry._id ? entry : item)));
       setWaitingForm(initialWaitingForm);
       setEditingWaitingEntryId('');
-      setWaitingView('data');
-      setWaitingMessage('Moved to Data list.');
+      setWaitingView(listType);
+      setWaitingMessage(listType === 'data' ? 'Moved to Data list.' : 'Moved to Waiting list.');
     } catch (error) {
-      setWaitingMessage(error.response?.data?.message || 'Unable to move entry to Data list.');
+      setWaitingMessage(error.response?.data?.message || 'Unable to move entry.');
     }
   };
 
@@ -223,7 +223,7 @@ const PlayersPage = () => {
   const filteredWaitingList = waitingList
     .filter((entry) => (entry.listType || 'waiting') === waitingView)
     .filter((entry) => waitingDayFilter === 'all' || getWaitingEntryDays(entry).has(waitingDayFilter))
-    .filter((entry) => !waitingAgeFilter || Number(entry.playerAge) === Number(waitingAgeFilter));
+    .filter((entry) => !waitingAgeFilter || String(entry.playerAge ?? '').trim() === waitingAgeFilter.trim());
 
   return (
     <div className="dashboard-layout">
@@ -358,7 +358,7 @@ const PlayersPage = () => {
                 </label>
                 <label>
                   <span>Age</span>
-                  <input name="playerAge" type="number" min="0" max="120" step="0.1" value={waitingForm.playerAge} onChange={handleWaitingFormChange} />
+                  <input name="playerAge" inputMode="decimal" value={waitingForm.playerAge} onChange={handleWaitingFormChange} />
                 </label>
                 <label>
                   <span>Parent phone</span>
@@ -396,7 +396,10 @@ const PlayersPage = () => {
                 </label>
                 <button className="btn-primary" type="submit">{editingWaitingEntryId ? 'Save changes' : 'Save to waiting list'}</button>
                 {editingWaitingEntryId && waitingForm.listType !== 'data' && (
-                  <button className="btn-secondary" type="button" onClick={handleMoveWaitingToData}>Move to Data list</button>
+                  <button className="btn-secondary" type="button" onClick={() => handleMoveWaitingEntry('data')}>Move to Data list</button>
+                )}
+                {editingWaitingEntryId && waitingForm.listType === 'data' && (
+                  <button className="btn-secondary" type="button" onClick={() => handleMoveWaitingEntry('waiting')}>Move to Waiting list</button>
                 )}
                 {editingWaitingEntryId && (
                   <button className="btn-secondary" type="button" onClick={handleWaitingCancelEdit}>Cancel edit</button>
@@ -413,7 +416,7 @@ const PlayersPage = () => {
                 </label>
                 <label>
                   <span>Age</span>
-                  <input type="number" min="0" max="120" step="0.1" value={waitingAgeFilter} onChange={(event) => setWaitingAgeFilter(event.target.value)} placeholder="All ages" />
+                  <input inputMode="decimal" value={waitingAgeFilter} onChange={(event) => setWaitingAgeFilter(event.target.value)} placeholder="All ages" />
                 </label>
               </div>
 

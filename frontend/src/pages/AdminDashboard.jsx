@@ -281,7 +281,7 @@ const AdminDashboard = () => {
   const handleWaitingEdit = (entry) => {
     setWaitingForm({
       playerName: entry.playerName || '',
-      playerAge: typeof entry.playerAge === 'number' ? String(entry.playerAge) : '',
+      playerAge: entry.playerAge ?? '',
       parentName: entry.parentName || '',
       parentPhone: entry.parentPhone || '',
       desiredGroupId: entry.desiredGroupId?._id || entry.desiredGroupId || '',
@@ -680,7 +680,7 @@ const AdminDashboard = () => {
                 </label>
                 <label>
                   <span>{copy.playerAge}</span>
-                  <input name="playerAge" type="number" min="0" max="120" value={waitingForm.playerAge} onChange={handleWaitingFormChange} />
+                  <input name="playerAge" inputMode="decimal" value={waitingForm.playerAge} onChange={handleWaitingFormChange} />
                 </label>
                 <label>
                   <span>{copy.parentName}</span>

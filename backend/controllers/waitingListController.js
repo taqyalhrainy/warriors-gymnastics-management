@@ -28,11 +28,6 @@ const validateWaitingListPayload = async (payload) => {
     : [desiredGroupId].filter(Boolean);
   const desiredGroupIds = [...new Set(rawGroupIds.filter(validateObjectId).map(String))];
 
-  const parsedPlayerAge = playerAge === '' || typeof playerAge === 'undefined' ? undefined : Number(playerAge);
-  if (typeof parsedPlayerAge !== 'undefined' && (!Number.isFinite(parsedPlayerAge) || parsedPlayerAge < 0 || parsedPlayerAge > 120)) {
-    return { error: { status: 400, message: 'Player age must be a valid number.' } };
-  }
-
   if (desiredGroupIds.length) {
     const groups = await TrainingGroup.find({ _id: { $in: desiredGroupIds } });
     if (groups.length !== desiredGroupIds.length) {
@@ -43,7 +38,7 @@ const validateWaitingListPayload = async (payload) => {
   return {
     data: {
       playerName: playerName || '',
-      playerAge: parsedPlayerAge,
+      playerAge: typeof playerAge === 'undefined' || playerAge === null ? '' : String(playerAge),
       parentName: parentName || '',
       parentPhone: parentPhone || '',
       desiredGroupId: desiredGroupIds[0] || undefined,

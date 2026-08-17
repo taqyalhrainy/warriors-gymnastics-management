@@ -91,7 +91,7 @@ const buildPaymentRestorePayload = (snapshot) => ({
 
 const buildWaitingListRestorePayload = (snapshot, fallbackUserId) => ({
   playerName: snapshot.playerName || '',
-  playerAge: typeof snapshot.playerAge === 'number' ? snapshot.playerAge : undefined,
+  playerAge: typeof snapshot.playerAge === 'undefined' || snapshot.playerAge === null ? '' : String(snapshot.playerAge),
   parentName: snapshot.parentName || '',
   parentPhone: snapshot.parentPhone || '',
   desiredGroupId: asObjectId(snapshot.desiredGroupId || snapshot.desiredGroupIds?.[0]) || undefined,

@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const waitingListEntrySchema = new mongoose.Schema({
   playerName: { type: String, trim: true, default: '' },
-  playerAge: { type: Number, min: 0, max: 120 },
+  playerAge: { type: String, trim: true, default: '' },
   parentName: { type: String, trim: true, default: '' },
   parentPhone: { type: String, trim: true, default: '' },
   desiredGroupId: { type: mongoose.Schema.Types.ObjectId, ref: 'TrainingGroup' },

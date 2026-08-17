@@ -115,7 +115,7 @@ const snapshotWaitingListDocument = (entryDocument) => {
   return {
     _id: normalizeId(entry?._id),
     playerName: entry?.playerName || '',
-    playerAge: typeof entry?.playerAge === 'number' ? entry.playerAge : undefined,
+    playerAge: typeof entry?.playerAge === 'undefined' || entry?.playerAge === null ? '' : String(entry.playerAge),
     parentName: entry?.parentName || '',
     parentPhone: entry?.parentPhone || '',
     desiredGroupId: normalizeId(entry?.desiredGroupId || groups[0]),
