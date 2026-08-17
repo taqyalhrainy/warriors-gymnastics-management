@@ -499,11 +499,15 @@ const AdminDashboard = () => {
       setWaitingList(waitingRows);
       setDashboardPlayers(playerRows);
       setExpiredAlertPlayers(getExpiredAlertPlayers(playerRows));
-      const skipped = selectedSnapshotScopes.reduce((sum, scope) => sum + Number(result[scope]?.skipped || 0), 0);
-      const restoredParts = selectedSnapshotScopes
+      const completedScopes = result.scopes?.length ? result.scopes : selectedSnapshotScopes;
+      const skipped = completedScopes.reduce((sum, scope) => sum + Number(result[scope]?.skipped || 0), 0);
+      const restoredParts = completedScopes
         .map((scope) => `${scope}: ${result[scope]?.restored || 0}`)
         .join(', ');
-      setSnapshotMessage(`Restored ${restoredParts}.${skipped ? ` Skipped ${skipped} incomplete records.` : ''}`);
+      const skippedUnavailable = result.skippedUnavailableScopes?.length
+        ? ` Skipped unavailable sections: ${result.skippedUnavailableScopes.join(', ')}.`
+        : '';
+      setSnapshotMessage(`Restored ${restoredParts}.${skipped ? ` Skipped ${skipped} incomplete records.` : ''}${skippedUnavailable}`);
     } catch (err) {
       setSnapshotMessage(err.response?.data?.message || 'Unable to restore snapshot.');
     } finally {

@@ -463,6 +463,7 @@ const runSnapshotRestore = async ({ jobId, asOf, scopes, reqMeta }) => {
     job.result = {
       asOf: asOf.toISOString(),
       scopes,
+      skippedUnavailableScopes: job.skippedUnavailableScopes || [],
       players: playerResult,
       payments: paymentResult,
       waitingList: waitingListResult
@@ -480,7 +481,7 @@ const restoreHistorySnapshot = async (req, res, next) => {
   try {
     const { at, confirm } = req.body || {};
     const requestedScopes = Array.isArray(req.body?.scopes) ? req.body.scopes : RESTORE_SCOPES;
-    const scopes = [...new Set(requestedScopes)].filter((scope) => RESTORE_SCOPES.includes(scope));
+    let scopes = [...new Set(requestedScopes)].filter((scope) => RESTORE_SCOPES.includes(scope));
     if (confirm !== 'RESTORE') {
       return res.status(400).json({ message: 'Snapshot restore requires confirmation.' });
     }
@@ -503,11 +504,13 @@ const restoreHistorySnapshot = async (req, res, next) => {
     const unavailableScopes = availabilityChecks.filter(({ availableSince }) => (
       availableSince && new Date(availableSince) > asOf
     ));
-    if (unavailableScopes.length) {
+    scopes = scopes.filter((scope) => !unavailableScopes.some((item) => item.scope === scope));
+    if (!scopes.length) {
       return res.status(400).json({
-        message: `Cannot restore ${unavailableScopes.map((item) => item.scope).join(', ')} before its first saved snapshot.`
+        message: `Cannot restore before the first saved snapshot for ${unavailableScopes.map((item) => item.scope).join(', ')}.`
       });
     }
+    const skippedUnavailableScopes = unavailableScopes.map((item) => item.scope);
 
     const jobId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     snapshotRestoreJobs.set(jobId, {
@@ -516,6 +519,7 @@ const restoreHistorySnapshot = async (req, res, next) => {
       message: 'Snapshot restore queued.',
       asOf: asOf.toISOString(),
       scopes,
+      skippedUnavailableScopes,
       startedAt: new Date(),
       result: null
     });
@@ -532,7 +536,8 @@ const restoreHistorySnapshot = async (req, res, next) => {
       status: 'queued',
       message: 'Snapshot restore started.',
       asOf: asOf.toISOString(),
-      scopes
+      scopes,
+      skippedUnavailableScopes
     });
   } catch (error) {
     next(error);
