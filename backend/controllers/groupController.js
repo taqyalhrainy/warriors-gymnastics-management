@@ -301,22 +301,22 @@ const getGroupPlayers = async (req, res, next) => {
         transactionType: { $in: ['Full payment', 'Partial payment'] }
       }).select('playerId paidAmount paymentDate createdAt transactionType').lean()
       : [];
-    const presentCountByPlayerId = new Map();
+    const presentDatesByPlayerId = new Map();
     const paidByPlayerId = new Map();
 
     presentRecords.forEach((record) => {
       const playerId = String(record.playerId);
       const cycleStart = cycleStartByPlayerId.get(playerId);
-      if (!cycleStart) {
-        presentCountByPlayerId.set(playerId, (presentCountByPlayerId.get(playerId) || 0) + 1);
-        return;
-      }
+      const recordDate = getDateOnly(record.date);
 
       const isExplicitlyCounted = explicitCurrentRecordIdsByPlayerId.get(playerId)?.has(String(record._id));
-      const isInCurrentCycle = isExplicitlyCounted || getDateOnly(record.date) >= getDateOnly(cycleStart);
+      const isInCurrentCycle = !cycleStart || isExplicitlyCounted || recordDate >= getDateOnly(cycleStart);
 
       if (isInCurrentCycle) {
-        presentCountByPlayerId.set(playerId, (presentCountByPlayerId.get(playerId) || 0) + 1);
+        if (!presentDatesByPlayerId.has(playerId)) {
+          presentDatesByPlayerId.set(playerId, new Set());
+        }
+        presentDatesByPlayerId.get(playerId).add(recordDate.toISOString().split('T')[0]);
       }
     });
 
@@ -332,7 +332,10 @@ const getGroupPlayers = async (req, res, next) => {
     res.json(players.map((player) => ({
       ...formatPlayerResponse(player),
       attendanceGroupId: id,
-      attendancePresentCount: presentCountByPlayerId.get(String(player._id)) || 0,
+      attendancePresentCount: Math.min(
+        Number(player.packageClasses || player.subscriptionId?.totalSessions || 0) || Number.MAX_SAFE_INTEGER,
+        presentDatesByPlayerId.get(String(player._id))?.size || 0
+      ),
       paymentRemainingAmount: Math.max(
         0,
         Number(player.previousDueBalance || 0)

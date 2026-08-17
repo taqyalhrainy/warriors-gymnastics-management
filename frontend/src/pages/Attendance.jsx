@@ -187,7 +187,7 @@ const getPlayerPackageCounter = (player) => {
   const used = Number(player?.attendancePresentCount ?? subscription?.usedSessions ?? 0);
 
   return {
-    used: Math.max(0, used),
+    used: Math.max(0, total ? Math.min(used, total) : used),
     total: Math.max(0, total)
   };
 };
@@ -1265,10 +1265,14 @@ const AttendancePage = () => {
       return Number(player?.attendancePresentCount || 0);
     }
 
-    return records.filter((record) => (
-      record.status === 'present'
-      && isAttendanceRecordInSubscriptionCycle(record, player, cycleStartOverride)
-    )).length;
+    const countedDates = new Set();
+    records.forEach((record) => {
+      if (record.status !== 'present' || !isAttendanceRecordInSubscriptionCycle(record, player, cycleStartOverride)) {
+        return;
+      }
+      countedDates.add(getDateInputValue(record.date));
+    });
+    return countedDates.size;
   };
 
   const withAttendancePresentCount = (player, records, cycleStartOverride = '', groupId = '') => {
