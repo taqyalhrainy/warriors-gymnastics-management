@@ -2331,6 +2331,12 @@ body.attendance-touch-dragging {
   color: #b91c1c;
 }
 
+.attendance-money-due.is-credit {
+  border-color: rgba(34, 197, 94, 0.45);
+  background: rgba(220, 252, 231, 0.92);
+  color: #047857;
+}
+
 .attendance-expired-badge,
 .attendance-frozen-badge,
 .attendance-admin-status-badge {

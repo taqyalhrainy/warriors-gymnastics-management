@@ -193,7 +193,22 @@ const getPlayerPackageCounter = (player) => {
 };
 
 const formatCompactMoney = (value) => Number(value || 0).toLocaleString('en-US');
-const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
+const parseManualAttendanceDue = (value) => {
+  const normalized = normalizeDigits(value).trim();
+  const amount = Math.abs(parseLocalizedNumber(normalized));
+  return normalized.startsWith('+') ? -amount : parseLocalizedNumber(normalized);
+};
+
+const getAttendanceMoneyState = (value) => {
+  const amount = Number(value || 0);
+  if (amount > 0) {
+    return { label: `Due ${formatCompactMoney(amount)}`, className: 'attendance-money-due' };
+  }
+  if (amount < 0) {
+    return { label: `Credit ${formatCompactMoney(Math.abs(amount))}`, className: 'attendance-money-due is-credit' };
+  }
+  return null;
+};
 
 const isPlayerSubscriptionExpired = (player) => {
   if (!player) {
@@ -628,18 +643,6 @@ const AttendancePage = () => {
 
     loadAttendanceBoard({ force: true, date: selectedAttendanceDate });
   }, [selectedAttendanceDate]);
-
-  useEffect(() => {
-    const handlePaymentsChanged = (event) => {
-      const payment = event.detail || {};
-      const paymentType = payment.transactionType || payment.requestedPayment?.transactionType;
-      if (payment.action !== 'create' || !isSubscriptionPaymentType(paymentType)) return;
-      const playerId = payment.playerId?._id || payment.playerId || payment.requestedPayment?.playerId;
-      patchPlayerPaymentDueInAttendanceBoard(playerId, Number(payment.paidAmount || payment.requestedPayment?.paidAmount || 0));
-    };
-    window.addEventListener('payments:changed', handlePaymentsChanged);
-    return () => window.removeEventListener('payments:changed', handlePaymentsChanged);
-  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -1126,27 +1129,6 @@ const AttendancePage = () => {
       attendanceBoardCacheTimestamp = Date.now();
       attendanceBoardCacheDate = selectedAttendanceDate;
       attendanceBoardCacheVersion = getCacheVersion();
-      groupColumnsRef.current = nextGroups;
-      return nextGroups;
-    });
-  };
-
-  const patchPlayerPaymentDueInAttendanceBoard = (playerId, paidAmount) => {
-    if (!playerId || !paidAmount) return;
-    setGroupColumns((currentGroups) => {
-      const nextGroups = currentGroups.map((group) => ({
-        ...group,
-        players: group.players.map((player) => (
-          getEntityId(player._id) === getEntityId(playerId)
-            ? {
-              ...player,
-              paymentRemainingAmount: Math.max(0, Number(player.paymentRemainingAmount || 0) - Number(paidAmount || 0))
-            }
-            : player
-        ))
-      }));
-
-      attendanceBoardCache = nextGroups;
       groupColumnsRef.current = nextGroups;
       return nextGroups;
     });
@@ -1757,9 +1739,7 @@ const AttendancePage = () => {
       endDate: subscriptionForm.endDate,
       status: selectedPlayer.status === 'expired' ? 'active' : selectedPlayer.status,
       subscriptionNeedsAttention: keepWarning,
-      previousDueBalance: Number(selectedPlayer.paymentRemainingAmount || 0),
-      dueAdjustment: 0,
-      paymentRemainingAmount: Number(selectedPlayer.paymentRemainingAmount || 0) + Number(selectedPlayer.payment || 0),
+      paymentRemainingAmount: Number(selectedPlayer.paymentRemainingAmount || 0),
       currentSubscriptionStartedAt: subscriptionForm.startDate,
       currentSubscriptionAttendanceIds: [],
       subscriptionId: selectedPlayer.subscriptionId && typeof selectedPlayer.subscriptionId === 'object'
@@ -1828,12 +1808,7 @@ const AttendancePage = () => {
         dueAdjustment: Number(savedPlayer.dueAdjustment || 0),
         paymentRemainingAmount: typeof savedPlayer.paymentRemainingAmount !== 'undefined'
           ? savedPlayer.paymentRemainingAmount
-          : Math.max(
-            0,
-            Number(savedPlayer.previousDueBalance || 0)
-              + Number(savedPlayer.payment || 0)
-              - Number(savedPlayer.dueAdjustment || 0)
-          )
+          : Number(savedPlayer.previousDueBalance || 0) - Number(savedPlayer.dueAdjustment || 0)
       };
 
       syncPlayerInAttendanceBoard(refreshedPlayerWithCount, attendanceRecords, getPlayerAttendanceGroupId(selectedPlayer));
@@ -1978,19 +1953,11 @@ const AttendancePage = () => {
 
   const handleSetAttendanceDue = async () => {
     if (!selectedPlayer?._id) return;
-    const targetDue = Math.max(0, parseLocalizedNumber(dueAdjustmentForm));
-    const currentAdjustment = Number(selectedPlayer.dueAdjustment || 0);
-    const currentPreviousDue = Number(selectedPlayer.previousDueBalance || 0);
-    const currentDue = Number(selectedPlayer.paymentRemainingAmount || 0);
-    const naturalDue = currentDue + currentAdjustment;
-    const nextAdjustment = targetDue <= naturalDue ? naturalDue - targetDue : 0;
-    const nextPreviousDue = targetDue <= naturalDue
-      ? currentPreviousDue
-      : currentPreviousDue + (targetDue - naturalDue);
+    const targetDue = parseManualAttendanceDue(dueAdjustmentForm);
     const optimisticPlayer = {
       ...selectedPlayer,
-      previousDueBalance: nextPreviousDue,
-      dueAdjustment: nextAdjustment,
+      previousDueBalance: targetDue,
+      dueAdjustment: 0,
       paymentRemainingAmount: targetDue
     };
     const previousPlayer = selectedPlayer;
@@ -2002,8 +1969,8 @@ const AttendancePage = () => {
       setSelectedPlayerIfOpen(optimisticPlayer);
       setDueAdjustmentForm('');
       await updatePlayer(selectedPlayer._id, {
-        previousDueBalance: nextPreviousDue,
-        dueAdjustment: nextAdjustment
+        previousDueBalance: targetDue,
+        dueAdjustment: 0
       });
       const refreshedPlayer = await getPlayer(selectedPlayer._id, { force: true });
       const attendanceRecords = await fetchAttendanceByPlayer(selectedPlayer._id);
@@ -2809,7 +2776,7 @@ const AttendancePage = () => {
                     const isFrozen = isPlayerFrozen(player);
                     const isExpired = isPlayerSubscriptionExpired(player);
                     const packageCounter = getPlayerPackageCounter(player);
-                    const remainingAmount = Number(player.paymentRemainingAmount || 0);
+                    const moneyState = getAttendanceMoneyState(player.paymentRemainingAmount);
                     const adminStatusLabel = isExpired
                       ? (player.subscriptionNeedsAttention ? 'Review' : 'Expired')
                       : (isFrozen ? t('frozenStatus') : (player.status && player.status !== 'active' ? player.status : ''));
@@ -2822,8 +2789,8 @@ const AttendancePage = () => {
                           <em className="attendance-package-counter">
                             {packageCounter.total > 0 ? `${packageCounter.used}/${packageCounter.total}` : packageCounter.used}
                           </em>
-                          {remainingAmount > 0 && (
-                            <em className="attendance-money-due">Due {formatCompactMoney(remainingAmount)}</em>
+                          {moneyState && (
+                            <em className={moneyState.className}>{moneyState.label}</em>
                           )}
                           {isExpired && (
                             <em className="attendance-expired-badge">{player.subscriptionNeedsAttention ? 'Review' : 'Expired'}</em>
@@ -3020,7 +2987,7 @@ const AttendancePage = () => {
                     <div className="student-info-grid-full due-adjustment-box">
                       <div>
                         <span>Attendance due</span>
-                        <strong>Due {formatCompactMoney(selectedPlayer.paymentRemainingAmount || 0)}</strong>
+                        <strong>{getAttendanceMoneyState(selectedPlayer.paymentRemainingAmount)?.label || 'Due 0'}</strong>
                       </div>
                       <div className="due-adjustment-actions">
                         <input
@@ -3028,7 +2995,7 @@ const AttendancePage = () => {
                           inputMode="decimal"
                           value={dueAdjustmentForm}
                           onChange={(event) => setDueAdjustmentForm(normalizeDigits(event.target.value))}
-                          placeholder="New due amount"
+                          placeholder="100 due / +100 credit"
                         />
                         <button
                           type="button"
