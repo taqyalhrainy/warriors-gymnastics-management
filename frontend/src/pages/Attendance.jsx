@@ -2465,13 +2465,28 @@ const AttendancePage = () => {
     || Number(cycle.packageClasses || 0) > 0
     || Number(cycle.payment || 0) > 0
   );
+  const getSubscriptionCycleIdentity = (cycle) => [
+    getDateInputValue(cycle.startDate),
+    getDateInputValue(cycle.endDate),
+    cycle.packageName || '',
+    Number(cycle.packageClasses || 0),
+    Number(cycle.packageHours || 0),
+    Number(cycle.payment || 0)
+  ].join('|');
   const normalizeSubscriptionCycles = (cycles) => {
     const sortedAsc = [...cycles]
       .filter((cycle) => cycle.startDate)
       .sort((first, second) => new Date(first.startDate) - new Date(second.startDate));
     const meaningfulCycles = [];
+    const seenCycleIdentities = new Set();
 
     sortedAsc.forEach((cycle) => {
+      const identity = getSubscriptionCycleIdentity(cycle);
+      if (seenCycleIdentities.has(identity)) {
+        return;
+      }
+      seenCycleIdentities.add(identity);
+
       const previous = meaningfulCycles[meaningfulCycles.length - 1];
       const startsInsidePrevious = previous?.endDate
         && getLocalDateOnly(cycle.startDate).getTime() <= getLocalDateOnly(previous.endDate).getTime();
@@ -2483,7 +2498,19 @@ const AttendancePage = () => {
       meaningfulCycles.push(cycle);
     });
 
-    return meaningfulCycles;
+    const mergedByStart = new Map();
+    meaningfulCycles.forEach((cycle) => {
+      const startKey = getDateInputValue(cycle.startDate);
+      const existing = mergedByStart.get(startKey);
+      const existingChangedAt = new Date(existing?.changedAt || 0).getTime();
+      const cycleChangedAt = new Date(cycle.changedAt || 0).getTime();
+      if (!existing || cycleChangedAt >= existingChangedAt || (!cycleHasPackageDetails(existing) && cycleHasPackageDetails(cycle))) {
+        mergedByStart.set(startKey, cycle);
+      }
+    });
+
+    return [...mergedByStart.values()]
+      .sort((first, second) => new Date(first.startDate) - new Date(second.startDate));
   };
   const buildSubscriptionHistory = (entries = [], player = null) => {
     const sortedEntries = [...entries].sort((first, second) => new Date(first.changedAt) - new Date(second.changedAt));
