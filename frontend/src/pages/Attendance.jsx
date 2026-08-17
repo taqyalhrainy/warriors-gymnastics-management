@@ -4,8 +4,9 @@ import { updateTodayAttendance, cancelTodayAttendance, fetchAttendanceByPlayer, 
 import { fetchGroups, fetchGroupPlayers, reorderGroups as reorderGroupsRequest } from '../services/groups.js';
 import { fetchHistorySnapshot, fetchPlayerHistory } from '../services/history.js';
 import { fetchParents } from '../services/parents.js';
-import { getPlayer, updatePlayer } from '../services/players.js';
+import { deletePlayer, getPlayer, updatePlayer } from '../services/players.js';
 import { fetchPackageOptions } from '../services/packageOptions.js';
+import { createWaitingListEntry } from '../services/waitingList.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
 import { getCacheVersion } from '../services/cache.js';
@@ -2299,6 +2300,53 @@ const AttendancePage = () => {
     const selectedParent = editParents.find((parent) => getEntityId(parent._id) === getEntityId(selectedPlayerForm.parentId));
     const selectedGroupRefs = selectedPlayerForm.groupIds
       .map((groupId) => editGroups.find((group) => getEntityId(group._id) === getEntityId(groupId)) || { _id: groupId, name: '' });
+    if (selectedPlayerForm.status === 'waiting-list') {
+      selectedPlayerLoadRequestIdRef.current += 1;
+      selectedPlayerEditRequestIdRef.current += 1;
+      const mutation = beginSelectedPlayerMutation('move-to-waiting-list');
+      const waitingPayload = {
+        playerName: selectedPlayerForm.fullName || selectedPlayer.fullName || '',
+        playerAge: '',
+        parentName: selectedParent?.name || selectedPlayer.parentId?.name || '',
+        parentPhone: selectedPlayerForm.parentPhone || selectedPlayer.parentPhone || '',
+        desiredGroupIds: selectedPlayerForm.groupIds,
+        listType: 'waiting',
+        notes: selectedPlayerForm.note || ''
+      };
+      const removedPlayer = {
+        ...selectedPlayer,
+        status: 'left',
+        isDeleted: true,
+        groupIds: [],
+        groupId: null
+      };
+
+      try {
+        setMessage('');
+        setShowUnsavedExitConfirm(false);
+        patchPlayerInAttendanceBoard(removedPlayer);
+        selectedPlayerFormDirtyRef.current = false;
+        setIsEditingSelectedPlayer(false);
+        await createWaitingListEntry(waitingPayload);
+        await deletePlayer(selectedPlayer._id);
+        if (!isLatestSelectedPlayerMutation(mutation)) return;
+        closeSelectedPlayer({ force: true });
+        setMessage('Moved to waiting list');
+      } catch (err) {
+        if (isLatestSelectedPlayerMutation(mutation)) {
+          applyOptimisticSelectedPlayer(previousPlayer);
+        }
+        if (isCurrentSelectedPlayerMutation(mutation)) {
+          setSelectedPlayerForm(selectedPlayerForm);
+          setIsEditingSelectedPlayer(true);
+          selectedPlayerFormDirtyRef.current = true;
+        }
+        setMessage(err.response?.data?.message || 'Unable to move player to waiting list');
+      } finally {
+        finishSelectedPlayerMutation(mutation);
+      }
+      return;
+    }
     const becameFrozen = selectedPlayer.status !== 'frozen' && selectedPlayerForm.status === 'frozen';
     const leftFrozen = selectedPlayer.status === 'frozen' && selectedPlayerForm.status !== 'frozen';
     let showInAttendanceWhenFrozen = selectedPlayerForm.showInAttendanceWhenFrozen !== false;
@@ -2895,6 +2943,7 @@ const AttendancePage = () => {
                         <option value="frozen">{t('frozenStatus')}</option>
                         <option value="tryout">{t('tryoutStatus')}</option>
                         <option value="left">{t('leftStatus')}</option>
+                        <option value="waiting-list">Waiting List</option>
                       </select>
                     </label>
                     <label>
