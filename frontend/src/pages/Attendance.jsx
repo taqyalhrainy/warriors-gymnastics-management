@@ -2833,7 +2833,7 @@ const AttendancePage = () => {
                         {player.attendanceAlertEnabled && <span className="attendance-review-pulse" aria-hidden="true" />}
                         <button type="button" className="attendance-player-main" onClick={() => handleSelectPlayer(player)}>
                           <strong>{player.fullName}</strong>
-                          <span>{player.parentId?.name || t('noParent')}</span>
+                          <span>{player.parentId?.name || player.parentName || t('noParent')}</span>
                           <em className="attendance-package-counter">
                             {packageCounter.total > 0 ? `${packageCounter.used}/${packageCounter.total}` : packageCounter.used}
                           </em>
@@ -3010,7 +3010,7 @@ const AttendancePage = () => {
                 <>
                   <div className="student-info-grid">
                     <div><span>{t('name')}</span><strong>{selectedPlayer.fullName || t('notSet')}</strong></div>
-                    <div><span>{t('parent')}</span><strong>{selectedPlayer.parentId?.name || t('notSet')}</strong></div>
+                    <div><span>{t('parent')}</span><strong>{selectedPlayer.parentId?.name || selectedPlayer.parentName || t('notSet')}</strong></div>
                     <div><span>{t('parentPhone')}</span><strong>{selectedPlayer.parentPhone || t('notSet')}</strong></div>
                     <div>
                       <span>{t('status')}</span>
@@ -3353,7 +3353,7 @@ const AttendancePage = () => {
                   <div className="student-history-row" key={player._id}>
                     <span>{player.fullName}</span>
                     <strong>{player.todayAttendance?.status || t('notSet')}</strong>
-                    <span>{player.parentId?.name || t('noParent')}</span>
+                    <span>{player.parentId?.name || player.parentName || t('noParent')}</span>
                   </div>
                 )) : <p className="empty-state">{t('noStudentsInGroup')}</p>}
               </div>

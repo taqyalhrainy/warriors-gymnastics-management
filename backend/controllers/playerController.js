@@ -255,7 +255,8 @@ const createPlayer = async (req, res, next) => {
       req
     });
     await createAuditLog({ userId: req.user._id, action: 'add player', entity: 'Player', entityId: player._id, req });
-    res.status(201).json(formatPlayerResponse(player));
+    const responsePlayer = await loadPlayerForHistory(player._id);
+    res.status(201).json(formatPlayerResponse(responsePlayer));
   } catch (error) {
     if (error.statusCode) {
       return res.status(error.statusCode).json({ message: error.message });
