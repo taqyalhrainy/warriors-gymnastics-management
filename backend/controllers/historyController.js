@@ -19,6 +19,11 @@ const {
 
 const snapshotRestoreJobs = new Map();
 const RESTORE_SCOPES = ['players', 'payments', 'waitingList'];
+const RESTORE_SCOPE_ENTITY_TYPES = {
+  players: 'player',
+  payments: 'payment',
+  waitingList: 'waitingList'
+};
 
 const asObjectId = (value) => (validateObjectId(value) ? value : undefined);
 const asDate = (value) => {
@@ -490,6 +495,18 @@ const restoreHistorySnapshot = async (req, res, next) => {
     const asOf = new Date(at);
     if (Number.isNaN(asOf.getTime())) {
       return res.status(400).json({ message: 'Invalid snapshot date/time.' });
+    }
+    const availabilityChecks = await Promise.all(scopes.map(async (scope) => ({
+      scope,
+      availableSince: await getHistoryAvailableSince(RESTORE_SCOPE_ENTITY_TYPES[scope])
+    })));
+    const unavailableScopes = availabilityChecks.filter(({ availableSince }) => (
+      availableSince && new Date(availableSince) > asOf
+    ));
+    if (unavailableScopes.length) {
+      return res.status(400).json({
+        message: `Cannot restore ${unavailableScopes.map((item) => item.scope).join(', ')} before its first saved snapshot.`
+      });
     }
 
     const jobId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
