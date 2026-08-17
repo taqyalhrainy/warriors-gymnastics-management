@@ -25,6 +25,14 @@ const initialWaitingForm = {
 
 const EXPIRED_ALERT_READ_KEY = 'warriors-expired-alert-read-ids';
 const DASHBOARD_STATS_CACHE_KEY = 'warriors-dashboard-stats-cache';
+const SNAPSHOT_RESTORE_SCOPES = [
+  { key: 'players', label: 'Players', description: 'Player profiles, subscriptions, status, due, groups.', restorable: true },
+  { key: 'payments', label: 'Payments', description: 'Payment records and payment history.', restorable: true },
+  { key: 'attendance', label: 'Attendance', description: 'Visible in History snapshots; restore tracking is not enabled yet.', restorable: false },
+  { key: 'groups', label: 'Groups', description: 'Rebuilt from restored player assignments.', restorable: false },
+  { key: 'waitingList', label: 'Waiting List', description: 'Not tracked by snapshot restore yet.', restorable: false }
+];
+const RESTORABLE_SNAPSHOT_SCOPES = SNAPSHOT_RESTORE_SCOPES.filter((scope) => scope.restorable);
 
 const readDashboardStatsCache = () => {
   try {
@@ -113,6 +121,8 @@ const AdminDashboard = () => {
   const [snapshotDate, setSnapshotDate] = useState(() => getLocalDateValue());
   const [snapshotTime, setSnapshotTime] = useState(() => getLocalTimeValue());
   const [snapshotConfirmText, setSnapshotConfirmText] = useState('');
+  const [snapshotRestoreMode, setSnapshotRestoreMode] = useState('all');
+  const [snapshotScopes, setSnapshotScopes] = useState(() => RESTORABLE_SNAPSHOT_SCOPES.map((scope) => scope.key));
   const [isSnapshotRestoring, setIsSnapshotRestoring] = useState(false);
   const [snapshotMessage, setSnapshotMessage] = useState('');
   const [isDashboardLoading, setIsDashboardLoading] = useState(false);
@@ -397,6 +407,8 @@ const AdminDashboard = () => {
     setSnapshotDate(getLocalDateValue());
     setSnapshotTime(getLocalTimeValue());
     setSnapshotConfirmText('');
+    setSnapshotRestoreMode('all');
+    setSnapshotScopes(RESTORABLE_SNAPSHOT_SCOPES.map((scope) => scope.key));
     setSnapshotMessage('');
     setIsSnapshotOpen(true);
   };
@@ -406,6 +418,18 @@ const AdminDashboard = () => {
     setIsSnapshotOpen(false);
     setSnapshotConfirmText('');
     setSnapshotMessage('');
+  };
+
+  const selectedSnapshotScopes = snapshotRestoreMode === 'all'
+    ? RESTORABLE_SNAPSHOT_SCOPES.map((scope) => scope.key)
+    : snapshotScopes;
+
+  const handleSnapshotScopeToggle = (scopeKey) => {
+    setSnapshotScopes((current) => (
+      current.includes(scopeKey)
+        ? current.filter((key) => key !== scopeKey)
+        : [...current, scopeKey]
+    ));
   };
 
   const handleSnapshotRestore = async (event) => {
@@ -421,15 +445,22 @@ const AdminDashboard = () => {
       setSnapshotMessage('Type RESTORE to confirm snapshot restore.');
       return;
     }
+    if (!selectedSnapshotScopes.length) {
+      setSnapshotMessage('Choose at least one site section to restore.');
+      return;
+    }
 
-    const confirmed = window.confirm(`Restore tracked site data to ${targetDateTime.toLocaleString()}? This will change players and payments.`);
+    const scopeLabel = snapshotRestoreMode === 'all'
+      ? 'everything tracked'
+      : selectedSnapshotScopes.join(', ');
+    const confirmed = window.confirm(`Restore ${scopeLabel} to ${targetDateTime.toLocaleString()}?`);
     if (!confirmed) {
       return;
     }
 
     setIsSnapshotRestoring(true);
     try {
-      const startedJob = await restoreHistorySnapshot({ at: targetDateTime.toISOString() });
+      const startedJob = await restoreHistorySnapshot({ at: targetDateTime.toISOString(), scopes: selectedSnapshotScopes });
       setSnapshotMessage(startedJob.message || 'Snapshot restore started.');
       let result = null;
 
@@ -469,7 +500,10 @@ const AdminDashboard = () => {
       setDashboardPlayers(playerRows);
       setExpiredAlertPlayers(getExpiredAlertPlayers(playerRows));
       const skipped = Number(result.players?.skipped || 0) + Number(result.payments?.skipped || 0);
-      setSnapshotMessage(`Restored ${result.players?.restored || 0} players and ${result.payments?.restored || 0} payments.${skipped ? ` Skipped ${skipped} incomplete records.` : ''}`);
+      const restoredParts = selectedSnapshotScopes
+        .map((scope) => `${scope}: ${result[scope]?.restored || 0}`)
+        .join(', ');
+      setSnapshotMessage(`Restored ${restoredParts}.${skipped ? ` Skipped ${skipped} incomplete records.` : ''}`);
     } catch (err) {
       setSnapshotMessage(err.response?.data?.message || 'Unable to restore snapshot.');
     } finally {
@@ -544,6 +578,44 @@ const AdminDashboard = () => {
               {snapshotMessage && <p className={snapshotMessage.startsWith('Restored') ? 'alert-info' : 'alert-error'}>{snapshotMessage}</p>}
 
               <form className="snapshot-form" onSubmit={handleSnapshotRestore}>
+                <div className="snapshot-scope-panel">
+                  <span>Restore scope</span>
+                  <div className="snapshot-mode-tabs" role="tablist" aria-label="Snapshot restore scope">
+                    <button
+                      type="button"
+                      className={snapshotRestoreMode === 'all' ? 'is-active' : ''}
+                      onClick={() => {
+                        setSnapshotRestoreMode('all');
+                        setSnapshotScopes(RESTORABLE_SNAPSHOT_SCOPES.map((scope) => scope.key));
+                      }}
+                    >
+                      Everything
+                    </button>
+                    <button
+                      type="button"
+                      className={snapshotRestoreMode === 'custom' ? 'is-active' : ''}
+                      onClick={() => setSnapshotRestoreMode('custom')}
+                    >
+                      Choose sections
+                    </button>
+                  </div>
+                  {snapshotRestoreMode === 'custom' && (
+                    <div className="snapshot-scope-grid">
+                      {SNAPSHOT_RESTORE_SCOPES.map((scope) => (
+                        <label key={scope.key}>
+                          <input
+                            type="checkbox"
+                            disabled={!scope.restorable}
+                            checked={snapshotScopes.includes(scope.key)}
+                            onChange={() => handleSnapshotScopeToggle(scope.key)}
+                          />
+                          <b>{scope.label}</b>
+                          <small>{scope.description}</small>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <label>
                   <span>Date</span>
                   <input type="date" value={snapshotDate} max={getLocalDateValue()} onChange={(event) => setSnapshotDate(event.target.value)} required />
@@ -556,7 +628,7 @@ const AdminDashboard = () => {
                   <span>Confirm</span>
                   <input type="text" value={snapshotConfirmText} onChange={(event) => setSnapshotConfirmText(event.target.value)} placeholder="RESTORE" required />
                 </label>
-                <button type="submit" className="btn-primary" disabled={isSnapshotRestoring || snapshotConfirmText !== 'RESTORE'}>
+                <button type="submit" className="btn-primary" disabled={isSnapshotRestoring || snapshotConfirmText !== 'RESTORE' || !selectedSnapshotScopes.length}>
                   {isSnapshotRestoring ? 'Restoring...' : 'Restore Snapshot'}
                 </button>
               </form>

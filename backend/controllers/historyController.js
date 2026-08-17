@@ -16,6 +16,7 @@ const {
 } = require('../utils/history');
 
 const snapshotRestoreJobs = new Map();
+const RESTORE_SCOPES = ['players', 'payments'];
 
 const asObjectId = (value) => (validateObjectId(value) ? value : undefined);
 const asDate = (value) => {
@@ -345,34 +346,43 @@ const getPlayerHistory = async (req, res, next) => {
   }
 };
 
-const runSnapshotRestore = async ({ jobId, asOf, reqMeta }) => {
+const runSnapshotRestore = async ({ jobId, asOf, scopes, reqMeta }) => {
   const job = snapshotRestoreJobs.get(jobId);
   if (!job) return;
 
   try {
     job.status = 'running';
     job.message = 'Preparing snapshot...';
+    const shouldRestorePlayers = scopes.includes('players');
+    const shouldRestorePayments = scopes.includes('payments');
     const [players, payments] = await Promise.all([
-      restoreStateAt('player', asOf),
-      restoreStateAt('payment', asOf)
+      shouldRestorePlayers ? restoreStateAt('player', asOf) : Promise.resolve([]),
+      shouldRestorePayments ? restoreStateAt('payment', asOf) : Promise.resolve([])
     ]);
 
-    job.message = 'Restoring players...';
-    const playerResult = await restorePlayers(players, reqMeta);
-    job.message = 'Restoring payments...';
-    const paymentResult = await restorePayments(payments, reqMeta);
+    let playerResult = null;
+    let paymentResult = null;
+    if (shouldRestorePlayers) {
+      job.message = 'Restoring players...';
+      playerResult = await restorePlayers(players, reqMeta);
+    }
+    if (shouldRestorePayments) {
+      job.message = 'Restoring payments...';
+      paymentResult = await restorePayments(payments, reqMeta);
+    }
     job.message = 'Rebuilding links and counters...';
     await Promise.all([
       syncParentChildren(),
       syncGroupCounts()
     ]);
     clearDashboardReportCache();
-    await createAuditLog({ userId: reqMeta.user._id, action: `restore snapshot ${asOf.toISOString()}`, entity: 'HistoryEntry', entityId: null, req: reqMeta });
+    await createAuditLog({ userId: reqMeta.user._id, action: `restore snapshot ${asOf.toISOString()} (${scopes.join(', ')})`, entity: 'HistoryEntry', entityId: null, req: reqMeta });
 
     job.status = 'complete';
     job.message = 'Snapshot restored successfully.';
     job.result = {
       asOf: asOf.toISOString(),
+      scopes,
       players: playerResult,
       payments: paymentResult
     };
@@ -388,8 +398,13 @@ const runSnapshotRestore = async ({ jobId, asOf, reqMeta }) => {
 const restoreHistorySnapshot = async (req, res, next) => {
   try {
     const { at, confirm } = req.body || {};
+    const requestedScopes = Array.isArray(req.body?.scopes) ? req.body.scopes : RESTORE_SCOPES;
+    const scopes = [...new Set(requestedScopes)].filter((scope) => RESTORE_SCOPES.includes(scope));
     if (confirm !== 'RESTORE') {
       return res.status(400).json({ message: 'Snapshot restore requires confirmation.' });
+    }
+    if (!scopes.length) {
+      return res.status(400).json({ message: 'Choose at least one snapshot section to restore.' });
     }
 
     if (!at) {
@@ -407,6 +422,7 @@ const restoreHistorySnapshot = async (req, res, next) => {
       status: 'queued',
       message: 'Snapshot restore queued.',
       asOf: asOf.toISOString(),
+      scopes,
       startedAt: new Date(),
       result: null
     });
@@ -416,13 +432,14 @@ const restoreHistorySnapshot = async (req, res, next) => {
       ip: req.ip,
       headers: req.headers
     };
-    setImmediate(() => runSnapshotRestore({ jobId, asOf, reqMeta }));
+    setImmediate(() => runSnapshotRestore({ jobId, asOf, scopes, reqMeta }));
 
     res.status(202).json({
       jobId,
       status: 'queued',
       message: 'Snapshot restore started.',
-      asOf: asOf.toISOString()
+      asOf: asOf.toISOString(),
+      scopes
     });
   } catch (error) {
     next(error);

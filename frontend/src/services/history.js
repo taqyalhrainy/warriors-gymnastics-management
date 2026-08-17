@@ -13,9 +13,10 @@ export const fetchPlayerHistory = async (playerId) => {
   return response.data;
 };
 
-export const restoreHistorySnapshot = async ({ at }) => {
+export const restoreHistorySnapshot = async ({ at, scopes }) => {
   const response = await api.post('/history/restore', {
     at,
+    scopes,
     confirm: 'RESTORE'
   }, {
     timeout: 180000,
