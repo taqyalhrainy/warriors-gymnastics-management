@@ -28,9 +28,9 @@ const DASHBOARD_STATS_CACHE_KEY = 'warriors-dashboard-stats-cache';
 const SNAPSHOT_RESTORE_SCOPES = [
   { key: 'players', label: 'Players', description: 'Player profiles, subscriptions, status, due, groups.', restorable: true },
   { key: 'payments', label: 'Payments', description: 'Payment records and payment history.', restorable: true },
+  { key: 'waitingList', label: 'Waiting List', description: 'Waiting and Data list entries.', restorable: true },
   { key: 'attendance', label: 'Attendance', description: 'Visible in History snapshots; restore tracking is not enabled yet.', restorable: false },
   { key: 'groups', label: 'Groups', description: 'Rebuilt from restored player assignments.', restorable: false },
-  { key: 'waitingList', label: 'Waiting List', description: 'Not tracked by snapshot restore yet.', restorable: false }
 ];
 const RESTORABLE_SNAPSHOT_SCOPES = SNAPSHOT_RESTORE_SCOPES.filter((scope) => scope.restorable);
 
@@ -499,7 +499,7 @@ const AdminDashboard = () => {
       setWaitingList(waitingRows);
       setDashboardPlayers(playerRows);
       setExpiredAlertPlayers(getExpiredAlertPlayers(playerRows));
-      const skipped = Number(result.players?.skipped || 0) + Number(result.payments?.skipped || 0);
+      const skipped = selectedSnapshotScopes.reduce((sum, scope) => sum + Number(result[scope]?.skipped || 0), 0);
       const restoredParts = selectedSnapshotScopes
         .map((scope) => `${scope}: ${result[scope]?.restored || 0}`)
         .join(', ');

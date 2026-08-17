@@ -2,6 +2,7 @@ const Player = require('../models/Player');
 const Payment = require('../models/Payment');
 const Parent = require('../models/Parent');
 const TrainingGroup = require('../models/TrainingGroup');
+const WaitingListEntry = require('../models/WaitingListEntry');
 const HistoryEntry = require('../models/HistoryEntry');
 const { validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
@@ -12,11 +13,12 @@ const {
   getHistoryAvailableSince,
   snapshotPlayerDocument,
   snapshotPaymentDocument,
+  snapshotWaitingListDocument,
   createHistoryEntry
 } = require('../utils/history');
 
 const snapshotRestoreJobs = new Map();
-const RESTORE_SCOPES = ['players', 'payments'];
+const RESTORE_SCOPES = ['players', 'payments', 'waitingList'];
 
 const asObjectId = (value) => (validateObjectId(value) ? value : undefined);
 const asDate = (value) => {
@@ -80,6 +82,23 @@ const buildPaymentRestorePayload = (snapshot) => ({
   createdAt: asDate(snapshot.createdAt) || asDate(snapshot.paymentDate) || new Date(),
   updatedBy: asObjectId(snapshot.updatedBy) || null,
   updatedAt: asDate(snapshot.updatedAt) || null
+});
+
+const buildWaitingListRestorePayload = (snapshot, fallbackUserId) => ({
+  playerName: snapshot.playerName || '',
+  playerAge: typeof snapshot.playerAge === 'number' ? snapshot.playerAge : undefined,
+  parentName: snapshot.parentName || '',
+  parentPhone: snapshot.parentPhone || '',
+  desiredGroupId: asObjectId(snapshot.desiredGroupId || snapshot.desiredGroupIds?.[0]) || undefined,
+  desiredGroupIds: Array.isArray(snapshot.desiredGroupIds)
+    ? snapshot.desiredGroupIds.map(asObjectId).filter(Boolean)
+    : [asObjectId(snapshot.desiredGroupId)].filter(Boolean),
+  listType: snapshot.listType === 'data' ? 'data' : 'waiting',
+  createdBy: asObjectId(snapshot.createdBy) || fallbackUserId,
+  contactedAt: asDate(snapshot.contactedAt) || null,
+  notes: snapshot.notes || '',
+  createdAt: asDate(snapshot.createdAt) || new Date(),
+  updatedAt: asDate(snapshot.updatedAt) || new Date()
 });
 
 const loadPlayerForSnapshot = (id) => Player.findById(id)
@@ -316,6 +335,55 @@ const getHistorySnapshot = async (req, res, next) => {
   }
 };
 
+const restoreWaitingList = async (targetEntries, req) => {
+  const targetById = new Map(targetEntries.map((entry) => [String(entry._id), entry]));
+  const currentEntries = await WaitingListEntry.find({}).select('_id').lean();
+  const operations = [];
+  let restored = 0;
+  let removed = 0;
+  let skipped = 0;
+
+  for (const entry of currentEntries) {
+    const entryId = String(entry._id);
+    const target = targetById.get(entryId);
+
+    if (!target) {
+      operations.push({ deleteOne: { filter: { _id: entry._id } } });
+      removed += 1;
+      continue;
+    }
+
+    const payload = buildWaitingListRestorePayload(target, req.user._id);
+    operations.push({
+      updateOne: {
+        filter: { _id: entry._id },
+        update: { $set: payload }
+      }
+    });
+    restored += 1;
+    targetById.delete(entryId);
+  }
+
+  for (const target of targetById.values()) {
+    if (!validateObjectId(target._id)) {
+      skipped += 1;
+      continue;
+    }
+    operations.push({
+      insertOne: {
+        document: { _id: target._id, ...buildWaitingListRestorePayload(target, req.user._id) }
+      }
+    });
+    restored += 1;
+  }
+
+  if (operations.length) {
+    await WaitingListEntry.bulkWrite(operations, { ordered: false });
+  }
+
+  return { restored, removed, skipped };
+};
+
 const getPlayerHistory = async (req, res, next) => {
   try {
     const { playerId } = req.params;
@@ -355,13 +423,16 @@ const runSnapshotRestore = async ({ jobId, asOf, scopes, reqMeta }) => {
     job.message = 'Preparing snapshot...';
     const shouldRestorePlayers = scopes.includes('players');
     const shouldRestorePayments = scopes.includes('payments');
-    const [players, payments] = await Promise.all([
+    const shouldRestoreWaitingList = scopes.includes('waitingList');
+    const [players, payments, waitingList] = await Promise.all([
       shouldRestorePlayers ? restoreStateAt('player', asOf) : Promise.resolve([]),
-      shouldRestorePayments ? restoreStateAt('payment', asOf) : Promise.resolve([])
+      shouldRestorePayments ? restoreStateAt('payment', asOf) : Promise.resolve([]),
+      shouldRestoreWaitingList ? restoreStateAt('waitingList', asOf) : Promise.resolve([])
     ]);
 
     let playerResult = null;
     let paymentResult = null;
+    let waitingListResult = null;
     if (shouldRestorePlayers) {
       job.message = 'Restoring players...';
       playerResult = await restorePlayers(players, reqMeta);
@@ -369,6 +440,10 @@ const runSnapshotRestore = async ({ jobId, asOf, scopes, reqMeta }) => {
     if (shouldRestorePayments) {
       job.message = 'Restoring payments...';
       paymentResult = await restorePayments(payments, reqMeta);
+    }
+    if (shouldRestoreWaitingList) {
+      job.message = 'Restoring waiting list...';
+      waitingListResult = await restoreWaitingList(waitingList, reqMeta);
     }
     job.message = 'Rebuilding links and counters...';
     await Promise.all([
@@ -384,7 +459,8 @@ const runSnapshotRestore = async ({ jobId, asOf, scopes, reqMeta }) => {
       asOf: asOf.toISOString(),
       scopes,
       players: playerResult,
-      payments: paymentResult
+      payments: paymentResult,
+      waitingList: waitingListResult
     };
     job.completedAt = new Date();
   } catch (error) {

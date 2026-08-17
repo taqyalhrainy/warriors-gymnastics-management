@@ -2,6 +2,7 @@ const WaitingListEntry = require('../models/WaitingListEntry');
 const TrainingGroup = require('../models/TrainingGroup');
 const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
+const { snapshotWaitingListDocument, createHistoryEntry } = require('../utils/history');
 
 const populateWaitingListEntry = (query) => query
   .populate('desiredGroupId', 'name days startTime endTime currentCount maxCapacity color')
@@ -65,6 +66,15 @@ const createWaitingListEntry = async (req, res, next) => {
       ...data,
       createdBy: req.user._id
     });
+    await createHistoryEntry({
+      entityType: 'waitingList',
+      entityId: entry._id,
+      action: 'create',
+      before: null,
+      after: snapshotWaitingListDocument(entry),
+      userId: req.user._id,
+      req
+    });
     await createAuditLog({ userId: req.user._id, action: 'create waiting list entry', entity: 'WaitingListEntry', entityId: entry._id, req });
 
     const populatedEntry = await populateWaitingListEntry(WaitingListEntry.findById(entry._id));
@@ -85,6 +95,7 @@ const updateWaitingListEntry = async (req, res, next) => {
     if (!entry) {
       return res.status(404).json({ message: 'Waiting list entry not found.' });
     }
+    const beforeSnapshot = snapshotWaitingListDocument(entry);
 
     const payload = sanitizeObject(req.body);
     const { data, error } = await validateWaitingListPayload(payload);
@@ -94,6 +105,15 @@ const updateWaitingListEntry = async (req, res, next) => {
 
     Object.assign(entry, data);
     await entry.save();
+    await createHistoryEntry({
+      entityType: 'waitingList',
+      entityId: entry._id,
+      action: 'update',
+      before: beforeSnapshot,
+      after: snapshotWaitingListDocument(entry),
+      userId: req.user._id,
+      req
+    });
     await createAuditLog({ userId: req.user._id, action: 'update waiting list entry', entity: 'WaitingListEntry', entityId: entry._id, req });
 
     const populatedEntry = await populateWaitingListEntry(WaitingListEntry.findById(entry._id));
@@ -114,8 +134,18 @@ const deleteWaitingListEntry = async (req, res, next) => {
     if (!entry) {
       return res.status(404).json({ message: 'Waiting list entry not found.' });
     }
+    const beforeSnapshot = snapshotWaitingListDocument(entry);
 
     await entry.deleteOne();
+    await createHistoryEntry({
+      entityType: 'waitingList',
+      entityId: entry._id,
+      action: 'delete',
+      before: beforeSnapshot,
+      after: null,
+      userId: req.user._id,
+      req
+    });
     await createAuditLog({ userId: req.user._id, action: 'delete waiting list entry', entity: 'WaitingListEntry', entityId: entry._id, req });
     res.json({ message: 'Waiting list entry deleted successfully.' });
   } catch (error) {

@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const historyEntrySchema = new mongoose.Schema({
   entityType: {
     type: String,
-    enum: ['player', 'payment'],
+    enum: ['player', 'payment', 'waitingList'],
     required: true
   },
   entityId: {

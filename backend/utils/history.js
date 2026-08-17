@@ -1,6 +1,7 @@
 const Player = require('../models/Player');
 const Payment = require('../models/Payment');
 const Attendance = require('../models/Attendance');
+const WaitingListEntry = require('../models/WaitingListEntry');
 const HistoryEntry = require('../models/HistoryEntry');
 const { decrypt } = require('./encryption');
 
@@ -105,6 +106,29 @@ const snapshotPaymentDocument = (paymentDocument) => {
   };
 };
 
+const snapshotWaitingListDocument = (entryDocument) => {
+  const entry = entryDocument?.toObject ? entryDocument.toObject() : entryDocument;
+  const groups = Array.isArray(entry?.desiredGroupIds) && entry.desiredGroupIds.length
+    ? entry.desiredGroupIds
+    : [entry?.desiredGroupId].filter(Boolean);
+
+  return {
+    _id: normalizeId(entry?._id),
+    playerName: entry?.playerName || '',
+    playerAge: typeof entry?.playerAge === 'number' ? entry.playerAge : undefined,
+    parentName: entry?.parentName || '',
+    parentPhone: entry?.parentPhone || '',
+    desiredGroupId: normalizeId(entry?.desiredGroupId || groups[0]),
+    desiredGroupIds: groups.map(normalizeId).filter(Boolean),
+    listType: entry?.listType === 'data' ? 'data' : 'waiting',
+    createdBy: normalizeId(entry?.createdBy),
+    contactedAt: entry?.contactedAt || null,
+    notes: entry?.notes || '',
+    createdAt: entry?.createdAt || null,
+    updatedAt: entry?.updatedAt || null
+  };
+};
+
 const diffChangedFields = (before = {}, after = {}) => {
   const keys = new Set([...Object.keys(before || {}), ...Object.keys(after || {})]);
   return [...keys].filter((key) => JSON.stringify(before?.[key] ?? null) !== JSON.stringify(after?.[key] ?? null));
@@ -170,6 +194,13 @@ const loadCurrentPaymentSnapshots = async () => {
   return payments.map(snapshotPaymentDocument);
 };
 
+const loadCurrentWaitingListSnapshots = async () => {
+  const entries = await WaitingListEntry.find({})
+    .sort({ createdAt: 1, _id: 1 });
+
+  return entries.map(snapshotWaitingListDocument);
+};
+
 const ensureHistoryBaseline = async (entityType) => {
   const existingEntry = await HistoryEntry.findOne({ entityType }).sort({ changedAt: 1 }).lean();
   if (existingEntry) {
@@ -178,7 +209,9 @@ const ensureHistoryBaseline = async (entityType) => {
 
   const snapshots = entityType === 'player'
     ? await loadCurrentPlayerSnapshots()
-    : await loadCurrentPaymentSnapshots();
+    : entityType === 'payment'
+      ? await loadCurrentPaymentSnapshots()
+      : await loadCurrentWaitingListSnapshots();
 
   return createBaselineEntries(entityType, snapshots);
 };
@@ -186,6 +219,7 @@ const ensureHistoryBaseline = async (entityType) => {
 const ensureHistoryBaselines = async () => {
   await ensureHistoryBaseline('player');
   await ensureHistoryBaseline('payment');
+  await ensureHistoryBaseline('waitingList');
 };
 
 const getHistoryAvailableSince = async (entityType) => {
@@ -233,7 +267,9 @@ const restoreStateAt = async (entityType, asOf) => {
 
   const baseState = entityType === 'player'
     ? await loadCurrentPlayerSnapshots()
-    : await loadCurrentPaymentSnapshots();
+    : entityType === 'payment'
+      ? await loadCurrentPaymentSnapshots()
+      : await loadCurrentWaitingListSnapshots();
 
   const stateMap = new Map(baseState.map((item) => [String(item._id), item]));
   const futureEvents = await HistoryEntry.find({
@@ -277,6 +313,16 @@ const restoreStateAt = async (entityType, asOf) => {
       });
   }
 
+  if (entityType === 'waitingList') {
+    return rows.sort((a, b) => {
+      const createdAtDiff = new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+      if (createdAtDiff !== 0) {
+        return createdAtDiff;
+      }
+      return String(a._id || '').localeCompare(String(b._id || ''));
+    });
+  }
+
   const paymentsByPlayer = new Map();
   rows.forEach((payment) => {
     const playerKey = String(payment.playerId || 'unknown');
@@ -308,6 +354,7 @@ const restoreStateAt = async (entityType, asOf) => {
 module.exports = {
   snapshotPlayerDocument,
   snapshotPaymentDocument,
+  snapshotWaitingListDocument,
   createHistoryEntry,
   restoreStateAt,
   loadAttendanceForDate,
