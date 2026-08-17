@@ -197,7 +197,7 @@ const formatCompactMoney = (value) => Number(value || 0).toLocaleString('en-US')
 const parseManualAttendanceDue = (value) => {
   const normalized = normalizeDigits(value).trim();
   const amount = Math.abs(parseLocalizedNumber(normalized));
-  return normalized.startsWith('+') ? -amount : parseLocalizedNumber(normalized);
+  return normalized.startsWith('-') ? -amount : amount;
 };
 
 const getAttendanceMoneyState = (value) => {
@@ -3044,7 +3044,7 @@ const AttendancePage = () => {
                           inputMode="decimal"
                           value={dueAdjustmentForm}
                           onChange={(event) => setDueAdjustmentForm(normalizeDigits(event.target.value))}
-                          placeholder="100 due / +100 credit"
+                          placeholder="100 due / -100 credit"
                         />
                         <button
                           type="button"
