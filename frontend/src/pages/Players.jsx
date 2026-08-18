@@ -142,7 +142,6 @@ const PlayersPage = () => {
       }
       setWaitingForm(initialWaitingForm);
       setEditingWaitingEntryId('');
-      if (!editingWaitingEntryId) setIsWaitingFormOpen(false);
     } catch (error) {
       setWaitingMessage(error.response?.data?.message || 'Unable to save waiting list entry.');
     }

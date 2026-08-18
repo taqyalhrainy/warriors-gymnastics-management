@@ -270,9 +270,6 @@ const AdminDashboard = () => {
       }
       setWaitingForm(initialWaitingForm);
       setEditingWaitingEntryId('');
-      if (!editingWaitingEntryId) {
-        setIsWaitingFormOpen(false);
-      }
     } catch (err) {
       setWaitingMessage(err.response?.data?.message || (editingWaitingEntryId ? 'Unable to update waiting list entry.' : copy.unableSave));
     }
