@@ -177,7 +177,6 @@ const PlayersPage = () => {
       setWaitingList((current) => current.map((item) => (item._id === entry._id ? entry : item)));
       setWaitingForm(initialWaitingForm);
       setEditingWaitingEntryId('');
-      setWaitingView(listType);
       setWaitingMessage(listType === 'data' ? 'Moved to Data list.' : 'Moved to Waiting list.');
     } catch (error) {
       setWaitingMessage(error.response?.data?.message || 'Unable to move entry.');

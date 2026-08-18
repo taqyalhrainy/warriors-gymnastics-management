@@ -21,6 +21,7 @@ const playerSchema = new mongoose.Schema({
   payment: { type: Number, default: 0, min: 0 },
   previousDueBalance: { type: Number, default: 0 },
   dueAdjustment: { type: Number, default: 0, min: 0 },
+  attendanceDueManual: { type: Boolean, default: false },
   note: { type: String, trim: true, default: '' },
   freezeNote: { type: String, trim: true, default: '' },
   status: { type: String, enum: ['active', 'expired', 'frozen', 'left', 'tryout'], default: 'active' },

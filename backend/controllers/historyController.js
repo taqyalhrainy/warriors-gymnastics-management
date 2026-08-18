@@ -54,6 +54,7 @@ const buildPlayerRestorePayload = (snapshot) => ({
   payment: Number(snapshot.payment || 0),
   previousDueBalance: Number(snapshot.previousDueBalance || 0),
   dueAdjustment: Number(snapshot.dueAdjustment || 0),
+  attendanceDueManual: Boolean(snapshot.attendanceDueManual),
   note: snapshot.note || '',
   freezeNote: snapshot.freezeNote || '',
   status: snapshot.status || 'active',

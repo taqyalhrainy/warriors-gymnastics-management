@@ -63,6 +63,7 @@ const snapshotPlayerDocument = (playerDocument) => {
     payment: Number(player?.payment || 0),
     previousDueBalance: Number(player?.previousDueBalance || 0),
     dueAdjustment: Number(player?.dueAdjustment || 0),
+    attendanceDueManual: Boolean(player?.attendanceDueManual),
     note: player?.note || '',
     freezeNote: player?.freezeNote || '',
     status: player?.status || '',

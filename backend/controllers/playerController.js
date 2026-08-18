@@ -151,6 +151,7 @@ const getPlayerCycleStart = (player) => (
 );
 
 const getPlayerRemainingAmount = async (player) => {
+  if (!player.attendanceDueManual) return 0;
   return Number(player.previousDueBalance || 0) - Number(player.dueAdjustment || 0);
 };
 
@@ -346,6 +347,7 @@ const updatePlayer = async (req, res, next) => {
     }
     if (typeof updates.previousDueBalance !== 'undefined') {
       updates.previousDueBalance = parseLocalizedNumber(updates.previousDueBalance);
+      updates.attendanceDueManual = true;
     }
     if (typeof updates.dueAdjustment !== 'undefined') {
       updates.dueAdjustment = Math.max(0, parseLocalizedNumber(updates.dueAdjustment));

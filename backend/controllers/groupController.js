@@ -317,7 +317,9 @@ const getGroupPlayers = async (req, res, next) => {
         Number(player.packageClasses || player.subscriptionId?.totalSessions || 0) || Number.MAX_SAFE_INTEGER,
         presentDatesByPlayerId.get(String(player._id))?.size || 0
       ),
-      paymentRemainingAmount: Number(player.previousDueBalance || 0) - Number(player.dueAdjustment || 0)
+      paymentRemainingAmount: player.attendanceDueManual
+        ? Number(player.previousDueBalance || 0) - Number(player.dueAdjustment || 0)
+        : 0
     })));
   } catch (error) {
     next(error);
