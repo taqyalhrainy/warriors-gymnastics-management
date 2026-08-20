@@ -1017,6 +1017,23 @@ const AttendancePage = () => {
     .find((group) => getEntityId(group._id) === getEntityId(groupId))
     ?.players.find((currentPlayer) => getEntityId(currentPlayer._id) === getEntityId(playerId)) || null;
 
+  const firstMeaningfulValue = (...values) => values.find((value) => value !== undefined && value !== null && value !== '');
+
+  const mergeStablePlayerFields = (incomingPlayer, fallbackPlayer = null) => ({
+    ...incomingPlayer,
+    startDate: firstMeaningfulValue(incomingPlayer?.startDate, fallbackPlayer?.startDate),
+    endDate: firstMeaningfulValue(incomingPlayer?.endDate, fallbackPlayer?.endDate),
+    currentSubscriptionStartedAt: firstMeaningfulValue(incomingPlayer?.currentSubscriptionStartedAt, fallbackPlayer?.currentSubscriptionStartedAt),
+    packageName: firstMeaningfulValue(incomingPlayer?.packageName, fallbackPlayer?.packageName, ''),
+    packageClasses: firstMeaningfulValue(incomingPlayer?.packageClasses, fallbackPlayer?.packageClasses, 0),
+    packageHours: firstMeaningfulValue(incomingPlayer?.packageHours, fallbackPlayer?.packageHours, 0),
+    payment: firstMeaningfulValue(incomingPlayer?.payment, fallbackPlayer?.payment, 0),
+    status: firstMeaningfulValue(incomingPlayer?.status, fallbackPlayer?.status, 'active'),
+    subscriptionNeedsAttention: typeof incomingPlayer?.subscriptionNeedsAttention === 'boolean'
+      ? incomingPlayer.subscriptionNeedsAttention
+      : Boolean(fallbackPlayer?.subscriptionNeedsAttention)
+  });
+
   const patchPlayerInAttendanceBoard = (updatedPlayer, attendanceRecords = null, fallbackGroupId = '') => {
     if (!updatedPlayer?._id) {
       return;
@@ -1063,14 +1080,15 @@ const AttendancePage = () => {
         let nextPlayers = cleanPlayers.filter((player) => getEntityId(player._id) !== playerId);
 
         if (shouldIncludePlayer) {
+          const stablePlayer = mergeStablePlayerFields(updatedPlayer, existingPlayer || existingPlayerAnyGroup);
           const patchedPlayer = {
             ...existingPlayer,
-            ...updatedPlayer,
+            ...stablePlayer,
             attendanceGroupId: groupId,
-            attendancePresentCount: updatedPlayer.attendancePresentCount
+            attendancePresentCount: stablePlayer.attendancePresentCount
               ?? existingPlayer?.attendancePresentCount
               ?? existingPlayerAnyGroup?.attendancePresentCount,
-            groupId: groupInfo ? { ...groupInfo } : updatedPlayer.groupId,
+            groupId: groupInfo ? { ...groupInfo } : stablePlayer.groupId,
             todayAttendance: hasAttendanceOverride
               ? (overrideAttendanceByGroupId.get(groupId) || null)
               : (attendanceByGroupId.get(groupId) || null)
@@ -1286,10 +1304,14 @@ const AttendancePage = () => {
 
   const refreshPlayerAttendanceCount = async (playerId, groupId) => {
     try {
+      const startedCacheVersion = getCacheVersion();
       const attendanceRecords = applyLocalPlayerAttendanceOverrides(
         await fetchAttendanceByPlayer(playerId),
         playerId
       );
+      if (getCacheVersion() !== startedCacheVersion) {
+        return;
+      }
       const boardPlayer = getAttendancePlayerFromBoard(groupColumnsRef.current, playerId, groupId)
         || (isSelectedPlayerOpen(playerId) ? selectedPlayerRef.current : null);
       if (!boardPlayer) return;
@@ -1450,12 +1472,17 @@ const AttendancePage = () => {
 
   const handleSelectPlayer = async (player) => {
     const requestId = ++selectedPlayerLoadRequestIdRef.current;
+    const startedCacheVersion = getCacheVersion();
     selectedPlayerFormDirtyRef.current = false;
     selectedPlayerEditRequestIdRef.current += 1;
     try {
       setMessage('');
-      setSelectedPlayer(player);
-      setSelectedPlayerForm(createSelectedPlayerForm(player));
+      const stableInitialPlayer = mergeStablePlayerFields(
+        player,
+        getEntityId(selectedPlayerRef.current?._id) === getEntityId(player._id) ? selectedPlayerRef.current : null
+      );
+      setSelectedPlayer(stableInitialPlayer);
+      setSelectedPlayerForm(createSelectedPlayerForm(stableInitialPlayer));
       setSelectedPlayerAttendanceHistory([]);
       setSelectedPlayerSubscriptionHistory([]);
       setOpenSubscriptionHistoryKey('');
@@ -1465,7 +1492,7 @@ const AttendancePage = () => {
       setEditingAttendanceHistoryId(null);
       setIsEditingSelectedPlayer(false);
 
-      const [latestPlayer, attendanceRecords, playerHistory] = await Promise.all([
+      let [latestPlayer, attendanceRecords, playerHistory] = await Promise.all([
         getPlayer(player._id),
         fetchAttendanceByPlayer(player._id),
         fetchPlayerHistory(player._id)
@@ -1474,16 +1501,27 @@ const AttendancePage = () => {
       if (requestId !== selectedPlayerLoadRequestIdRef.current) {
         return;
       }
+      if (getCacheVersion() !== startedCacheVersion) {
+        [latestPlayer, attendanceRecords, playerHistory] = await Promise.all([
+          getPlayer(player._id, { force: true }),
+          fetchAttendanceByPlayer(player._id),
+          fetchPlayerHistory(player._id)
+        ]);
+        if (requestId !== selectedPlayerLoadRequestIdRef.current) {
+          return;
+        }
+      }
 
       const subscriptionHistory = buildSubscriptionHistory(playerHistory.entries || [], latestPlayer)
         .filter((cycle) => !latestPlayer.startDate || getLocalDateOnly(cycle.startDate).getTime() <= getLocalDateOnly(latestPlayer.startDate).getTime());
       const latestRemainingAmount = typeof latestPlayer.paymentRemainingAmount !== 'undefined'
         ? latestPlayer.paymentRemainingAmount
         : player.paymentRemainingAmount;
+      const currentCycleStart = getCurrentSubscriptionCycleStartValue(latestPlayer);
       const latestPlayerWithCount = withAttendancePresentCount(
         { ...latestPlayer, paymentRemainingAmount: latestRemainingAmount, dueAdjustment: latestPlayer.dueAdjustment || 0 },
         attendanceRecords,
-        getDateInputValue(subscriptionHistory[0]?.startDate),
+        currentCycleStart,
         getPlayerAttendanceGroupId(player)
       );
 
@@ -2268,7 +2306,7 @@ const AttendancePage = () => {
       const refreshedPlayerWithCount = withAttendancePresentCount(
         refreshedPlayer,
         attendanceRecords,
-        getDateInputValue(refreshedHistory[0]?.startDate)
+        getCurrentSubscriptionCycleStartValue(refreshedPlayer)
       );
 
       syncPlayerInAttendanceBoard(refreshedPlayerWithCount, attendanceRecords);
