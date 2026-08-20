@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import StatsCard from '../components/StatsCard.jsx';
@@ -129,6 +129,8 @@ const AdminDashboard = () => {
   const [isWaitingFormOpen, setIsWaitingFormOpen] = useState(false);
   const [error, setError] = useState('');
   const [waitingMessage, setWaitingMessage] = useState('');
+  const waitingDataRequestIdRef = useRef(0);
+  const playerViewRequestIdRef = useRef(0);
   const { language, t } = useLanguage();
   const { token, user } = useAuth();
   const copy = language === 'ar'
@@ -225,18 +227,24 @@ const AdminDashboard = () => {
   }, [token]);
 
   const loadWaitingListData = async () => {
+    const requestId = waitingDataRequestIdRef.current + 1;
+    waitingDataRequestIdRef.current = requestId;
     try {
       const [groupRows, waitingRows, playerRows] = await Promise.all([
         fetchGroups(),
         fetchWaitingList(),
         fetchPlayers({ dashboard: 'expired-alert' })
       ]);
-      setGroups(groupRows);
-      setWaitingList(waitingRows);
-      setDashboardPlayers(playerRows);
-      setExpiredAlertPlayers(getExpiredAlertPlayers(playerRows));
+      if (requestId === waitingDataRequestIdRef.current) {
+        setGroups(groupRows);
+        setWaitingList(waitingRows);
+        setDashboardPlayers(playerRows);
+        setExpiredAlertPlayers(getExpiredAlertPlayers(playerRows));
+      }
     } catch (err) {
-      setWaitingMessage(err.response?.data?.message || copy.unableLoad);
+      if (requestId === waitingDataRequestIdRef.current) {
+        setWaitingMessage(err.response?.data?.message || copy.unableLoad);
+      }
     }
   };
 
@@ -347,6 +355,8 @@ const AdminDashboard = () => {
   };
 
   const openPlayerView = async (player) => {
+    const requestId = playerViewRequestIdRef.current + 1;
+    playerViewRequestIdRef.current = requestId;
     setViewedPlayer(player);
     setViewedPlayerAttendance([]);
     setViewedPlayerPayments([]);
@@ -361,17 +371,23 @@ const AdminDashboard = () => {
       ]);
       const threeMonthsAgo = new Date();
       threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+      if (requestId !== playerViewRequestIdRef.current) return;
       setViewedPlayer(playerData);
       setViewedPlayerAttendance(attendanceData.filter((record) => new Date(record.date) >= threeMonthsAgo));
       setViewedPlayerPayments(paymentData);
     } catch (err) {
-      setPlayerViewError(err.response?.data?.message || 'Unable to load player details.');
+      if (requestId === playerViewRequestIdRef.current) {
+        setPlayerViewError(err.response?.data?.message || 'Unable to load player details.');
+      }
     } finally {
-      setIsPlayerViewLoading(false);
+      if (requestId === playerViewRequestIdRef.current) {
+        setIsPlayerViewLoading(false);
+      }
     }
   };
 
   const closePlayerView = () => {
+    playerViewRequestIdRef.current += 1;
     setViewedPlayer(null);
     setViewedPlayerAttendance([]);
     setViewedPlayerPayments([]);

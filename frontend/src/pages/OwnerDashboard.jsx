@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchTodayAttendance } from '../services/attendance.js';
 import { fetchGroups, fetchGroupPlayers } from '../services/groups.js';
 import { fetchPayments } from '../services/payments.js';
@@ -85,9 +85,12 @@ const OwnerDashboard = () => {
   const [highlightedNewSubscriptionIds, setHighlightedNewSubscriptionIds] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const dashboardLoadRequestIdRef = useRef(0);
   const today = getDateInputValue();
 
   const loadOwnerDashboard = async () => {
+    const requestId = dashboardLoadRequestIdRef.current + 1;
+    dashboardLoadRequestIdRef.current = requestId;
     setIsLoading(true);
     setError('');
 
@@ -119,13 +122,19 @@ const OwnerDashboard = () => {
         };
       }));
 
-      setPlayers(playerRows);
-      setPayments(paymentRows);
-      setGroupColumns(groupsWithPlayers);
+      if (requestId === dashboardLoadRequestIdRef.current) {
+        setPlayers(playerRows);
+        setPayments(paymentRows);
+        setGroupColumns(groupsWithPlayers);
+      }
     } catch (err) {
-      setError(err.response?.data?.message || 'Unable to load owner dashboard.');
+      if (requestId === dashboardLoadRequestIdRef.current) {
+        setError(err.response?.data?.message || 'Unable to load owner dashboard.');
+      }
     } finally {
-      setIsLoading(false);
+      if (requestId === dashboardLoadRequestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 

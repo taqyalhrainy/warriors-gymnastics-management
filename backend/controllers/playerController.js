@@ -10,6 +10,7 @@ const { createAuditLog } = require('../utils/audit');
 const { encrypt, decrypt } = require('../utils/encryption');
 const { parseLocalizedNumber } = require('../utils/numberInput');
 const { snapshotPlayerDocument, createHistoryEntry } = require('../utils/history');
+const { synchronizeSubscriptionAttendanceUsage } = require('../utils/subscriptionAttendance');
 
 const formatPlayerResponse = (player) => {
   const obj = player.toObject({ virtuals: true });
@@ -365,9 +366,21 @@ const updatePlayer = async (req, res, next) => {
     if (startsNewSubscription) {
       updates.currentSubscriptionStartedAt = getDateAtStartOfDay(updates.startDate) || new Date();
       updates.currentSubscriptionAttendanceIds = [];
+      updates.currentSubscriptionExcludedAttendanceIds = [];
     }
     Object.assign(player, updates);
     await player.save();
+    if (
+      startsNewSubscription
+      || typeof updates.currentSubscriptionAttendanceIds !== 'undefined'
+      || typeof updates.currentSubscriptionExcludedAttendanceIds !== 'undefined'
+    ) {
+      try {
+        await synchronizeSubscriptionAttendanceUsage(player);
+      } catch (error) {
+        console.error('Player subscription attendance synchronization failed:', error);
+      }
+    }
     if (startsNewSubscription || typeof updates.payment !== 'undefined' || typeof updates.startDate !== 'undefined' || typeof updates.currentSubscriptionStartedAt !== 'undefined') {
       await recalculatePlayerPayments(player);
     }

@@ -15,6 +15,7 @@ const playerSchema = new mongoose.Schema({
   endDate: { type: Date },
   currentSubscriptionStartedAt: { type: Date },
   currentSubscriptionAttendanceIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Attendance' }],
+  currentSubscriptionExcludedAttendanceIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Attendance' }],
   packageName: { type: String, trim: true, default: '' },
   packageClasses: { type: Number, min: 0, default: 0 },
   packageHours: { type: Number, min: 0, default: 0 },

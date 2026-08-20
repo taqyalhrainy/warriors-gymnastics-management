@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchPayments, createPayment, updatePayment, deletePayment } from '../services/payments.js';
 import { fetchPlayers } from '../services/players.js';
@@ -126,15 +126,23 @@ const PaymentsPage = () => {
   const [selectedDay, setSelectedDay] = useState(getDateInputValue());
   const [searchQuery, setSearchQuery] = useState('');
   const [playerSearch, setPlayerSearch] = useState('');
+  const paymentsLoadRequestIdRef = useRef(0);
+  const paymentsRevisionRef = useRef(0);
   const { t } = useLanguage();
 
   const loadPayments = async (options = {}) => {
+    const requestId = paymentsLoadRequestIdRef.current + 1;
+    paymentsLoadRequestIdRef.current = requestId;
+    const startedRevision = paymentsRevisionRef.current;
     try {
       const forceAll = Boolean(options.forceAll);
       const params = isPaymentUnlocked || forceAll
         ? { fresh: Date.now() }
         : { day: selectedDay || getDateInputValue(), fresh: Date.now() };
-      setPayments(sortPaymentsNewestFirst(await fetchPayments(params)));
+      const paymentRows = sortPaymentsNewestFirst(await fetchPayments(params));
+      if (requestId === paymentsLoadRequestIdRef.current && startedRevision === paymentsRevisionRef.current) {
+        setPayments(paymentRows);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -378,6 +386,7 @@ const PaymentsPage = () => {
       delete payload.customTransactionType;
       const optimisticPayment = buildOptimisticPayment(payload, optimisticId);
 
+      paymentsRevisionRef.current += 1;
       setPayments((current) => sortPaymentsNewestFirst(
         editingPaymentId
           ? current.map((payment) => payment._id === editingPaymentId ? optimisticPayment : payment)
@@ -391,17 +400,20 @@ const PaymentsPage = () => {
 
       if (editingPaymentId) {
         const savedPayment = await updatePayment(editingPaymentId, payload);
+        paymentsRevisionRef.current += 1;
         setPayments((current) => sortPaymentsNewestFirst(
           current.map((payment) => payment._id === savedPayment._id ? savedPayment : payment)
         ));
       } else {
         const savedPayment = await createPayment(payload);
+        paymentsRevisionRef.current += 1;
         setPayments((current) => sortPaymentsNewestFirst(
           current.map((payment) => payment._id === optimisticId ? savedPayment : payment)
         ));
       }
       refreshPaymentsInBackground();
     } catch (err) {
+      paymentsRevisionRef.current += 1;
       setPayments(previousPayments);
       setForm(previousForm);
       setEditingPaymentId(previousEditingPaymentId);
@@ -441,14 +453,17 @@ const PaymentsPage = () => {
 
     setError('');
     const previousPayments = payments;
+    paymentsRevisionRef.current += 1;
     setPayments((current) => current.filter((item) => item._id !== payment._id));
     try {
       await deletePayment(payment._id);
+      paymentsRevisionRef.current += 1;
       if (editingPaymentId === payment._id) {
         handleCancelEdit();
       }
       refreshPaymentsInBackground();
     } catch (err) {
+      paymentsRevisionRef.current += 1;
       setPayments(previousPayments);
       setError(err.response?.data?.message || 'Unable to delete payment.');
     }

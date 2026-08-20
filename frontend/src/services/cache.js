@@ -2,10 +2,15 @@ const DEFAULT_TTL_MS = 5 * 60 * 1000;
 
 const cacheStore = new Map();
 const pendingRequests = new Map();
+const keyVersions = new Map();
 let cacheVersion = 0;
-let requestVersion = 0;
 
 const isFresh = (entry, ttlMs) => entry && (Date.now() - entry.timestamp) < ttlMs;
+const getKeyVersion = (key) => keyVersions.get(key) || 0;
+
+const bumpKeyVersion = (key) => {
+  keyVersions.set(key, getKeyVersion(key) + 1);
+};
 
 export const fetchCached = async (key, loader, options = {}) => {
   const ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
@@ -16,32 +21,33 @@ export const fetchCached = async (key, loader, options = {}) => {
   }
 
   if (!options.force && pendingRequests.has(key)) {
-    return pendingRequests.get(key);
+    return pendingRequests.get(key).promise;
   }
 
-  const startedAtVersion = requestVersion;
+  const startedAtVersion = getKeyVersion(key);
   let request;
   request = loader()
     .then((value) => {
-      if (pendingRequests.get(key) === request && startedAtVersion === requestVersion) {
+      const activeRequest = pendingRequests.get(key);
+      if (activeRequest?.promise === request && startedAtVersion === getKeyVersion(key)) {
         cacheStore.set(key, {
           value,
           timestamp: Date.now()
         });
       }
-      if (pendingRequests.get(key) === request) {
+      if (activeRequest?.promise === request) {
         pendingRequests.delete(key);
       }
       return value;
     })
     .catch((error) => {
-      if (pendingRequests.get(key) === request) {
+      if (pendingRequests.get(key)?.promise === request) {
         pendingRequests.delete(key);
       }
       throw error;
     });
 
-  pendingRequests.set(key, request);
+  pendingRequests.set(key, { promise: request, version: startedAtVersion });
   return request;
 };
 
@@ -68,36 +74,39 @@ export const updateCached = (key, updater) => {
 
 export const touchCacheVersion = () => {
   cacheVersion += 1;
-  requestVersion += 1;
 };
 
 export const invalidateCache = (prefixes = []) => {
   const prefixList = Array.isArray(prefixes) ? prefixes : [prefixes];
   const shouldBumpVersion = prefixList.some(Boolean);
 
-  [...cacheStore.keys()].forEach((key) => {
+  const matchingKeys = new Set([
+    ...cacheStore.keys(),
+    ...pendingRequests.keys(),
+    ...keyVersions.keys()
+  ]);
+  matchingKeys.forEach((key) => {
     if (prefixList.some((prefix) => key.startsWith(prefix))) {
+      bumpKeyVersion(key);
       cacheStore.delete(key);
-    }
-  });
-
-  [...pendingRequests.keys()].forEach((key) => {
-    if (prefixList.some((prefix) => key.startsWith(prefix))) {
       pendingRequests.delete(key);
     }
   });
 
   if (shouldBumpVersion) {
     cacheVersion += 1;
-    requestVersion += 1;
   }
 };
 
 export const clearCache = () => {
+  new Set([
+    ...cacheStore.keys(),
+    ...pendingRequests.keys(),
+    ...keyVersions.keys()
+  ]).forEach(bumpKeyVersion);
   cacheStore.clear();
   pendingRequests.clear();
   cacheVersion += 1;
-  requestVersion += 1;
 };
 
 export const getCacheVersion = () => cacheVersion;

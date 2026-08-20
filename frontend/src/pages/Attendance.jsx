@@ -12,6 +12,8 @@ import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
 import { getCacheVersion } from '../services/cache.js';
 
 const ATTENDANCE_BOARD_CACHE_TTL_MS = 5 * 60 * 1000;
+const LOCAL_ATTENDANCE_OVERRIDE_TTL_MS = 60 * 1000;
+const LOCAL_PLAYER_OVERRIDE_TTL_MS = 45 * 1000;
 let attendanceBoardCache = null;
 let attendanceBoardCacheTimestamp = 0;
 let attendanceBoardCacheDate = '';
@@ -193,6 +195,43 @@ const getPlayerPackageCounter = (player) => {
   };
 };
 
+const firstMeaningfulValue = (...values) => values.find((value) => value !== undefined && value !== null && value !== '');
+
+const mergeStablePlayerFields = (incomingPlayer, fallbackPlayer = null) => ({
+  ...incomingPlayer,
+  parentId: incomingPlayer?.parentId ?? fallbackPlayer?.parentId,
+  parentPhone: incomingPlayer?.parentPhone ?? fallbackPlayer?.parentPhone,
+  groupId: incomingPlayer?.groupId ?? fallbackPlayer?.groupId,
+  groupIds: Array.isArray(incomingPlayer?.groupIds) ? incomingPlayer.groupIds : (fallbackPlayer?.groupIds || []),
+  startDate: firstMeaningfulValue(incomingPlayer?.startDate, fallbackPlayer?.startDate),
+  endDate: firstMeaningfulValue(incomingPlayer?.endDate, fallbackPlayer?.endDate),
+  currentSubscriptionStartedAt: firstMeaningfulValue(incomingPlayer?.currentSubscriptionStartedAt, fallbackPlayer?.currentSubscriptionStartedAt),
+  currentSubscriptionAttendanceIds: Array.isArray(incomingPlayer?.currentSubscriptionAttendanceIds)
+    ? incomingPlayer.currentSubscriptionAttendanceIds
+    : (fallbackPlayer?.currentSubscriptionAttendanceIds || []),
+  currentSubscriptionExcludedAttendanceIds: Array.isArray(incomingPlayer?.currentSubscriptionExcludedAttendanceIds)
+    ? incomingPlayer.currentSubscriptionExcludedAttendanceIds
+    : (fallbackPlayer?.currentSubscriptionExcludedAttendanceIds || []),
+  packageName: firstMeaningfulValue(incomingPlayer?.packageName, fallbackPlayer?.packageName, ''),
+  packageClasses: firstMeaningfulValue(incomingPlayer?.packageClasses, fallbackPlayer?.packageClasses, 0),
+  packageHours: firstMeaningfulValue(incomingPlayer?.packageHours, fallbackPlayer?.packageHours, 0),
+  payment: firstMeaningfulValue(incomingPlayer?.payment, fallbackPlayer?.payment, 0),
+  paymentRemainingAmount: incomingPlayer?.paymentRemainingAmount ?? fallbackPlayer?.paymentRemainingAmount ?? 0,
+  attendancePresentCount: incomingPlayer?.attendancePresentCount ?? fallbackPlayer?.attendancePresentCount ?? 0,
+  attendanceGroupId: incomingPlayer?.attendanceGroupId ?? fallbackPlayer?.attendanceGroupId,
+  todayAttendance: incomingPlayer?.todayAttendance ?? fallbackPlayer?.todayAttendance ?? null,
+  subscriptionId: incomingPlayer?.subscriptionId && typeof incomingPlayer.subscriptionId === 'object'
+    ? {
+      ...(fallbackPlayer?.subscriptionId && typeof fallbackPlayer.subscriptionId === 'object' ? fallbackPlayer.subscriptionId : {}),
+      ...incomingPlayer.subscriptionId
+    }
+    : (incomingPlayer?.subscriptionId ?? fallbackPlayer?.subscriptionId),
+  status: firstMeaningfulValue(incomingPlayer?.status, fallbackPlayer?.status, 'active'),
+  subscriptionNeedsAttention: typeof incomingPlayer?.subscriptionNeedsAttention === 'boolean'
+    ? incomingPlayer.subscriptionNeedsAttention
+    : Boolean(fallbackPlayer?.subscriptionNeedsAttention)
+});
+
 const formatCompactMoney = (value) => Number(value || 0).toLocaleString('en-US');
 const parseManualAttendanceDue = (value) => {
   const normalized = normalizeDigits(value).trim();
@@ -339,6 +378,7 @@ const AttendancePage = () => {
   const [selectedSummaryGroup, setSelectedSummaryGroup] = useState(null);
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [hoveredSummaryGroup, setHoveredSummaryGroup] = useState(null);
   const [search, setSearch] = useState('');
   const [selectedAttendanceDate, setSelectedAttendanceDate] = useState(() => getLocalDateValue());
@@ -349,7 +389,9 @@ const AttendancePage = () => {
   const [pendingAttendanceKeys, setPendingAttendanceKeys] = useState([]);
   const attendanceBoardRef = useRef(null);
   const attendanceLoadRequestIdRef = useRef(0);
+  const attendanceBoardRevisionRef = useRef(0);
   const groupColumnsRef = useRef([]);
+  const loadedAttendanceDateRef = useRef('');
   const touchHoldTimeoutRef = useRef(null);
   const draggedGroupIdRef = useRef(null);
   const dragOverGroupIdRef = useRef(null);
@@ -363,6 +405,8 @@ const AttendancePage = () => {
   const attendanceActionSequenceRef = useRef(0);
   const latestAttendanceActionRef = useRef(new Map());
   const localAttendanceOverridesRef = useRef(new Map());
+  const localPlayerOverridesRef = useRef(new Map());
+  const playerAttendanceRefreshRequestIdRef = useRef(new Map());
   const subscriptionSaveSequenceRef = useRef(0);
   const pendingAttendanceHistoryIdRef = useRef(null);
   const didRunInitialAttendanceLoadRef = useRef(false);
@@ -377,33 +421,88 @@ const AttendancePage = () => {
   const attendanceRangeStartValue = getAttendanceRangeStartValue();
   const isViewingToday = selectedAttendanceDate === todayDateValue;
   const isAttendanceDateOutOfRange = selectedAttendanceDate < attendanceRangeStartValue || selectedAttendanceDate > todayDateValue;
+  const isAttendanceBoardTransitioning = !isAttendanceDateOutOfRange && isLoading;
 
   const getLocalAttendanceOverrideKey = (date, playerId, groupId) => `${date}:${getEntityId(playerId)}:${getEntityId(groupId)}`;
+
+  const setLocalAttendanceOverride = (date, playerId, groupId, record) => {
+    const key = getLocalAttendanceOverrideKey(date, playerId, groupId);
+    localAttendanceOverridesRef.current.set(key, {
+      date,
+      playerId: getEntityId(playerId),
+      groupId: getEntityId(groupId),
+      record,
+      expiresAt: Date.now() + LOCAL_ATTENDANCE_OVERRIDE_TTL_MS
+    });
+  };
+
+  const isMatchingAttendanceRecord = (first, second) => (
+    first
+    && second
+    && getEntityId(first.playerId) === getEntityId(second.playerId)
+    && getEntityId(first.groupId) === getEntityId(second.groupId)
+    && getDateInputValue(first.date) === getDateInputValue(second.date)
+    && first.status === second.status
+  );
+
+  const getActiveAttendanceOverrides = () => {
+    const activeOverrides = [];
+    localAttendanceOverridesRef.current.forEach((override, key) => {
+      if (!override || override.expiresAt <= Date.now()) {
+        localAttendanceOverridesRef.current.delete(key);
+        return;
+      }
+      activeOverrides.push([key, override]);
+    });
+    return activeOverrides;
+  };
 
   const applyLocalAttendanceOverrides = (records, date) => {
     const recordsByKey = new Map((records || []).map((record) => [
       getLocalAttendanceOverrideKey(date, record.playerId, record.groupId),
       record
     ]));
-    localAttendanceOverridesRef.current.forEach((record, key) => {
-      if (key.startsWith(`${date}:`)) {
-        recordsByKey.set(key, record);
+    getActiveAttendanceOverrides().forEach(([key, override]) => {
+      if (override.date !== date) return;
+      const serverRecord = recordsByKey.get(key);
+      if (override.record === null) {
+        if (!serverRecord) {
+          localAttendanceOverridesRef.current.delete(key);
+        }
+        recordsByKey.delete(key);
+        return;
       }
+      if (isMatchingAttendanceRecord(serverRecord, override.record)) {
+        localAttendanceOverridesRef.current.delete(key);
+        return;
+      }
+      recordsByKey.set(key, override.record);
     });
     return [...recordsByKey.values()];
   };
 
   const applyLocalPlayerAttendanceOverrides = (records, playerId) => {
-    const recordsById = new Map((records || []).map((record) => [
-      getEntityId(record._id) || getLocalAttendanceOverrideKey(getDateInputValue(record.date), record.playerId, record.groupId),
+    const recordsByKey = new Map((records || []).map((record) => [
+      getLocalAttendanceOverrideKey(getDateInputValue(record.date), record.playerId, record.groupId),
       record
     ]));
-    localAttendanceOverridesRef.current.forEach((record) => {
-      if (getEntityId(record.playerId) === getEntityId(playerId)) {
-        recordsById.set(getEntityId(record._id) || getLocalAttendanceOverrideKey(getDateInputValue(record.date), record.playerId, record.groupId), record);
+    getActiveAttendanceOverrides().forEach(([key, override]) => {
+      if (override.playerId !== getEntityId(playerId)) return;
+      const serverRecord = recordsByKey.get(key);
+      if (override.record === null) {
+        if (!serverRecord) {
+          localAttendanceOverridesRef.current.delete(key);
+        }
+        recordsByKey.delete(key);
+        return;
       }
+      if (isMatchingAttendanceRecord(serverRecord, override.record)) {
+        localAttendanceOverridesRef.current.delete(key);
+        return;
+      }
+      recordsByKey.set(key, override.record);
     });
-    return [...recordsById.values()];
+    return [...recordsByKey.values()].sort((first, second) => new Date(second.date) - new Date(first.date));
   };
   const selectedAttendanceDateLabel = isViewingToday
     ? 'Today'
@@ -549,26 +648,102 @@ const AttendancePage = () => {
     ].filter(Boolean);
   };
 
+  const rememberLocalPlayerOverride = (player) => {
+    const playerId = getEntityId(player?._id);
+    if (!playerId) return;
+    localPlayerOverridesRef.current.set(playerId, {
+      player,
+      expiresAt: Date.now() + LOCAL_PLAYER_OVERRIDE_TTL_MS
+    });
+  };
+
+  const applyLocalPlayerOverridesToGroups = (groups) => {
+    const now = Date.now();
+    const activeOverrides = [];
+    localPlayerOverridesRef.current.forEach((override, playerId) => {
+      if (!override?.player || override.expiresAt <= now) {
+        localPlayerOverridesRef.current.delete(playerId);
+        return;
+      }
+      activeOverrides.push(override.player);
+    });
+
+    if (!activeOverrides.length) return groups;
+
+    let nextGroups = groups.map((group) => ({
+      ...group,
+      players: dedupePlayersById(group.players || [])
+    }));
+
+    activeOverrides.forEach((overridePlayer) => {
+      const playerId = getEntityId(overridePlayer._id);
+      const targetGroupIds = new Set(getSnapshotGroups(overridePlayer).map((group) => getEntityId(group._id)).filter(Boolean));
+      const shouldUseLoadedGroups = targetGroupIds.size === 0 && !overridePlayer.isDeleted && overridePlayer.status !== 'left';
+      const isVisible = isPlayerVisibleInAttendance(overridePlayer);
+      let fallbackPlayer = null;
+
+      nextGroups.forEach((group) => {
+        const loadedPlayer = group.players.find((player) => getEntityId(player._id) === playerId);
+        if (!fallbackPlayer && loadedPlayer) fallbackPlayer = loadedPlayer;
+      });
+
+      nextGroups = nextGroups.map((group) => {
+        const groupId = getEntityId(group._id);
+        const currentPlayers = group.players || [];
+        const loadedPlayerIndex = currentPlayers.findIndex((player) => getEntityId(player._id) === playerId);
+        const loadedPlayer = loadedPlayerIndex >= 0 ? currentPlayers[loadedPlayerIndex] : null;
+        const shouldInclude = isVisible && (targetGroupIds.has(groupId) || (shouldUseLoadedGroups && Boolean(loadedPlayer)));
+        let players = currentPlayers.filter((player) => getEntityId(player._id) !== playerId);
+
+        if (shouldInclude) {
+          const mergedPlayer = {
+            ...loadedPlayer,
+            ...mergeStablePlayerFields(overridePlayer, loadedPlayer || fallbackPlayer),
+            attendanceGroupId: groupId,
+            todayAttendance: loadedPlayer?.todayAttendance || null
+          };
+          const insertAt = loadedPlayerIndex >= 0 ? loadedPlayerIndex : players.length;
+          players.splice(insertAt, 0, mergedPlayer);
+        }
+
+        return {
+          ...group,
+          players,
+          currentCount: players.length
+        };
+      });
+    });
+
+    return nextGroups;
+  };
+
   const loadAttendanceBoard = async (options = {}) => {
     const force = Boolean(options.force);
     const silent = Boolean(options.silent);
     const date = options.date || selectedAttendanceDate;
     const viewingToday = date === todayDateValue;
     const requestId = ++attendanceLoadRequestIdRef.current;
-    const startedCacheVersion = getCacheVersion();
+    const startedBoardRevision = attendanceBoardRevisionRef.current;
+    const loadedDateAtStart = loadedAttendanceDateRef.current;
 
-    const currentCacheVersion = startedCacheVersion;
+    const currentCacheVersion = getCacheVersion();
     const hasCachedBoardForDate = attendanceBoardCache && attendanceBoardCacheDate === date && attendanceBoardCacheVersion === currentCacheVersion && (Date.now() - attendanceBoardCacheTimestamp) < ATTENDANCE_BOARD_CACHE_TTL_MS;
     if (!force && hasCachedBoardForDate) {
       groupColumnsRef.current = attendanceBoardCache;
       setGroupColumns(attendanceBoardCache);
+      loadedAttendanceDateRef.current = date;
       setIsLoading(false);
+      setIsRefreshing(false);
       return attendanceBoardCache;
     }
 
     try {
-      if (!silent && !hasCachedBoardForDate) {
-        setIsLoading(true);
+      if (!silent) {
+        if (loadedDateAtStart !== date) {
+          setIsLoading(true);
+        } else {
+          setIsRefreshing(true);
+        }
       }
       const [groups, todayRecords] = await Promise.all([
         fetchGroups({ force }),
@@ -595,8 +770,12 @@ const AttendancePage = () => {
       const groupsWithPlayers = viewingToday
         ? currentGroupsWithPlayers
         : buildHistoricalGroups(groups, playerSnapshotResult?.rows || [], date, currentGroupsWithPlayers);
-      const groupsWithTodayAttendance = applyTodayRecordsToGroups(groupsWithPlayers, applyLocalAttendanceOverrides(todayRecords, date));
-      if (requestId !== attendanceLoadRequestIdRef.current || getCacheVersion() !== startedCacheVersion) {
+      const groupsWithLocalPlayers = applyLocalPlayerOverridesToGroups(groupsWithPlayers);
+      const groupsWithTodayAttendance = applyTodayRecordsToGroups(groupsWithLocalPlayers, applyLocalAttendanceOverrides(todayRecords, date));
+      if (requestId !== attendanceLoadRequestIdRef.current) {
+        return groupColumnsRef.current;
+      }
+      if (loadedDateAtStart === date && attendanceBoardRevisionRef.current !== startedBoardRevision) {
         return groupColumnsRef.current;
       }
 
@@ -606,14 +785,18 @@ const AttendancePage = () => {
       attendanceBoardCacheVersion = getCacheVersion();
       groupColumnsRef.current = groupsWithTodayAttendance;
       setGroupColumns(groupsWithTodayAttendance);
+      loadedAttendanceDateRef.current = date;
       setMessage(`${date === todayDateValue ? 'Today' : new Date(`${date}T00:00:00`).toLocaleDateString()} attendance loaded`);
       return groupsWithTodayAttendance;
     } catch (err) {
-      setMessage(err.response?.data?.message || 'Unable to load attendance board');
-      return [];
+      if (requestId === attendanceLoadRequestIdRef.current) {
+        setMessage(err.response?.data?.message || 'Unable to load attendance board');
+      }
+      return groupColumnsRef.current;
     } finally {
-      if (!silent) {
+      if (!silent && requestId === attendanceLoadRequestIdRef.current) {
         setIsLoading(false);
+        setIsRefreshing(false);
       }
     }
   };
@@ -624,6 +807,11 @@ const AttendancePage = () => {
 
   useEffect(() => {
     groupColumnsRef.current = groupColumns;
+    setSelectedSummaryGroup((currentGroup) => (
+      currentGroup
+        ? (groupColumns.find((group) => getEntityId(group._id) === getEntityId(currentGroup._id)) || null)
+        : currentGroup
+    ));
   }, [groupColumns]);
 
   useEffect(() => {
@@ -632,7 +820,11 @@ const AttendancePage = () => {
 
   useEffect(() => {
     if (isAttendanceDateOutOfRange) {
+      attendanceLoadRequestIdRef.current += 1;
+      loadedAttendanceDateRef.current = '';
       setGroupColumns([]);
+      setIsLoading(false);
+      setIsRefreshing(false);
       setMessage('Out of range (maximum range is 3 months)');
       return;
     }
@@ -807,6 +999,7 @@ const AttendancePage = () => {
 
     const previousGroups = groupColumns;
     const reorderedGroups = reorderGroups(groupColumns, fromGroupId, targetGroupId);
+    attendanceBoardRevisionRef.current += 1;
     setGroupColumns(reorderedGroups);
       attendanceBoardCache = reorderedGroups;
       attendanceBoardCacheTimestamp = Date.now();
@@ -817,6 +1010,7 @@ const AttendancePage = () => {
       await reorderGroupsRequest(reorderedGroups.map((group) => group._id));
       setMessage('Group order updated');
     } catch (err) {
+      attendanceBoardRevisionRef.current += 1;
       setGroupColumns(previousGroups);
       attendanceBoardCache = previousGroups;
       attendanceBoardCacheTimestamp = Date.now();
@@ -931,17 +1125,22 @@ const AttendancePage = () => {
   };
 
   const setPlayerAttendanceInBoard = (playerId, targetGroupId, attendance) => {
+    attendanceBoardRevisionRef.current += 1;
     setGroupColumns((currentGroups) => {
       const currentPlayerRecords = currentGroups
-        .flatMap((group) => group.players)
-        .filter((player) => player._id === playerId);
-      const targetPlayerRecord = currentGroups
-        .find((group) => getEntityId(group._id) === getEntityId(targetGroupId))
-        ?.players.find((player) => player._id === playerId) || null;
-      const previousStatus = targetPlayerRecord?.todayAttendance?.status || null;
-      const nextStatus = attendance?.status || null;
-      const presentDelta = (previousStatus === 'present' ? -1 : 0) + (nextStatus === 'present' ? 1 : 0);
-      const basePresentCount = Number((targetPlayerRecord || currentPlayerRecords[0])?.attendancePresentCount || 0);
+        .flatMap((group) => group.players
+          .filter((player) => player._id === playerId)
+          .map((player) => ({ player, groupId: getEntityId(group._id) })));
+      const targetPlayerRecord = currentPlayerRecords
+        .find((item) => item.groupId === getEntityId(targetGroupId))?.player || null;
+      const hadPresentAttendance = currentPlayerRecords.some((item) => item.player.todayAttendance?.status === 'present');
+      const willHavePresentAttendance = currentPlayerRecords.some((item) => (
+        item.groupId === getEntityId(targetGroupId)
+          ? attendance?.status === 'present'
+          : item.player.todayAttendance?.status === 'present'
+      ));
+      const presentDelta = Number(willHavePresentAttendance) - Number(hadPresentAttendance);
+      const basePresentCount = Number((targetPlayerRecord || currentPlayerRecords[0]?.player)?.attendancePresentCount || 0);
       const nextPresentCount = Math.max(0, basePresentCount + presentDelta);
 
       const nextGroups = currentGroups.map((group) => {
@@ -1017,28 +1216,12 @@ const AttendancePage = () => {
     .find((group) => getEntityId(group._id) === getEntityId(groupId))
     ?.players.find((currentPlayer) => getEntityId(currentPlayer._id) === getEntityId(playerId)) || null;
 
-  const firstMeaningfulValue = (...values) => values.find((value) => value !== undefined && value !== null && value !== '');
-
-  const mergeStablePlayerFields = (incomingPlayer, fallbackPlayer = null) => ({
-    ...incomingPlayer,
-    startDate: firstMeaningfulValue(incomingPlayer?.startDate, fallbackPlayer?.startDate),
-    endDate: firstMeaningfulValue(incomingPlayer?.endDate, fallbackPlayer?.endDate),
-    currentSubscriptionStartedAt: firstMeaningfulValue(incomingPlayer?.currentSubscriptionStartedAt, fallbackPlayer?.currentSubscriptionStartedAt),
-    packageName: firstMeaningfulValue(incomingPlayer?.packageName, fallbackPlayer?.packageName, ''),
-    packageClasses: firstMeaningfulValue(incomingPlayer?.packageClasses, fallbackPlayer?.packageClasses, 0),
-    packageHours: firstMeaningfulValue(incomingPlayer?.packageHours, fallbackPlayer?.packageHours, 0),
-    payment: firstMeaningfulValue(incomingPlayer?.payment, fallbackPlayer?.payment, 0),
-    status: firstMeaningfulValue(incomingPlayer?.status, fallbackPlayer?.status, 'active'),
-    subscriptionNeedsAttention: typeof incomingPlayer?.subscriptionNeedsAttention === 'boolean'
-      ? incomingPlayer.subscriptionNeedsAttention
-      : Boolean(fallbackPlayer?.subscriptionNeedsAttention)
-  });
-
   const patchPlayerInAttendanceBoard = (updatedPlayer, attendanceRecords = null, fallbackGroupId = '') => {
     if (!updatedPlayer?._id) {
       return;
     }
 
+    attendanceBoardRevisionRef.current += 1;
     setGroupColumns((currentGroups) => {
       const playerId = getEntityId(updatedPlayer._id);
       const attendanceByGroupId = new Map();
@@ -1119,29 +1302,39 @@ const AttendancePage = () => {
   };
 
   const syncPlayerInAttendanceBoard = (updatedPlayer, attendanceRecords = null, fallbackGroupId = '') => {
+    const playerId = getEntityId(updatedPlayer?._id);
+    const existingOverride = localPlayerOverridesRef.current.get(playerId);
+    if (existingOverride?.player && existingOverride.expiresAt > Date.now()) {
+      localPlayerOverridesRef.current.set(playerId, {
+        player: mergeStablePlayerFields(updatedPlayer, existingOverride.player),
+        expiresAt: Date.now() + LOCAL_PLAYER_OVERRIDE_TTL_MS
+      });
+    }
     patchPlayerInAttendanceBoard(updatedPlayer, attendanceRecords, fallbackGroupId);
   };
 
   const patchExistingPlayerInAttendanceBoard = (updatedPlayer) => {
     if (!updatedPlayer?._id) return;
 
+    rememberLocalPlayerOverride(updatedPlayer);
+    attendanceBoardRevisionRef.current += 1;
     setGroupColumns((currentGroups) => {
       const playerId = getEntityId(updatedPlayer._id);
       const nextGroups = currentGroups.map((group) => ({
         ...group,
-        players: group.players.map((player) => (
-          getEntityId(player._id) === playerId
-            ? {
-              ...player,
-              ...updatedPlayer,
-              groupId: updatedPlayer.groupId || player.groupId,
-              groupIds: updatedPlayer.groupIds?.length ? updatedPlayer.groupIds : player.groupIds,
-              attendanceGroupId: player.attendanceGroupId || getEntityId(group._id),
-              attendancePresentCount: player.attendancePresentCount,
-              todayAttendance: player.todayAttendance
-            }
-            : player
-        ))
+        players: group.players.map((player) => {
+          if (getEntityId(player._id) !== playerId) return player;
+          const stablePlayer = mergeStablePlayerFields(updatedPlayer, player);
+          return {
+            ...player,
+            ...stablePlayer,
+            groupId: stablePlayer.groupId || player.groupId,
+            groupIds: stablePlayer.groupIds?.length ? stablePlayer.groupIds : player.groupIds,
+            attendanceGroupId: stablePlayer.attendanceGroupId || player.attendanceGroupId || getEntityId(group._id),
+            attendancePresentCount: stablePlayer.attendancePresentCount ?? player.attendancePresentCount,
+            todayAttendance: player.todayAttendance
+          };
+        })
       }));
 
       attendanceBoardCache = nextGroups;
@@ -1167,6 +1360,7 @@ const AttendancePage = () => {
   };
 
   const applyOptimisticSelectedPlayer = (nextPlayer, attendanceRecords = null, fallbackGroupId = '') => {
+    rememberLocalPlayerOverride(nextPlayer);
     syncPlayerInAttendanceBoard(nextPlayer, attendanceRecords, fallbackGroupId);
     setSelectedPlayerIfOpen(nextPlayer);
   };
@@ -1202,30 +1396,12 @@ const AttendancePage = () => {
     }
   };
 
-  const applyPresentDeltaToPlayer = (player, presentDelta) => {
-    if (!player || !presentDelta) {
-      return player;
-    }
-
-    const subscription = player.subscriptionId && typeof player.subscriptionId === 'object'
-      ? {
-        ...player.subscriptionId,
-        usedSessions: Math.max(0, Number(player.subscriptionId.usedSessions || 0) + presentDelta),
-        remainingSessions: typeof player.subscriptionId.remainingSessions !== 'undefined'
-          ? Math.max(0, Number(player.subscriptionId.remainingSessions || 0) - presentDelta)
-          : player.subscriptionId.remainingSessions
-      }
-      : player.subscriptionId;
-
-    return {
-      ...player,
-      subscriptionId: subscription,
-      attendancePresentCount: Math.max(0, Number(player.attendancePresentCount || 0) + presentDelta)
-    };
-  };
-
   const getCurrentSubscriptionAttendanceIdSet = (player) => new Set(
     (player?.currentSubscriptionAttendanceIds || []).map((id) => getEntityId(id))
+  );
+
+  const getCurrentSubscriptionExcludedAttendanceIdSet = (player) => new Set(
+    (player?.currentSubscriptionExcludedAttendanceIds || []).map((id) => getEntityId(id))
   );
 
   const getCurrentSubscriptionCycleStartValue = (player = selectedPlayer) => (
@@ -1237,9 +1413,17 @@ const AttendancePage = () => {
     Boolean(record?._id) && getCurrentSubscriptionAttendanceIdSet(player).has(getEntityId(record._id))
   );
 
+  const isRecordExplicitlyExcludedFromCurrentSubscription = (record, player = selectedPlayer) => (
+    Boolean(record?._id) && getCurrentSubscriptionExcludedAttendanceIdSet(player).has(getEntityId(record._id))
+  );
+
   const isAttendanceRecordInSubscriptionCycle = (record, player, cycleStartOverride = '') => {
     const preciseCycleStart = cycleStartOverride;
     const cycleStart = preciseCycleStart || getCurrentSubscriptionCycleStartValue(player);
+
+    if (isRecordExplicitlyExcludedFromCurrentSubscription(record, player)) {
+      return false;
+    }
 
     if (isRecordExplicitlyCountedInCurrentSubscription(record, player)) {
       return true;
@@ -1303,13 +1487,15 @@ const AttendancePage = () => {
   };
 
   const refreshPlayerAttendanceCount = async (playerId, groupId) => {
+    const playerKey = getEntityId(playerId);
+    const requestId = (playerAttendanceRefreshRequestIdRef.current.get(playerKey) || 0) + 1;
+    playerAttendanceRefreshRequestIdRef.current.set(playerKey, requestId);
     try {
-      const startedCacheVersion = getCacheVersion();
       const attendanceRecords = applyLocalPlayerAttendanceOverrides(
         await fetchAttendanceByPlayer(playerId),
         playerId
       );
-      if (getCacheVersion() !== startedCacheVersion) {
+      if (playerAttendanceRefreshRequestIdRef.current.get(playerKey) !== requestId) {
         return;
       }
       const boardPlayer = getAttendancePlayerFromBoard(groupColumnsRef.current, playerId, groupId)
@@ -1324,6 +1510,10 @@ const AttendancePage = () => {
       }
     } catch (error) {
       console.error(error);
+    } finally {
+      if (playerAttendanceRefreshRequestIdRef.current.get(playerKey) === requestId) {
+        playerAttendanceRefreshRequestIdRef.current.delete(playerKey);
+      }
     }
   };
 
@@ -1358,7 +1548,7 @@ const AttendancePage = () => {
       checkInTime: status === 'present' ? new Date().toISOString() : undefined
     };
     const overrideKey = getLocalAttendanceOverrideKey(selectedAttendanceDate, player._id, groupId);
-    localAttendanceOverridesRef.current.set(overrideKey, optimisticAttendance);
+    setLocalAttendanceOverride(selectedAttendanceDate, player._id, groupId, optimisticAttendance);
 
     setMessage('');
     setAttendanceActionPending(actionKey, true);
@@ -1376,7 +1566,7 @@ const AttendancePage = () => {
       if (latestAttendanceActionRef.current.get(playerDateKey) !== actionSequence) {
         return;
       }
-      localAttendanceOverridesRef.current.delete(overrideKey);
+      setLocalAttendanceOverride(selectedAttendanceDate, player._id, groupId, savedAttendance);
       setPlayerAttendanceInBoard(player._id, groupId, savedAttendance);
       if (selectedPlayer?._id === player._id) {
         setSelectedPlayer((currentPlayer) => currentPlayer ? {
@@ -1426,7 +1616,7 @@ const AttendancePage = () => {
     const previousPlayerRecord = getAttendancePlayerFromBoard(groupColumnsRef.current, player._id, groupId);
     const previousAttendance = previousPlayerRecord?.todayAttendance || null;
     const overrideKey = getLocalAttendanceOverrideKey(selectedAttendanceDate, player._id, groupId);
-    localAttendanceOverridesRef.current.delete(overrideKey);
+    setLocalAttendanceOverride(selectedAttendanceDate, player._id, groupId, null);
     setMessage('');
     setAttendanceActionPending(actionKey, true);
     setPlayerAttendanceInBoard(player._id, groupId, null);
@@ -1448,9 +1638,7 @@ const AttendancePage = () => {
       setMessage('Attendance cancelled');
     } catch (err) {
       if (latestAttendanceActionRef.current.get(playerDateKey) === actionSequence) {
-        if (previousAttendance) {
-          localAttendanceOverridesRef.current.set(overrideKey, previousAttendance);
-        }
+        localAttendanceOverridesRef.current.delete(overrideKey);
         setPlayerAttendanceInBoard(player._id, groupId, previousAttendance);
 
         if (selectedPlayer?._id === player._id) {
@@ -1472,7 +1660,6 @@ const AttendancePage = () => {
 
   const handleSelectPlayer = async (player) => {
     const requestId = ++selectedPlayerLoadRequestIdRef.current;
-    const startedCacheVersion = getCacheVersion();
     selectedPlayerFormDirtyRef.current = false;
     selectedPlayerEditRequestIdRef.current += 1;
     try {
@@ -1492,8 +1679,8 @@ const AttendancePage = () => {
       setEditingAttendanceHistoryId(null);
       setIsEditingSelectedPlayer(false);
 
-      let [latestPlayer, attendanceRecords, playerHistory] = await Promise.all([
-        getPlayer(player._id),
+      const [latestPlayerResponse, attendanceResponse, playerHistory] = await Promise.all([
+        getPlayer(player._id, { force: true }),
         fetchAttendanceByPlayer(player._id),
         fetchPlayerHistory(player._id)
       ]);
@@ -1501,16 +1688,8 @@ const AttendancePage = () => {
       if (requestId !== selectedPlayerLoadRequestIdRef.current) {
         return;
       }
-      if (getCacheVersion() !== startedCacheVersion) {
-        [latestPlayer, attendanceRecords, playerHistory] = await Promise.all([
-          getPlayer(player._id, { force: true }),
-          fetchAttendanceByPlayer(player._id),
-          fetchPlayerHistory(player._id)
-        ]);
-        if (requestId !== selectedPlayerLoadRequestIdRef.current) {
-          return;
-        }
-      }
+      const latestPlayer = mergeStablePlayerFields(latestPlayerResponse, stableInitialPlayer);
+      const attendanceRecords = applyLocalPlayerAttendanceOverrides(attendanceResponse, player._id);
 
       const subscriptionHistory = buildSubscriptionHistory(playerHistory.entries || [], latestPlayer)
         .filter((cycle) => !latestPlayer.startDate || getLocalDateOnly(cycle.startDate).getTime() <= getLocalDateOnly(latestPlayer.startDate).getTime());
@@ -1573,7 +1752,7 @@ const AttendancePage = () => {
         fetchParents(),
         fetchGroups(),
         fetchPackageOptions(),
-        getPlayer(selectedPlayer._id)
+        getPlayer(selectedPlayer._id, { force: true })
       ]);
 
       if (requestId !== selectedPlayerEditRequestIdRef.current || editingPlayerId !== selectedPlayer?._id) {
@@ -1583,9 +1762,10 @@ const AttendancePage = () => {
       setEditParents(parentsData);
       setEditGroups(groupsData);
       setPackageOptions(packageData);
-      setSelectedPlayer(latestPlayer);
+      const stableLatestPlayer = mergeStablePlayerFields(latestPlayer, selectedPlayer);
+      setSelectedPlayer(stableLatestPlayer);
       if (!selectedPlayerFormDirtyRef.current) {
-        setSelectedPlayerForm(createSelectedPlayerForm(latestPlayer));
+        setSelectedPlayerForm(createSelectedPlayerForm(stableLatestPlayer));
       }
     } catch (err) {
       if (requestId !== selectedPlayerEditRequestIdRef.current) {
@@ -1781,6 +1961,7 @@ const AttendancePage = () => {
       paymentRemainingAmount: Number(selectedPlayer.paymentRemainingAmount || 0),
       currentSubscriptionStartedAt: subscriptionForm.startDate,
       currentSubscriptionAttendanceIds: [],
+      currentSubscriptionExcludedAttendanceIds: [],
       subscriptionId: selectedPlayer.subscriptionId && typeof selectedPlayer.subscriptionId === 'object'
         ? {
           ...selectedPlayer.subscriptionId,
@@ -1798,6 +1979,7 @@ const AttendancePage = () => {
 
     setSubscriptionMessage('');
     setIsSavingSubscription(true);
+    let savedPlayer = null;
     try {
       const optimisticCycle = {
         key: subscriptionForm.startDate,
@@ -1817,7 +1999,7 @@ const AttendancePage = () => {
       setOpenSubscriptionHistoryKey(optimisticCycle.key);
       setShowSubscriptionModal(false);
       setMessage('New subscription started');
-      const savedPlayer = await updatePlayer(selectedPlayer._id, {
+      savedPlayer = await updatePlayer(selectedPlayer._id, {
         startDate: subscriptionForm.startDate,
         endDate: subscriptionForm.endDate,
         status: selectedPlayer.status === 'expired' ? 'active' : selectedPlayer.status,
@@ -1827,6 +2009,10 @@ const AttendancePage = () => {
       if (subscriptionSaveSequenceRef.current !== saveSequence) {
         return;
       }
+
+      const committedPlayer = mergeStablePlayerFields(savedPlayer, optimisticPlayer);
+      syncPlayerInAttendanceBoard(committedPlayer, null, getPlayerAttendanceGroupId(selectedPlayer));
+      setSelectedPlayerIfOpen(committedPlayer);
 
       const [attendanceData, playerHistory] = await Promise.all([
         fetchAttendanceByPlayer(selectedPlayer._id),
@@ -1859,12 +2045,21 @@ const AttendancePage = () => {
       }
     } catch (error) {
       if (subscriptionSaveSequenceRef.current === saveSequence) {
-        applyOptimisticSelectedPlayer(previousPlayer);
-        if (isSelectedPlayerOpen(previousPlayer._id)) {
-          setShowSubscriptionModal(true);
+        if (savedPlayer) {
+          const committedPlayer = mergeStablePlayerFields(savedPlayer, optimisticPlayer);
+          syncPlayerInAttendanceBoard(committedPlayer, null, getPlayerAttendanceGroupId(previousPlayer));
+          setSelectedPlayerIfOpen(committedPlayer);
+          setShowSubscriptionModal(false);
+          setMessage('New subscription saved');
+          setSubscriptionMessage('');
+        } else {
+          applyOptimisticSelectedPlayer(previousPlayer);
+          if (isSelectedPlayerOpen(previousPlayer._id)) {
+            setShowSubscriptionModal(true);
+          }
+          setSubscriptionMessage(error.response?.data?.message || 'Unable to start a new subscription.');
         }
       }
-      setSubscriptionMessage(error.response?.data?.message || 'Unable to start a new subscription.');
     } finally {
       setIsSavingSubscription(false);
     }
@@ -1890,13 +2085,13 @@ const AttendancePage = () => {
       patchExistingPlayerInAttendanceBoard(optimisticPlayer);
       setSelectedPlayerIfOpen(optimisticPlayer);
       setMessage('Subscription warning cleared');
-      await updatePlayer(selectedPlayer._id, { subscriptionNeedsAttention: false });
-      const refreshedPlayer = await getPlayer(selectedPlayer._id, { force: true });
+      const savedPlayer = await updatePlayer(selectedPlayer._id, { subscriptionNeedsAttention: false });
       if (!isLatestSelectedPlayerMutation(mutation)) {
         return;
       }
-      patchExistingPlayerInAttendanceBoard(refreshedPlayer);
-      setSelectedPlayerIfOpen(refreshedPlayer);
+      const confirmedPlayer = mergeStablePlayerFields(savedPlayer, optimisticPlayer);
+      patchExistingPlayerInAttendanceBoard(confirmedPlayer);
+      setSelectedPlayerIfOpen(confirmedPlayer);
     } catch (error) {
       if (isLatestSelectedPlayerMutation(mutation)) {
         patchExistingPlayerInAttendanceBoard(previousPlayer);
@@ -1930,13 +2125,13 @@ const AttendancePage = () => {
       patchExistingPlayerInAttendanceBoard(optimisticPlayer);
       setSelectedPlayerIfOpen(optimisticPlayer);
       setMessage('Subscription warning enabled');
-      await updatePlayer(selectedPlayer._id, { subscriptionNeedsAttention: true });
-      const refreshedPlayer = await getPlayer(selectedPlayer._id, { force: true });
+      const savedPlayer = await updatePlayer(selectedPlayer._id, { subscriptionNeedsAttention: true });
       if (!isLatestSelectedPlayerMutation(mutation)) {
         return;
       }
-      patchExistingPlayerInAttendanceBoard(refreshedPlayer);
-      setSelectedPlayerIfOpen(refreshedPlayer);
+      const confirmedPlayer = mergeStablePlayerFields(savedPlayer, optimisticPlayer);
+      patchExistingPlayerInAttendanceBoard(confirmedPlayer);
+      setSelectedPlayerIfOpen(confirmedPlayer);
     } catch (error) {
       if (isLatestSelectedPlayerMutation(mutation)) {
         patchExistingPlayerInAttendanceBoard(previousPlayer);
@@ -1970,13 +2165,13 @@ const AttendancePage = () => {
       patchExistingPlayerInAttendanceBoard(optimisticPlayer);
       setSelectedPlayerIfOpen(optimisticPlayer);
       setMessage(isEnabled ? 'Attendance alert dot enabled' : 'Attendance alert dot cleared');
-      await updatePlayer(selectedPlayer._id, { attendanceAlertEnabled: isEnabled });
-      const refreshedPlayer = await getPlayer(selectedPlayer._id, { force: true });
+      const savedPlayer = await updatePlayer(selectedPlayer._id, { attendanceAlertEnabled: isEnabled });
       if (!isLatestSelectedPlayerMutation(mutation)) {
         return;
       }
-      patchExistingPlayerInAttendanceBoard(refreshedPlayer);
-      setSelectedPlayerIfOpen(refreshedPlayer);
+      const confirmedPlayer = mergeStablePlayerFields(savedPlayer, optimisticPlayer);
+      patchExistingPlayerInAttendanceBoard(confirmedPlayer);
+      setSelectedPlayerIfOpen(confirmedPlayer);
     } catch (error) {
       if (isLatestSelectedPlayerMutation(mutation)) {
         patchExistingPlayerInAttendanceBoard(previousPlayer);
@@ -2007,19 +2202,21 @@ const AttendancePage = () => {
       patchExistingPlayerInAttendanceBoard(optimisticPlayer);
       setSelectedPlayerIfOpen(optimisticPlayer);
       setDueAdjustmentForm('');
-      await updatePlayer(selectedPlayer._id, {
+      const savedPlayer = await updatePlayer(selectedPlayer._id, {
         previousDueBalance: targetDue,
         dueAdjustment: 0
       });
-      const refreshedPlayer = await getPlayer(selectedPlayer._id, { force: true });
-      const attendanceRecords = await fetchAttendanceByPlayer(selectedPlayer._id);
-      const refreshedPlayerWithCount = withAttendancePresentCount(refreshedPlayer, attendanceRecords);
       const confirmedPlayer = {
-        ...refreshedPlayerWithCount,
+        ...mergeStablePlayerFields(savedPlayer, optimisticPlayer),
         paymentRemainingAmount: optimisticPlayer.paymentRemainingAmount
       };
       patchExistingPlayerInAttendanceBoard(confirmedPlayer);
       setSelectedPlayerIfOpen(confirmedPlayer);
+      try {
+        await refreshPlayerAttendanceCount(selectedPlayer._id, getPlayerAttendanceGroupId(selectedPlayer));
+      } catch (refreshError) {
+        console.error(refreshError);
+      }
       setMessage('Due updated');
     } catch (error) {
       patchExistingPlayerInAttendanceBoard(previousPlayer);
@@ -2054,21 +2251,26 @@ const AttendancePage = () => {
     const optimisticRecords = previousRecords.map((item) => (
       item._id === record._id ? optimisticRecord : item
     ));
-    const presentDelta = (record.status === 'present' ? -1 : 0) + (status === 'present' ? 1 : 0);
-    const optimisticPlayer = applyPresentDeltaToPlayer(selectedPlayer, presentDelta);
+    const recordDate = getDateInputValue(record.date);
+    const overrideKey = getLocalAttendanceOverrideKey(recordDate, selectedPlayer._id, groupId);
+    const optimisticPlayer = withAttendancePresentCount(selectedPlayer, optimisticRecords, '', groupId);
+    let attendanceSaved = false;
 
     try {
       setMessage('');
+      setLocalAttendanceOverride(recordDate, selectedPlayer._id, groupId, optimisticRecord);
       setAttendanceHistoryPending(record._id);
       setSelectedPlayerAttendanceHistory(optimisticRecords);
       applyOptimisticSelectedPlayer(optimisticPlayer, optimisticRecords, groupId);
       setMessage('Attendance history updated');
-      await updateTodayAttendance({
+      const savedAttendance = await updateTodayAttendance({
         playerId: selectedPlayer._id,
         groupId,
         status,
-        date: getDateInputValue(record.date)
+        date: recordDate
       });
+      attendanceSaved = true;
+      setLocalAttendanceOverride(recordDate, selectedPlayer._id, groupId, savedAttendance);
 
       const [refreshedPlayer, attendanceRecords] = await Promise.all([
         getPlayer(selectedPlayer._id, { force: true }),
@@ -2084,9 +2286,15 @@ const AttendancePage = () => {
       }
       setEditingAttendanceHistoryId(null);
     } catch (error) {
-      setSelectedPlayerAttendanceHistory(previousRecords);
-      applyOptimisticSelectedPlayer(previousPlayer, previousRecords, groupId);
-      setMessage(error.response?.data?.message || 'Unable to update attendance history');
+      if (attendanceSaved) {
+        setEditingAttendanceHistoryId(null);
+        setMessage('Attendance history updated');
+      } else {
+        localAttendanceOverridesRef.current.delete(overrideKey);
+        setSelectedPlayerAttendanceHistory(previousRecords);
+        applyOptimisticSelectedPlayer(previousPlayer, previousRecords, groupId);
+        setMessage(error.response?.data?.message || 'Unable to update attendance history');
+      }
     } finally {
       setAttendanceHistoryPending(null);
     }
@@ -2109,10 +2317,14 @@ const AttendancePage = () => {
     const previousPlayer = selectedPlayer;
     const previousRecords = selectedPlayerAttendanceHistory;
     const optimisticRecords = previousRecords.filter((item) => item._id !== record._id);
-    const optimisticPlayer = applyPresentDeltaToPlayer(selectedPlayer, record.status === 'present' ? -1 : 0);
+    const optimisticPlayer = withAttendancePresentCount(selectedPlayer, optimisticRecords, '', groupId);
+    const recordDate = getDateInputValue(record.date);
+    const overrideKey = getLocalAttendanceOverrideKey(recordDate, selectedPlayer._id, groupId);
+    let attendanceRemoved = false;
 
     try {
       setMessage('');
+      setLocalAttendanceOverride(recordDate, selectedPlayer._id, groupId, null);
       setAttendanceHistoryPending(record._id);
       setSelectedPlayerAttendanceHistory(optimisticRecords);
       applyOptimisticSelectedPlayer(optimisticPlayer, optimisticRecords, groupId);
@@ -2120,8 +2332,9 @@ const AttendancePage = () => {
       await cancelTodayAttendance({
         playerId: selectedPlayer._id,
         groupId,
-        date: getDateInputValue(record.date)
+        date: recordDate
       });
+      attendanceRemoved = true;
 
       const [refreshedPlayer, attendanceRecords] = await Promise.all([
         getPlayer(selectedPlayer._id, { force: true }),
@@ -2137,9 +2350,15 @@ const AttendancePage = () => {
       }
       setEditingAttendanceHistoryId(null);
     } catch (error) {
-      setSelectedPlayerAttendanceHistory(previousRecords);
-      applyOptimisticSelectedPlayer(previousPlayer, previousRecords, groupId);
-      setMessage(error.response?.data?.message || 'Unable to remove attendance history record');
+      if (attendanceRemoved) {
+        setEditingAttendanceHistoryId(null);
+        setMessage('Attendance history record removed');
+      } else {
+        localAttendanceOverridesRef.current.delete(overrideKey);
+        setSelectedPlayerAttendanceHistory(previousRecords);
+        applyOptimisticSelectedPlayer(previousPlayer, previousRecords, groupId);
+        setMessage(error.response?.data?.message || 'Unable to remove attendance history record');
+      }
     } finally {
       setAttendanceHistoryPending(null);
     }
@@ -2164,10 +2383,14 @@ const AttendancePage = () => {
       ...getCurrentSubscriptionAttendanceIdSet(selectedPlayer),
       getEntityId(record._id)
     ];
+    const nextCurrentSubscriptionExcludedAttendanceIds = [
+      ...getCurrentSubscriptionExcludedAttendanceIdSet(selectedPlayer)
+    ].filter((recordId) => recordId !== getEntityId(record._id));
     const groupId = getEntityId(record.groupId) || getPlayerAttendanceGroupId(selectedPlayer);
     const optimisticPlayer = withAttendancePresentCount({
       ...selectedPlayer,
-      currentSubscriptionAttendanceIds: nextCurrentSubscriptionAttendanceIds
+      currentSubscriptionAttendanceIds: nextCurrentSubscriptionAttendanceIds,
+      currentSubscriptionExcludedAttendanceIds: nextCurrentSubscriptionExcludedAttendanceIds
     }, previousRecords, '', groupId);
 
     try {
@@ -2175,22 +2398,19 @@ const AttendancePage = () => {
       setAttendanceHistoryPending(record._id);
       applyOptimisticSelectedPlayer(optimisticPlayer, previousRecords, groupId);
       setMessage('Attendance record counted in current subscription');
-      await updatePlayer(selectedPlayer._id, {
-        currentSubscriptionAttendanceIds: nextCurrentSubscriptionAttendanceIds
+      const savedPlayer = await updatePlayer(selectedPlayer._id, {
+        currentSubscriptionAttendanceIds: nextCurrentSubscriptionAttendanceIds,
+        currentSubscriptionExcludedAttendanceIds: nextCurrentSubscriptionExcludedAttendanceIds
       });
+      const confirmedPlayer = withAttendancePresentCount(
+        mergeStablePlayerFields(savedPlayer, optimisticPlayer),
+        previousRecords,
+        '',
+        groupId
+      );
 
-      const [refreshedPlayer, attendanceRecords] = await Promise.all([
-        getPlayer(selectedPlayer._id, { force: true }),
-        fetchAttendanceByPlayer(selectedPlayer._id)
-      ]);
-
-      const refreshedPlayerWithCount = withAttendancePresentCount(refreshedPlayer, attendanceRecords, '', groupId);
-
-      syncPlayerInAttendanceBoard(refreshedPlayerWithCount, attendanceRecords, groupId);
-      setSelectedPlayerIfOpen(refreshedPlayerWithCount);
-      if (isSelectedPlayerOpen(refreshedPlayerWithCount._id)) {
-        setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
-      }
+      syncPlayerInAttendanceBoard(confirmedPlayer, previousRecords, groupId);
+      setSelectedPlayerIfOpen(confirmedPlayer);
       setEditingAttendanceHistoryId(null);
     } catch (error) {
       setSelectedPlayerAttendanceHistory(previousRecords);
@@ -2218,10 +2438,15 @@ const AttendancePage = () => {
     const previousRecords = selectedPlayerAttendanceHistory;
     const nextCurrentSubscriptionAttendanceIds = [...getCurrentSubscriptionAttendanceIdSet(selectedPlayer)]
       .filter((recordId) => recordId !== getEntityId(record._id));
+    const nextCurrentSubscriptionExcludedAttendanceIds = [
+      ...getCurrentSubscriptionExcludedAttendanceIdSet(selectedPlayer),
+      getEntityId(record._id)
+    ];
     const groupId = getEntityId(record.groupId) || getPlayerAttendanceGroupId(selectedPlayer);
     const optimisticPlayer = withAttendancePresentCount({
       ...selectedPlayer,
-      currentSubscriptionAttendanceIds: nextCurrentSubscriptionAttendanceIds
+      currentSubscriptionAttendanceIds: nextCurrentSubscriptionAttendanceIds,
+      currentSubscriptionExcludedAttendanceIds: nextCurrentSubscriptionExcludedAttendanceIds
     }, previousRecords, '', groupId);
 
     try {
@@ -2229,22 +2454,19 @@ const AttendancePage = () => {
       setAttendanceHistoryPending(record._id);
       applyOptimisticSelectedPlayer(optimisticPlayer, previousRecords, groupId);
       setMessage('Attendance record removed from current subscription');
-      await updatePlayer(selectedPlayer._id, {
-        currentSubscriptionAttendanceIds: nextCurrentSubscriptionAttendanceIds
+      const savedPlayer = await updatePlayer(selectedPlayer._id, {
+        currentSubscriptionAttendanceIds: nextCurrentSubscriptionAttendanceIds,
+        currentSubscriptionExcludedAttendanceIds: nextCurrentSubscriptionExcludedAttendanceIds
       });
+      const confirmedPlayer = withAttendancePresentCount(
+        mergeStablePlayerFields(savedPlayer, optimisticPlayer),
+        previousRecords,
+        '',
+        groupId
+      );
 
-      const [refreshedPlayer, attendanceRecords] = await Promise.all([
-        getPlayer(selectedPlayer._id, { force: true }),
-        fetchAttendanceByPlayer(selectedPlayer._id)
-      ]);
-
-      const refreshedPlayerWithCount = withAttendancePresentCount(refreshedPlayer, attendanceRecords, '', groupId);
-
-      syncPlayerInAttendanceBoard(refreshedPlayerWithCount, attendanceRecords, groupId);
-      setSelectedPlayerIfOpen(refreshedPlayerWithCount);
-      if (isSelectedPlayerOpen(refreshedPlayerWithCount._id)) {
-        setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(attendanceRecords));
-      }
+      syncPlayerInAttendanceBoard(confirmedPlayer, previousRecords, groupId);
+      setSelectedPlayerIfOpen(confirmedPlayer);
       setEditingAttendanceHistoryId(null);
     } catch (error) {
       setSelectedPlayerAttendanceHistory(previousRecords);
@@ -2280,18 +2502,27 @@ const AttendancePage = () => {
       payment: Number(previousCycle.payment || 0),
       dueAdjustment: 0,
       currentSubscriptionStartedAt: getDateInputValue(previousCycle.startDate),
-      currentSubscriptionAttendanceIds: []
+      currentSubscriptionAttendanceIds: [],
+      currentSubscriptionExcludedAttendanceIds: []
     };
     const optimisticPlayer = {
       ...selectedPlayer,
       ...payload
     };
+    let savedPlayer = null;
 
     try {
       setMessage('');
       applyOptimisticSelectedPlayer(optimisticPlayer);
       setMessage('Subscription reverted');
-      await updatePlayer(selectedPlayer._id, payload);
+      savedPlayer = await updatePlayer(selectedPlayer._id, payload);
+      const committedPlayer = withAttendancePresentCount(
+        mergeStablePlayerFields(savedPlayer, optimisticPlayer),
+        selectedPlayerAttendanceHistory,
+        payload.currentSubscriptionStartedAt
+      );
+      syncPlayerInAttendanceBoard(committedPlayer, selectedPlayerAttendanceHistory);
+      setSelectedPlayerIfOpen(committedPlayer);
 
       const [refreshedPlayer, attendanceRecords, playerHistory] = await Promise.all([
         getPlayer(selectedPlayer._id, { force: true }),
@@ -2316,8 +2547,19 @@ const AttendancePage = () => {
       setOpenSubscriptionHistoryKey(getDateInputValue(refreshedHistory[0]?.startDate));
     } catch (error) {
       if (isLatestSelectedPlayerMutation(mutation)) {
-        applyOptimisticSelectedPlayer(previousPlayer);
-        setMessage(error.response?.data?.message || 'Unable to revert subscription');
+        if (savedPlayer) {
+          const committedPlayer = withAttendancePresentCount(
+            mergeStablePlayerFields(savedPlayer, optimisticPlayer),
+            selectedPlayerAttendanceHistory,
+            payload.currentSubscriptionStartedAt
+          );
+          syncPlayerInAttendanceBoard(committedPlayer, selectedPlayerAttendanceHistory);
+          setSelectedPlayerIfOpen(committedPlayer);
+          setMessage('Subscription reverted');
+        } else {
+          applyOptimisticSelectedPlayer(previousPlayer);
+          setMessage(error.response?.data?.message || 'Unable to revert subscription');
+        }
       }
     } finally {
       finishSelectedPlayerMutation(mutation);
@@ -2426,6 +2668,7 @@ const AttendancePage = () => {
       note: selectedPlayerForm.note,
       freezeNote: selectedPlayerForm.status === 'frozen' ? selectedPlayerForm.freezeNote : ''
     };
+    let savedPlayer = null;
 
     try {
       setMessage('');
@@ -2438,10 +2681,21 @@ const AttendancePage = () => {
       if (shouldCloseAfterSave) {
         closeSelectedPlayer({ force: true });
       }
-      const savedPlayer = await updatePlayer(selectedPlayer._id, updatePayload);
+      savedPlayer = await updatePlayer(selectedPlayer._id, updatePayload);
 
       if (!isLatestSelectedPlayerMutation(mutation)) {
         return;
+      }
+
+      const committedPlayer = mergeStablePlayerFields({
+        ...savedPlayer,
+        parentId: optimisticPlayer.parentId,
+        groupId: optimisticPlayer.groupId,
+        groupIds: optimisticPlayer.groupIds
+      }, optimisticPlayer);
+      syncPlayerInAttendanceBoard(committedPlayer);
+      if (!shouldCloseAfterSave) {
+        setSelectedPlayerIfOpen(committedPlayer);
       }
 
       const [attendanceRecords, playerHistory] = await Promise.all([
@@ -2468,15 +2722,29 @@ const AttendancePage = () => {
       }
     } catch (err) {
       if (isLatestSelectedPlayerMutation(mutation)) {
-        applyOptimisticSelectedPlayer(previousPlayer);
-      }
-      if (isCurrentSelectedPlayerMutation(mutation)) {
-        setSelectedPlayerForm(selectedPlayerForm);
-        setIsEditingSelectedPlayer(true);
-        selectedPlayerFormDirtyRef.current = true;
+        if (savedPlayer) {
+          const committedPlayer = mergeStablePlayerFields({
+            ...savedPlayer,
+            parentId: optimisticPlayer.parentId,
+            groupId: optimisticPlayer.groupId,
+            groupIds: optimisticPlayer.groupIds
+          }, optimisticPlayer);
+          syncPlayerInAttendanceBoard(committedPlayer);
+          if (!shouldCloseAfterSave) {
+            setSelectedPlayerIfOpen(committedPlayer);
+          }
+          setMessage('Player updated successfully');
+        } else {
+          applyOptimisticSelectedPlayer(previousPlayer);
+          if (isCurrentSelectedPlayerMutation(mutation)) {
+            setSelectedPlayerForm(selectedPlayerForm);
+            setIsEditingSelectedPlayer(true);
+            selectedPlayerFormDirtyRef.current = true;
+          }
+          setMessage(err.response?.data?.message || 'Unable to update player');
+        }
       }
       setPendingFrozenVisibilitySave(null);
-      setMessage(err.response?.data?.message || 'Unable to update player');
     } finally {
       finishSelectedPlayerMutation(mutation);
     }
@@ -2649,17 +2917,7 @@ const AttendancePage = () => {
     });
   };
   const isCurrentSubscriptionAttendanceRecord = (record) => {
-    if (isRecordExplicitlyCountedInCurrentSubscription(record)) {
-      return true;
-    }
-
-    const cycleStart = getCurrentSubscriptionCycleStartValue();
-
-    if (!cycleStart) {
-      return true;
-    }
-
-    return getLocalDateOnly(record.date) >= getLocalDateOnly(cycleStart);
+    return isAttendanceRecordInSubscriptionCycle(record, selectedPlayer);
   };
   const getPlayerGroups = (player) => {
     const groups = player?.groupIds?.length ? player.groupIds : [player?.groupId].filter(Boolean);
@@ -2812,7 +3070,14 @@ const AttendancePage = () => {
             <span>Search</span>
             <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search students or groups..." />
           </label>
-          <button type="button" className="btn-secondary" onClick={() => loadAttendanceBoard({ force: true, date: selectedAttendanceDate })}>{t('refresh')}</button>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => loadAttendanceBoard({ force: true, date: selectedAttendanceDate })}
+            disabled={isAttendanceBoardTransitioning || isRefreshing}
+          >
+            {isRefreshing ? 'Refreshing...' : t('refresh')}
+          </button>
         </div>
 
         {isAttendanceDateOutOfRange && (
@@ -2821,7 +3086,7 @@ const AttendancePage = () => {
           </div>
         )}
 
-        {isLoading ? (
+        {isAttendanceBoardTransitioning ? (
           <div className="attendance-board-loading" role="status" aria-live="polite">
             <span className="loading-spinner" />
             <strong>{t('loadingAttendanceBoard')}</strong>
@@ -3148,9 +3413,12 @@ const AttendancePage = () => {
                       <div className="student-history-list">
                         {selectedPlayerSubscriptionHistory.length ? selectedPlayerSubscriptionHistory.map((cycle) => {
                           const records = getAttendanceRecordsForSubscription(selectedPlayerAttendanceHistory, cycle, selectedPlayerSubscriptionHistory);
-                          const presentCount = records.filter((record) => record.status === 'present').length;
                           const isOpen = openSubscriptionHistoryKey === cycle.key;
-                          const isCurrentCycle = cycle.key === getDateInputValue(selectedPlayer.startDate);
+                          const isCurrentCycle = cycle.key === getCurrentSubscriptionCycleStartValue();
+                          const presentCount = records.filter((record) => (
+                            record.status === 'present'
+                            && (!isCurrentCycle || isAttendanceRecordInSubscriptionCycle(record, selectedPlayer))
+                          )).length;
                           return (
                             <div className="subscription-history-group" key={cycle.key}>
                               <button type="button" className={`subscription-history-summary${isCurrentCycle ? ' is-current-subscription' : ''}`} onClick={() => setOpenSubscriptionHistoryKey(isOpen ? '' : cycle.key)}>

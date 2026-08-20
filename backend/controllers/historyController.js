@@ -48,6 +48,12 @@ const buildPlayerRestorePayload = (snapshot) => ({
   startDate: asDate(snapshot.startDate) || null,
   endDate: asDate(snapshot.endDate) || null,
   currentSubscriptionStartedAt: asDate(snapshot.currentSubscriptionStartedAt) || null,
+  currentSubscriptionAttendanceIds: Array.isArray(snapshot.currentSubscriptionAttendanceIds)
+    ? snapshot.currentSubscriptionAttendanceIds.map(asObjectId).filter(Boolean)
+    : [],
+  currentSubscriptionExcludedAttendanceIds: Array.isArray(snapshot.currentSubscriptionExcludedAttendanceIds)
+    ? snapshot.currentSubscriptionExcludedAttendanceIds.map(asObjectId).filter(Boolean)
+    : [],
   packageName: snapshot.packageName || '',
   packageClasses: Number(snapshot.packageClasses || 0),
   packageHours: Number(snapshot.packageHours || 0),

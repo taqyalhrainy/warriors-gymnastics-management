@@ -1,10 +1,10 @@
 const Attendance = require('../models/Attendance');
-const Subscription = require('../models/Subscription');
 const Player = require('../models/Player');
 require('../models/Parent');
 const Notification = require('../models/Notification');
 const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
+const { synchronizeSubscriptionAttendanceUsage } = require('../utils/subscriptionAttendance');
 
 const toDateKey = (date = new Date()) => new Date(date).toISOString().split('T')[0];
 
@@ -30,6 +30,14 @@ const validateAttendanceDateInRange = (dateOnly) => {
   }
 };
 
+const safelyRunAttendanceSideEffect = async (label, callback) => {
+  try {
+    await callback();
+  } catch (error) {
+    console.error(`Attendance ${label} failed:`, error);
+  }
+};
+
 const markPresent = async (req, res, next) => {
   try {
     const { playerId, groupId } = sanitizeObject(req.body);
@@ -46,20 +54,6 @@ const markPresent = async (req, res, next) => {
     if (!player || player.isDeleted) {
       return res.status(404).json({ message: 'Player not found.' });
     }
-    const subscription = await Subscription.findOne({ playerId });
-    if (subscription) {
-      if (subscription.type === 'sessions') {
-        subscription.usedSessions += 1;
-        subscription.remainingSessions = Math.max(0, subscription.remainingSessions - 1);
-      }
-      subscription.lastAttendanceDate = today;
-      if (subscription.endDate <= today || subscription.remainingSessions === 0) {
-        subscription.status = 'expired';
-      } else if (subscription.remainingSessions <= 2) {
-        subscription.status = 'almost_expired';
-      }
-      await subscription.save();
-    }
     const attendance = await Attendance.create({
       playerId,
       groupId,
@@ -68,18 +62,19 @@ const markPresent = async (req, res, next) => {
       status: 'present',
       markedBy: req.user._id
     });
-    if (player.parentId?.userId) {
-      const attendanceTime = today.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-      await Notification.create({
+    const attendanceTime = today.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    await Promise.all([
+      safelyRunAttendanceSideEffect('subscription synchronization', () => synchronizeSubscriptionAttendanceUsage(player, today)),
+      player.parentId?.userId ? safelyRunAttendanceSideEffect('notification', () => Notification.create({
         recipientUserId: player.parentId.userId._id,
         playerId: player._id,
         title: 'Attendance Registered',
         message: `تم تسجيل حضور ابنتكم ${player.fullName} في نادي Warriors Gymnastics الساعة ${attendanceTime}.`,
         type: 'attendance',
         isRead: false
-      });
-    }
-    await createAuditLog({ userId: req.user._id, action: 'attendance present', entity: 'Attendance', entityId: attendance._id, req });
+      })) : Promise.resolve(),
+      safelyRunAttendanceSideEffect('audit log', () => createAuditLog({ userId: req.user._id, action: 'attendance present', entity: 'Attendance', entityId: attendance._id, req }))
+    ]);
     res.json(attendance);
   } catch (error) {
     next(error);
@@ -109,7 +104,10 @@ const markAbsent = async (req, res, next) => {
       status: 'absent',
       markedBy: req.user._id
     });
-    await createAuditLog({ userId: req.user._id, action: 'attendance absent', entity: 'Attendance', entityId: attendance._id, req });
+    await Promise.all([
+      safelyRunAttendanceSideEffect('subscription synchronization', () => synchronizeSubscriptionAttendanceUsage(player, today)),
+      safelyRunAttendanceSideEffect('audit log', () => createAuditLog({ userId: req.user._id, action: 'attendance absent', entity: 'Attendance', entityId: attendance._id, req }))
+    ]);
     res.json(attendance);
   } catch (error) {
     next(error);
@@ -152,40 +150,20 @@ const updateTodayAttendance = async (req, res, next) => {
       await attendance.save();
     }
 
-    const subscription = await Subscription.findOne({ playerId });
-    if (subscription && subscription.type === 'sessions' && previousStatus !== status) {
-      if (status === 'present' && previousStatus !== 'present') {
-        subscription.usedSessions += 1;
-        subscription.remainingSessions = Math.max(0, subscription.remainingSessions - 1);
-      }
-      if (status === 'absent' && previousStatus === 'present') {
-        subscription.usedSessions = Math.max(0, subscription.usedSessions - 1);
-        subscription.remainingSessions += 1;
-      }
-      subscription.lastAttendanceDate = status === 'present' ? dateOnly : subscription.lastAttendanceDate;
-      if (subscription.endDate <= today || subscription.remainingSessions === 0) {
-        subscription.status = 'expired';
-      } else if (subscription.remainingSessions <= 2) {
-        subscription.status = 'almost_expired';
-      } else {
-        subscription.status = 'active';
-      }
-      await subscription.save();
-    }
-
-    if (isCurrentDate && status === 'present' && previousStatus !== 'present' && player.parentId?.userId) {
-      const attendanceTime = today.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-      await Notification.create({
+    const shouldNotify = isCurrentDate && status === 'present' && previousStatus !== 'present' && player.parentId?.userId;
+    const attendanceTime = today.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    await Promise.all([
+      safelyRunAttendanceSideEffect('subscription synchronization', () => synchronizeSubscriptionAttendanceUsage(player, today)),
+      shouldNotify ? safelyRunAttendanceSideEffect('notification', () => Notification.create({
         recipientUserId: player.parentId.userId._id,
         playerId: player._id,
         title: 'Attendance Registered',
         message: `تم تسجيل حضور ابنكم ${player.fullName} في نادي Warriors Gymnastics الساعة ${attendanceTime}.`,
         type: 'attendance',
         isRead: false
-      });
-    }
-
-    await createAuditLog({ userId: req.user._id, action: `attendance ${status}`, entity: 'Attendance', entityId: attendance._id, req });
+      })) : Promise.resolve(),
+      safelyRunAttendanceSideEffect('audit log', () => createAuditLog({ userId: req.user._id, action: `attendance ${status}`, entity: 'Attendance', entityId: attendance._id, req }))
+    ]);
     res.json(attendance);
   } catch (error) {
     next(error);
@@ -214,24 +192,12 @@ const cancelTodayAttendance = async (req, res, next) => {
       return res.status(404).json({ message: 'No attendance record to cancel today.' });
     }
 
-    const previousStatus = attendance.status;
     await attendance.deleteOne();
-
-    const subscription = await Subscription.findOne({ playerId });
-    if (subscription && subscription.type === 'sessions' && previousStatus === 'present') {
-      subscription.usedSessions = Math.max(0, subscription.usedSessions - 1);
-      subscription.remainingSessions += 1;
-      if (subscription.endDate <= today || subscription.remainingSessions === 0) {
-        subscription.status = 'expired';
-      } else if (subscription.remainingSessions <= 2) {
-        subscription.status = 'almost_expired';
-      } else {
-        subscription.status = 'active';
-      }
-      await subscription.save();
-    }
-
-    await createAuditLog({ userId: req.user._id, action: 'attendance cancel', entity: 'Attendance', entityId: attendance._id, req });
+    const player = await Player.findById(playerId);
+    await Promise.all([
+      safelyRunAttendanceSideEffect('subscription synchronization', () => synchronizeSubscriptionAttendanceUsage(player, today)),
+      safelyRunAttendanceSideEffect('audit log', () => createAuditLog({ userId: req.user._id, action: 'attendance cancel', entity: 'Attendance', entityId: attendance._id, req }))
+    ]);
     res.json({ message: 'Attendance cancelled successfully.' });
   } catch (error) {
     next(error);

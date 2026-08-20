@@ -84,7 +84,6 @@ const patchCreatedPlayerIntoCache = (player) => {
 };
 
 export const createPlayer = async (data) => {
-  invalidatePlayerRelatedCache();
   const response = await api.post('/players', data);
   patchCreatedPlayerIntoCache(response.data);
   window.dispatchEvent(new CustomEvent('players:changed', {
@@ -97,7 +96,6 @@ export const createPlayer = async (data) => {
 };
 
 export const updatePlayer = async (id, data) => {
-  invalidatePlayerRelatedCache(id);
   const response = await api.put(`/players/${id}`, data);
   invalidateCache([
     'players:list',
@@ -112,7 +110,6 @@ export const updatePlayer = async (id, data) => {
 };
 
 export const deletePlayer = async (id) => {
-  invalidatePlayerRelatedCache(id);
   const response = await api.delete(`/players/${id}`);
   invalidatePlayerRelatedCache(id);
   window.dispatchEvent(new Event('players:changed'));

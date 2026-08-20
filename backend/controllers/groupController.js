@@ -286,6 +286,10 @@ const getGroupPlayers = async (req, res, next) => {
       String(player._id),
       new Set((player.currentSubscriptionAttendanceIds || []).map(String))
     ]));
+    const excludedCurrentRecordIdsByPlayerId = new Map(players.map((player) => [
+      String(player._id),
+      new Set((player.currentSubscriptionExcludedAttendanceIds || []).map(String))
+    ]));
     const presentRecords = playerIds.length
       ? await Attendance.find({
         playerId: { $in: playerIds },
@@ -298,6 +302,8 @@ const getGroupPlayers = async (req, res, next) => {
       const playerId = String(record.playerId);
       const cycleStart = cycleStartByPlayerId.get(playerId);
       const recordDate = getDateOnly(record.date);
+
+      if (excludedCurrentRecordIdsByPlayerId.get(playerId)?.has(String(record._id))) return;
 
       const isExplicitlyCounted = explicitCurrentRecordIdsByPlayerId.get(playerId)?.has(String(record._id));
       const isInCurrentCycle = !cycleStart || isExplicitlyCounted || recordDate >= getDateOnly(cycleStart);
