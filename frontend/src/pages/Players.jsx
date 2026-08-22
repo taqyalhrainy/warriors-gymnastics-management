@@ -31,7 +31,10 @@ const initialMovePlayerForm = {
   packageHours: '',
   payment: '',
   status: 'active',
-  note: ''
+  note: '',
+  parentId: '',
+  parentMode: 'existing',
+  parentSearch: ''
 };
 
 const PlayersPage = () => {
@@ -184,6 +187,25 @@ const PlayersPage = () => {
     setMovePlayerForm((current) => ({ ...current, [name]: value }));
   };
 
+  const handleMoveParentSelect = (event) => {
+    const parentId = event.target.value;
+    const parent = parents.find((item) => item._id === parentId);
+    setMovePlayerForm((current) => ({
+      ...current,
+      parentId,
+      parentName: parent?.name || '',
+      parentPhone: parent?.phone || current.parentPhone
+    }));
+  };
+
+  const setMoveParentMode = (parentMode) => {
+    setMovePlayerForm((current) => ({
+      ...current,
+      parentMode,
+      parentId: parentMode === 'new' ? '' : current.parentId
+    }));
+  };
+
   const handleWaitingSubmit = async (event) => {
     event.preventDefault();
     setWaitingMessage('');
@@ -291,7 +313,12 @@ const PlayersPage = () => {
 
     setIsMovingToPlayers(true);
     try {
-      let parent = findParentByPhone(movePlayerForm.parentPhone);
+      let parent = movePlayerForm.parentId
+        ? parents.find((item) => item._id === movePlayerForm.parentId)
+        : findParentByPhone(movePlayerForm.parentPhone);
+      if (!parent && movePlayerForm.parentMode !== 'new') {
+        parent = findParentByPhone(movePlayerForm.parentPhone);
+      }
       if (!parent) {
         if (!movePlayerForm.parentName.trim()) {
           setMovePlayerMessage('Parent name is required when this phone is not already saved.');
@@ -367,6 +394,14 @@ const PlayersPage = () => {
   const selectedMoveGroupNames = groups
     .filter((group) => movePlayerForm.groupIds.includes(group._id))
     .map((group) => group.name);
+
+  const filteredMoveParents = parents
+    .filter((parent) => [
+      parent.name,
+      parent.phone,
+      parent.email
+    ].join(' ').toLowerCase().includes(movePlayerForm.parentSearch.trim().toLowerCase()))
+    .slice(0, 80);
 
   const getWaitingEntryDays = (entry) => new Set(getWaitingEntryGroups(entry)
     .flatMap((group) => group?.days || [])
@@ -626,19 +661,87 @@ const PlayersPage = () => {
 
               {movePlayerMessage && <p className="alert-error">{movePlayerMessage}</p>}
 
-              <form className="waiting-list-form" onSubmit={handleMoveToPlayersSubmit}>
-                <label>
-                  <span>Player name</span>
-                  <input name="fullName" value={movePlayerForm.fullName} onChange={handleMovePlayerFormChange} required />
-                </label>
-                <label>
-                  <span>Parent phone</span>
-                  <input name="parentPhone" value={movePlayerForm.parentPhone} onChange={handleMovePlayerFormChange} required />
-                </label>
-                <label>
-                  <span>Parent name</span>
-                  <input name="parentName" value={movePlayerForm.parentName} onChange={handleMovePlayerFormChange} placeholder="Required only for a new parent" />
-                </label>
+              <form className="move-player-form" onSubmit={handleMoveToPlayersSubmit}>
+                <div className="move-player-panel is-primary">
+                  <div className="move-player-panel-title">
+                    <span>01</span>
+                    <div>
+                      <h3>Player</h3>
+                      <p>Basic profile details.</p>
+                    </div>
+                  </div>
+                  <div className="move-player-grid">
+                    <label>
+                      <span>Player name</span>
+                      <input name="fullName" value={movePlayerForm.fullName} onChange={handleMovePlayerFormChange} required />
+                    </label>
+                    <label>
+                      <span>Status</span>
+                      <select name="status" value={movePlayerForm.status} onChange={handleMovePlayerFormChange}>
+                        <option value="active">Active</option>
+                        <option value="tryout">Tryout</option>
+                        <option value="frozen">Frozen</option>
+                        <option value="left">Left</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="move-player-panel">
+                  <div className="move-player-panel-title">
+                    <span>02</span>
+                    <div>
+                      <h3>Parent</h3>
+                      <p>Select an existing parent or create a new one.</p>
+                    </div>
+                  </div>
+                  <div className="move-parent-mode" role="tablist" aria-label="Parent mode">
+                    <button type="button" className={movePlayerForm.parentMode === 'existing' ? 'is-active' : ''} onClick={() => setMoveParentMode('existing')}>
+                      Existing parent
+                    </button>
+                    <button type="button" className={movePlayerForm.parentMode === 'new' ? 'is-active' : ''} onClick={() => setMoveParentMode('new')}>
+                      New parent
+                    </button>
+                  </div>
+                  {movePlayerForm.parentMode === 'existing' && (
+                    <div className="move-player-grid">
+                      <label className="move-player-wide">
+                        <span>Search parent</span>
+                        <input name="parentSearch" type="search" value={movePlayerForm.parentSearch} onChange={handleMovePlayerFormChange} placeholder="Name or phone..." />
+                      </label>
+                      <label className="move-player-wide">
+                        <span>Choose parent</span>
+                        <select value={movePlayerForm.parentId} onChange={handleMoveParentSelect}>
+                          <option value="">Auto match by phone or choose parent</option>
+                          {filteredMoveParents.map((parent) => (
+                            <option key={parent._id} value={parent._id}>
+                              {parent.phone ? `${parent.name} (${parent.phone})` : parent.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  )}
+                  <div className="move-player-grid">
+                    <label>
+                      <span>Parent name</span>
+                      <input name="parentName" value={movePlayerForm.parentName} onChange={handleMovePlayerFormChange} placeholder={movePlayerForm.parentMode === 'new' ? 'Required for new parent' : 'Filled when selected'} />
+                    </label>
+                    <label>
+                      <span>Parent phone</span>
+                      <input name="parentPhone" value={movePlayerForm.parentPhone} onChange={handleMovePlayerFormChange} required />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="move-player-panel">
+                  <div className="move-player-panel-title">
+                    <span>03</span>
+                    <div>
+                      <h3>Schedule</h3>
+                      <p>Groups and subscription dates.</p>
+                    </div>
+                  </div>
                 <div className="waiting-list-group-picker">
                   <span>Groups</span>
                   <button
@@ -665,53 +768,62 @@ const PlayersPage = () => {
                     </div>
                   )}
                 </div>
-                <label>
-                  <span>Start Date</span>
-                  <input name="startDate" type="date" value={movePlayerForm.startDate} onChange={handleMovePlayerFormChange} />
-                </label>
-                <label>
-                  <span>End Date</span>
-                  <input name="endDate" type="date" value={movePlayerForm.endDate} onChange={handleMovePlayerFormChange} />
-                </label>
-                <label>
-                  <span>Package</span>
-                  <select name="packageName" value={movePlayerForm.packageName} onChange={handleMovePlayerFormChange}>
-                    <option value="">Select Package</option>
-                    {packageOptions.map((option) => (
-                      <option key={option.label} value={option.label}>{option.label}</option>
-                    ))}
-                    <option value="custom">Custom</option>
-                  </select>
-                </label>
-                <label>
-                  <span>Classes</span>
-                  <input name="packageClasses" type="text" inputMode="decimal" value={movePlayerForm.packageClasses} onChange={handleMovePlayerFormChange} />
-                </label>
-                <label>
-                  <span>Hours</span>
-                  <input name="packageHours" type="text" inputMode="decimal" value={movePlayerForm.packageHours} onChange={handleMovePlayerFormChange} />
-                </label>
-                <label>
-                  <span>Payment</span>
-                  <input name="payment" type="text" inputMode="decimal" value={movePlayerForm.payment} onChange={handleMovePlayerFormChange} />
-                </label>
-                <label>
-                  <span>Status</span>
-                  <select name="status" value={movePlayerForm.status} onChange={handleMovePlayerFormChange}>
-                    <option value="active">Active</option>
-                    <option value="tryout">Tryout</option>
-                    <option value="frozen">Frozen</option>
-                    <option value="left">Left</option>
-                  </select>
-                </label>
-                <label className="waiting-list-form-note">
-                  <span>Note</span>
-                  <input name="note" value={movePlayerForm.note} onChange={handleMovePlayerFormChange} />
-                </label>
-                <button className="btn-primary" type="submit" disabled={isMovingToPlayers}>
-                  {isMovingToPlayers ? 'Moving...' : 'Add to Players'}
-                </button>
-                <button className="btn-secondary" type="button" onClick={closeMoveToPlayers} disabled={isMovingToPlayers}>Cancel</button>
+                  <div className="move-player-grid">
+                    <label>
+                      <span>Start Date</span>
+                      <input name="startDate" type="date" value={movePlayerForm.startDate} onChange={handleMovePlayerFormChange} />
+                    </label>
+                    <label>
+                      <span>End Date</span>
+                      <input name="endDate" type="date" value={movePlayerForm.endDate} onChange={handleMovePlayerFormChange} />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="move-player-panel">
+                  <div className="move-player-panel-title">
+                    <span>04</span>
+                    <div>
+                      <h3>Subscription</h3>
+                      <p>Package, payment, and notes.</p>
+                    </div>
+                  </div>
+                  <div className="move-player-grid">
+                    <label>
+                      <span>Package</span>
+                      <select name="packageName" value={movePlayerForm.packageName} onChange={handleMovePlayerFormChange}>
+                        <option value="">Select Package</option>
+                        {packageOptions.map((option) => (
+                          <option key={option.label} value={option.label}>{option.label}</option>
+                        ))}
+                        <option value="custom">Custom</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Payment</span>
+                      <input name="payment" type="text" inputMode="decimal" value={movePlayerForm.payment} onChange={handleMovePlayerFormChange} />
+                    </label>
+                    <label>
+                      <span>Classes</span>
+                      <input name="packageClasses" type="text" inputMode="decimal" value={movePlayerForm.packageClasses} onChange={handleMovePlayerFormChange} />
+                    </label>
+                    <label>
+                      <span>Hours</span>
+                      <input name="packageHours" type="text" inputMode="decimal" value={movePlayerForm.packageHours} onChange={handleMovePlayerFormChange} />
+                    </label>
+                    <label className="move-player-wide">
+                      <span>Note</span>
+                      <input name="note" value={movePlayerForm.note} onChange={handleMovePlayerFormChange} />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="move-player-actions">
+                  <button className="btn-primary" type="submit" disabled={isMovingToPlayers}>
+                    {isMovingToPlayers ? 'Moving...' : 'Add to Players'}
+                  </button>
+                  <button className="btn-secondary" type="button" onClick={closeMoveToPlayers} disabled={isMovingToPlayers}>Cancel</button>
+                </div>
               </form>
             </section>
           </div>

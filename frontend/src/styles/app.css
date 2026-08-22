@@ -1154,6 +1154,121 @@ body.theme-light .new-subscription-warning {
   font-weight: 900;
 }
 
+.move-player-form {
+  display: grid;
+  gap: 14px;
+}
+
+.move-player-panel {
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, #06b6d4 26%, var(--border));
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, #ffffff 76%, transparent), color-mix(in srgb, #06b6d4 7%, transparent)),
+    var(--surface);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.08);
+}
+
+.move-player-panel.is-primary {
+  border-color: color-mix(in srgb, #ef4444 34%, var(--border));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, #ef4444 8%, transparent), color-mix(in srgb, #06b6d4 8%, transparent)),
+    var(--surface);
+}
+
+.move-player-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.move-player-panel-title > span {
+  width: 38px;
+  height: 38px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: linear-gradient(135deg, #ef4444, #111827);
+  font-weight: 950;
+  box-shadow: 0 12px 24px rgba(239, 68, 68, 0.18);
+}
+
+.move-player-panel-title h3 {
+  margin: 0;
+  font-size: 1.02rem;
+}
+
+.move-player-panel-title p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.move-player-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.move-player-grid label,
+.move-player-form label {
+  margin: 0;
+}
+
+.move-player-grid label span,
+.move-player-form label span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 850;
+}
+
+.move-player-grid input,
+.move-player-grid select {
+  width: 100%;
+}
+
+.move-player-wide {
+  grid-column: 1 / -1;
+}
+
+.move-parent-mode {
+  display: inline-flex;
+  gap: 6px;
+  padding: 5px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-alt) 78%, transparent);
+}
+
+.move-parent-mode button {
+  min-height: 38px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+  box-shadow: none;
+  font-weight: 900;
+}
+
+.move-parent-mode button.is-active {
+  color: #fff;
+  background: linear-gradient(135deg, #111827, #06b6d4);
+  box-shadow: 0 10px 24px rgba(6, 182, 212, 0.18);
+}
+
+.move-player-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
+}
+
 .expired-alert-row {
   display: flex;
   justify-content: flex-start;
