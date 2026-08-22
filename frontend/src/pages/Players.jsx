@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
-import { fetchPlayers, deletePlayer } from '../services/players.js';
+import { fetchPlayers, deletePlayer, createPlayer } from '../services/players.js';
 import { fetchGroups } from '../services/groups.js';
+import { createParent, fetchParents } from '../services/parents.js';
+import { fetchPackageOptions } from '../services/packageOptions.js';
 import { createWaitingListEntry, deleteWaitingListEntry, fetchWaitingList, updateWaitingListEntry } from '../services/waitingList.js';
 import { confirmAction } from '../utils/confirmAction.js';
+import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
 const initialWaitingForm = {
@@ -16,16 +19,38 @@ const initialWaitingForm = {
   notes: ''
 };
 
+const initialMovePlayerForm = {
+  fullName: '',
+  parentName: '',
+  parentPhone: '',
+  groupIds: [],
+  startDate: '',
+  endDate: '',
+  packageName: '',
+  packageClasses: '',
+  packageHours: '',
+  payment: '',
+  status: 'active',
+  note: ''
+};
+
 const PlayersPage = () => {
   const [players, setPlayers] = useState([]);
+  const [parents, setParents] = useState([]);
   const [groups, setGroups] = useState([]);
+  const [packageOptions, setPackageOptions] = useState([]);
   const [waitingList, setWaitingList] = useState([]);
   const [waitingForm, setWaitingForm] = useState(initialWaitingForm);
+  const [movePlayerForm, setMovePlayerForm] = useState(initialMovePlayerForm);
+  const [movingWaitingEntry, setMovingWaitingEntry] = useState(null);
   const [editingWaitingEntryId, setEditingWaitingEntryId] = useState('');
   const [isWaitingFormOpen, setIsWaitingFormOpen] = useState(false);
   const [isWaitingExpanded, setIsWaitingExpanded] = useState(false);
   const [isWaitingGroupPickerOpen, setIsWaitingGroupPickerOpen] = useState(false);
+  const [isMoveGroupPickerOpen, setIsMoveGroupPickerOpen] = useState(false);
   const [waitingMessage, setWaitingMessage] = useState('');
+  const [movePlayerMessage, setMovePlayerMessage] = useState('');
+  const [isMovingToPlayers, setIsMovingToPlayers] = useState(false);
   const [waitingView, setWaitingView] = useState('waiting');
   const [waitingDayFilter, setWaitingDayFilter] = useState('all');
   const [waitingAgeFilter, setWaitingAgeFilter] = useState('');
@@ -38,11 +63,15 @@ const PlayersPage = () => {
   useEffect(() => {
     Promise.all([
       fetchPlayers(),
-      fetchGroups()
+      fetchGroups(),
+      fetchParents(),
+      fetchPackageOptions()
     ])
-      .then(([playersData, groupsData]) => {
+      .then(([playersData, groupsData, parentData, packageData]) => {
         setPlayers(playersData);
         setGroups(groupsData);
+        setParents(parentData);
+        setPackageOptions(packageData);
       })
       .catch(console.error);
     fetchWaitingList().then(setWaitingList).catch(console.error);
@@ -127,6 +156,34 @@ const PlayersPage = () => {
     });
   };
 
+  const handleMoveGroupToggle = (groupId) => {
+    setMovePlayerForm((current) => {
+      const groupIds = current.groupIds.includes(groupId)
+        ? current.groupIds.filter((id) => id !== groupId)
+        : [...current.groupIds, groupId];
+      return { ...current, groupIds };
+    });
+  };
+
+  const handleMovePlayerFormChange = (event) => {
+    const { name, value } = event.target;
+    if (name === 'payment' || name === 'packageClasses' || name === 'packageHours') {
+      setMovePlayerForm((current) => ({ ...current, [name]: normalizeDigits(value) }));
+      return;
+    }
+    if (name === 'packageName') {
+      const selectedPackage = packageOptions.find((option) => option.label === value);
+      setMovePlayerForm((current) => ({
+        ...current,
+        packageName: value,
+        packageClasses: selectedPackage ? selectedPackage.classes : current.packageClasses,
+        packageHours: selectedPackage ? selectedPackage.hours : current.packageHours
+      }));
+      return;
+    }
+    setMovePlayerForm((current) => ({ ...current, [name]: value }));
+  };
+
   const handleWaitingSubmit = async (event) => {
     event.preventDefault();
     setWaitingMessage('');
@@ -182,6 +239,101 @@ const PlayersPage = () => {
     }
   };
 
+  const openMoveToPlayers = (entry) => {
+    const groupIds = (entry.desiredGroupIds?.length ? entry.desiredGroupIds : [entry.desiredGroupId].filter(Boolean))
+      .map((group) => group?._id || group)
+      .filter(Boolean);
+    setMovingWaitingEntry(entry);
+    setMovePlayerForm({
+      ...initialMovePlayerForm,
+      fullName: entry.playerName || '',
+      parentPhone: entry.parentPhone || '',
+      groupIds,
+      note: entry.notes || ''
+    });
+    setMovePlayerMessage('');
+    setIsMoveGroupPickerOpen(false);
+  };
+
+  const closeMoveToPlayers = (force = false) => {
+    if (isMovingToPlayers && !force) return;
+    setMovingWaitingEntry(null);
+    setMovePlayerForm(initialMovePlayerForm);
+    setMovePlayerMessage('');
+    setIsMoveGroupPickerOpen(false);
+  };
+
+  const normalizePhoneForMatch = (value) => normalizeDigits(value).replace(/\D/g, '');
+
+  const findParentByPhone = (phone) => {
+    const normalizedPhone = normalizePhoneForMatch(phone);
+    if (!normalizedPhone) return null;
+    return parents.find((parent) => normalizePhoneForMatch(parent.phone) === normalizedPhone) || null;
+  };
+
+  const handleMoveToPlayersSubmit = async (event) => {
+    event.preventDefault();
+    if (!movingWaitingEntry || isMovingToPlayers) return;
+    setMovePlayerMessage('');
+
+    if (!movePlayerForm.fullName.trim()) {
+      setMovePlayerMessage('Player name is required.');
+      return;
+    }
+    if (!movePlayerForm.parentPhone.trim()) {
+      setMovePlayerMessage('Parent phone is required.');
+      return;
+    }
+    if (!movePlayerForm.groupIds.length) {
+      setMovePlayerMessage('Choose at least one group.');
+      return;
+    }
+
+    setIsMovingToPlayers(true);
+    try {
+      let parent = findParentByPhone(movePlayerForm.parentPhone);
+      if (!parent) {
+        if (!movePlayerForm.parentName.trim()) {
+          setMovePlayerMessage('Parent name is required when this phone is not already saved.');
+          setIsMovingToPlayers(false);
+          return;
+        }
+        parent = await createParent({
+          name: movePlayerForm.parentName.trim(),
+          phone: movePlayerForm.parentPhone.trim(),
+          password: `wg-${Date.now()}`
+        });
+        setParents((current) => [parent, ...current]);
+      }
+
+      const player = await createPlayer({
+        fullName: movePlayerForm.fullName.trim(),
+        parentId: parent._id,
+        parentPhone: movePlayerForm.parentPhone.trim(),
+        groupId: movePlayerForm.groupIds[0] || '',
+        groupIds: movePlayerForm.groupIds,
+        startDate: movePlayerForm.startDate,
+        endDate: movePlayerForm.endDate,
+        packageName: movePlayerForm.packageName,
+        packageClasses: parseLocalizedNumber(movePlayerForm.packageClasses),
+        packageHours: parseLocalizedNumber(movePlayerForm.packageHours),
+        payment: parseLocalizedNumber(movePlayerForm.payment),
+        status: movePlayerForm.status,
+        note: movePlayerForm.note
+      });
+
+      await deleteWaitingListEntry(movingWaitingEntry._id);
+      setPlayers((current) => [player, ...current.filter((item) => item._id !== player._id)]);
+      setWaitingList((current) => current.filter((entry) => entry._id !== movingWaitingEntry._id));
+      setWaitingMessage('Moved to Players.');
+      closeMoveToPlayers(true);
+    } catch (error) {
+      setMovePlayerMessage(error.response?.data?.message || 'Unable to move this entry to Players.');
+    } finally {
+      setIsMovingToPlayers(false);
+    }
+  };
+
   const closeWaitingListModal = () => {
     setIsWaitingFormOpen(false);
     setIsWaitingExpanded(false);
@@ -210,6 +362,10 @@ const PlayersPage = () => {
 
   const selectedWaitingGroupNames = groups
     .filter((group) => waitingForm.desiredGroupIds.includes(group._id))
+    .map((group) => group.name);
+
+  const selectedMoveGroupNames = groups
+    .filter((group) => movePlayerForm.groupIds.includes(group._id))
     .map((group) => group.name);
 
   const getWaitingEntryDays = (entry) => new Set(getWaitingEntryGroups(entry)
@@ -443,6 +599,7 @@ const PlayersPage = () => {
                         <td>
                           <div className="table-actions">
                             <button className="btn-secondary" type="button" onClick={() => handleWaitingEdit(entry)}>{t('edit')}</button>
+                            <button className="btn-secondary" type="button" onClick={() => openMoveToPlayers(entry)}>Move to Players</button>
                             <button className="btn-secondary" type="button" onClick={() => handleWaitingDelete(entry._id)}>{t('delete')}</button>
                           </div>
                         </td>
@@ -453,6 +610,109 @@ const PlayersPage = () => {
                   </tbody>
                 </table>
               </div>
+            </section>
+          </div>
+        )}
+        {movingWaitingEntry && (
+          <div className="student-modal-backdrop" role="presentation" onClick={closeMoveToPlayers}>
+            <section className="student-modal waiting-list-modal" role="dialog" aria-modal="true" aria-label="Move to Players" onClick={(event) => event.stopPropagation()}>
+              <div className="student-modal-header">
+                <div>
+                  <h2>Move to Players</h2>
+                  <p>Complete the required player details before adding this entry to attendance.</p>
+                </div>
+                <button type="button" className="waiting-icon-button is-close" onClick={closeMoveToPlayers}>{t('close')}</button>
+              </div>
+
+              {movePlayerMessage && <p className="alert-error">{movePlayerMessage}</p>}
+
+              <form className="waiting-list-form" onSubmit={handleMoveToPlayersSubmit}>
+                <label>
+                  <span>Player name</span>
+                  <input name="fullName" value={movePlayerForm.fullName} onChange={handleMovePlayerFormChange} required />
+                </label>
+                <label>
+                  <span>Parent phone</span>
+                  <input name="parentPhone" value={movePlayerForm.parentPhone} onChange={handleMovePlayerFormChange} required />
+                </label>
+                <label>
+                  <span>Parent name</span>
+                  <input name="parentName" value={movePlayerForm.parentName} onChange={handleMovePlayerFormChange} placeholder="Required only for a new parent" />
+                </label>
+                <div className="waiting-list-group-picker">
+                  <span>Groups</span>
+                  <button
+                    type="button"
+                    className="waiting-picker-trigger"
+                    onClick={() => setIsMoveGroupPickerOpen((current) => !current)}
+                  >
+                    <b>{selectedMoveGroupNames.length ? `${selectedMoveGroupNames.length} selected` : 'Choose groups'}</b>
+                    <small>{selectedMoveGroupNames.slice(0, 2).join(', ') || 'Tap to show options'}</small>
+                  </button>
+                  {isMoveGroupPickerOpen && (
+                    <div className="waiting-picker-menu">
+                      {groups.map((group) => (
+                        <label key={group._id}>
+                          <input
+                            type="checkbox"
+                            checked={movePlayerForm.groupIds.includes(group._id)}
+                            onChange={() => handleMoveGroupToggle(group._id)}
+                          />
+                          <b>{group.name}</b>
+                          <small>{group.days?.join(', ')} {group.startTime} - {group.endTime}</small>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <label>
+                  <span>Start Date</span>
+                  <input name="startDate" type="date" value={movePlayerForm.startDate} onChange={handleMovePlayerFormChange} />
+                </label>
+                <label>
+                  <span>End Date</span>
+                  <input name="endDate" type="date" value={movePlayerForm.endDate} onChange={handleMovePlayerFormChange} />
+                </label>
+                <label>
+                  <span>Package</span>
+                  <select name="packageName" value={movePlayerForm.packageName} onChange={handleMovePlayerFormChange}>
+                    <option value="">Select Package</option>
+                    {packageOptions.map((option) => (
+                      <option key={option.label} value={option.label}>{option.label}</option>
+                    ))}
+                    <option value="custom">Custom</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Classes</span>
+                  <input name="packageClasses" type="text" inputMode="decimal" value={movePlayerForm.packageClasses} onChange={handleMovePlayerFormChange} />
+                </label>
+                <label>
+                  <span>Hours</span>
+                  <input name="packageHours" type="text" inputMode="decimal" value={movePlayerForm.packageHours} onChange={handleMovePlayerFormChange} />
+                </label>
+                <label>
+                  <span>Payment</span>
+                  <input name="payment" type="text" inputMode="decimal" value={movePlayerForm.payment} onChange={handleMovePlayerFormChange} />
+                </label>
+                <label>
+                  <span>Status</span>
+                  <select name="status" value={movePlayerForm.status} onChange={handleMovePlayerFormChange}>
+                    <option value="active">Active</option>
+                    <option value="tryout">Tryout</option>
+                    <option value="frozen">Frozen</option>
+                    <option value="left">Left</option>
+                  </select>
+                </label>
+                <label className="waiting-list-form-note">
+                  <span>Note</span>
+                  <input name="note" value={movePlayerForm.note} onChange={handleMovePlayerFormChange} />
+                </label>
+                <button className="btn-primary" type="submit" disabled={isMovingToPlayers}>
+                  {isMovingToPlayers ? 'Moving...' : 'Add to Players'}
+                </button>
+                <button className="btn-secondary" type="button" onClick={closeMoveToPlayers} disabled={isMovingToPlayers}>Cancel</button>
+              </form>
             </section>
           </div>
         )}
