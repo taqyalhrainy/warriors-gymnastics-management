@@ -101,7 +101,8 @@ const getPaymentSubscriptionDetails = (payment) => {
     startDate: player?.startDate || null,
     endDate: player?.endDate || null,
     classes: player?.packageClasses ?? payment.packageClassesSnapshot ?? 0,
-    hours: player?.packageHours ?? payment.packageHoursSnapshot ?? 0
+    hours: player?.packageHours ?? payment.packageHoursSnapshot ?? 0,
+    usedClasses: player?.subscriptionId?.usedSessions ?? 0
   };
 };
 
@@ -806,6 +807,10 @@ const PaymentsPage = () => {
                 <div>
                   <span>Classes</span>
                   <strong>{viewingPaymentDetails.classes || 0}</strong>
+                </div>
+                <div>
+                  <span>Attended From Package</span>
+                  <strong>{viewingPaymentDetails.usedClasses || 0}/{viewingPaymentDetails.classes || 0}</strong>
                 </div>
                 <div>
                   <span>Package</span>
