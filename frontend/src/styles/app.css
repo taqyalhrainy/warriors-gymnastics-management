@@ -4178,9 +4178,54 @@ body.rtl .new-subscription-summary-card[type='button'] {
   font-weight: 800;
 }
 
+.payment-row-actions button.is-danger,
 .payment-row-actions button:last-child {
   border-color: rgba(237, 28, 36, 0.48);
   background: rgba(237, 28, 36, 0.18);
+}
+
+.payment-detail-modal {
+  width: min(620px, 92vw);
+  max-height: min(86vh, 680px);
+  overflow: auto;
+  padding: 26px;
+  border-top: 4px solid #ef4444;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, #ef4444 7%, transparent), color-mix(in srgb, #06b6d4 7%, transparent)),
+    var(--surface);
+  box-shadow: 0 26px 70px rgba(15, 23, 42, 0.28);
+}
+
+.payment-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.payment-detail-grid div {
+  min-height: 104px;
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-alt) 72%, transparent);
+}
+
+.payment-detail-grid span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.payment-detail-grid strong {
+  color: var(--text);
+  font-size: clamp(1.2rem, 2vw, 1.7rem);
+  line-height: 1.1;
 }
 
 .payment-amount-cell,

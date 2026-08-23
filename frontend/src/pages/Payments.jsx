@@ -93,6 +93,18 @@ const getPackageName = (payment) => {
   return name && name !== 'custom' ? name : '-';
 };
 
+const getPaymentSubscriptionDetails = (payment) => {
+  const player = payment.playerId && typeof payment.playerId === 'object' ? payment.playerId : null;
+  return {
+    memberName: getMemberName(payment),
+    packageName: getPackageName(payment),
+    startDate: player?.startDate || null,
+    endDate: player?.endDate || null,
+    classes: player?.packageClasses ?? payment.packageClassesSnapshot ?? 0,
+    hours: player?.packageHours ?? payment.packageHoursSnapshot ?? 0
+  };
+};
+
 const getPlayerGroups = (player) => {
   const groups = player?.groupIds?.length ? player.groupIds : [player?.groupId].filter(Boolean);
   return groups.map((group) => group?.name).filter(Boolean).join(', ');
@@ -126,6 +138,7 @@ const PaymentsPage = () => {
   const [selectedDay, setSelectedDay] = useState(getDateInputValue());
   const [searchQuery, setSearchQuery] = useState('');
   const [playerSearch, setPlayerSearch] = useState('');
+  const [viewingPayment, setViewingPayment] = useState(null);
   const paymentsLoadRequestIdRef = useRef(0);
   const paymentsRevisionRef = useRef(0);
   const { t } = useLanguage();
@@ -482,6 +495,7 @@ const PaymentsPage = () => {
     remaining: searchedPayments.reduce((sum, payment) => sum + Number(payment.remainingAmount || 0), 0),
     fullPayments: searchedPayments.filter((payment) => Number(payment.remainingAmount || 0) <= 0).length
   }), [searchedPayments]);
+  const viewingPaymentDetails = viewingPayment ? getPaymentSubscriptionDetails(viewingPayment) : null;
 
   return (
     <div className="dashboard-layout payments-admin-layout">
@@ -723,8 +737,9 @@ const PaymentsPage = () => {
                             <td>{payment.notes ? payment.notes : '-'}</td>
                             <td>
                               <div className="payment-row-actions">
+                                <button type="button" onClick={() => setViewingPayment(payment)}>View</button>
                                 <button type="button" onClick={() => handleEditPayment(payment)}>Edit</button>
-                                <button type="button" onClick={() => handleDeletePayment(payment)}>Delete</button>
+                                <button type="button" className="is-danger" onClick={() => handleDeletePayment(payment)}>Delete</button>
                               </div>
                             </td>
                           </>
@@ -766,6 +781,37 @@ const PaymentsPage = () => {
                   <button className="btn-secondary" type="button" onClick={() => setShowPaymentUnlock(false)}>Cancel</button>
                 </div>
               </form>
+            </section>
+          </div>
+        )}
+        {viewingPaymentDetails && (
+          <div className="student-modal-backdrop" role="presentation" onClick={() => setViewingPayment(null)}>
+            <section className="payment-detail-modal" role="dialog" aria-modal="true" aria-label="Payment subscription details" onClick={(event) => event.stopPropagation()}>
+              <div className="student-modal-header">
+                <div>
+                  <p className="payments-kicker">Subscription details</p>
+                  <h2>{viewingPaymentDetails.memberName}</h2>
+                </div>
+                <button type="button" className="btn-secondary" onClick={() => setViewingPayment(null)}>Close</button>
+              </div>
+              <div className="payment-detail-grid">
+                <div>
+                  <span>Start Date</span>
+                  <strong>{formatDate(viewingPaymentDetails.startDate)}</strong>
+                </div>
+                <div>
+                  <span>End Date</span>
+                  <strong>{formatDate(viewingPaymentDetails.endDate)}</strong>
+                </div>
+                <div>
+                  <span>Classes</span>
+                  <strong>{viewingPaymentDetails.classes || 0}</strong>
+                </div>
+                <div>
+                  <span>Package</span>
+                  <strong>{viewingPaymentDetails.packageName}</strong>
+                </div>
+              </div>
             </section>
           </div>
         )}
