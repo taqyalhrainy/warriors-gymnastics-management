@@ -2,6 +2,7 @@ const Payment = require('../models/Payment');
 const Parent = require('../models/Parent');
 const Notification = require('../models/Notification');
 const Player = require('../models/Player');
+const Attendance = require('../models/Attendance');
 const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { encrypt, decrypt } = require('../utils/encryption');
@@ -11,7 +12,7 @@ const { snapshotPaymentDocument, createHistoryEntry } = require('../utils/histor
 const populatePaymentQuery = (query) => query
   .populate({
     path: 'playerId',
-    select: 'fullName parentId parentPhoneEncrypted isDeleted deletedAt packageName packageClasses packageHours payment previousDueBalance dueAdjustment startDate endDate currentSubscriptionStartedAt subscriptionId',
+    select: 'fullName parentId parentPhoneEncrypted isDeleted deletedAt packageName packageClasses packageHours payment previousDueBalance dueAdjustment startDate endDate currentSubscriptionStartedAt currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId',
     populate: [
       {
         path: 'parentId',
@@ -112,6 +113,93 @@ const getTransactionType = (value, remainingAmount) => {
 
 const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
 
+const getDateOnly = (value) => {
+  const date = value ? new Date(value) : new Date(0);
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const getCurrentSubscriptionStart = (player) => {
+  const rawDate = player?.currentSubscriptionStartedAt || player?.startDate || player?.subscriptionId?.startDate;
+  if (!rawDate) return null;
+  const date = new Date(rawDate);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const getPlayerIdFromPayment = (payment) => {
+  const player = payment?.playerId;
+  return player?._id ? String(player._id) : String(player || '');
+};
+
+const getPaymentPlayers = (payments) => {
+  const playerMap = new Map();
+  payments.forEach((payment) => {
+    const player = payment?.playerId;
+    if (player?._id) {
+      playerMap.set(String(player._id), player);
+    }
+  });
+  return [...playerMap.values()];
+};
+
+const getAttendancePresentCountMap = async (players) => {
+  const playerIds = players.map((player) => player._id).filter(Boolean);
+  if (!playerIds.length) return new Map();
+
+  const cycleStartByPlayerId = new Map(players.map((player) => [
+    String(player._id),
+    getCurrentSubscriptionStart(player) || new Date(0)
+  ]));
+  const explicitCurrentRecordIdsByPlayerId = new Map(players.map((player) => [
+    String(player._id),
+    new Set((player.currentSubscriptionAttendanceIds || []).map(String))
+  ]));
+  const excludedCurrentRecordIdsByPlayerId = new Map(players.map((player) => [
+    String(player._id),
+    new Set((player.currentSubscriptionExcludedAttendanceIds || []).map(String))
+  ]));
+  const presentRecords = await Attendance.find({
+    playerId: { $in: playerIds },
+    status: 'present'
+  }).select('_id playerId date').lean();
+  const presentDatesByPlayerId = new Map();
+
+  presentRecords.forEach((record) => {
+    const playerId = String(record.playerId);
+    if (excludedCurrentRecordIdsByPlayerId.get(playerId)?.has(String(record._id))) return;
+
+    const cycleStart = cycleStartByPlayerId.get(playerId);
+    const recordDate = getDateOnly(record.date);
+    const isExplicitlyCounted = explicitCurrentRecordIdsByPlayerId.get(playerId)?.has(String(record._id));
+    const isInCurrentCycle = !cycleStart || isExplicitlyCounted || recordDate >= getDateOnly(cycleStart);
+    if (!isInCurrentCycle) return;
+
+    if (!presentDatesByPlayerId.has(playerId)) {
+      presentDatesByPlayerId.set(playerId, new Set());
+    }
+    presentDatesByPlayerId.get(playerId).add(recordDate.toISOString().split('T')[0]);
+  });
+
+  return new Map(players.map((player) => {
+    const totalClasses = Number(player.packageClasses || player.subscriptionId?.totalSessions || 0) || Number.MAX_SAFE_INTEGER;
+    const presentCount = presentDatesByPlayerId.get(String(player._id))?.size || 0;
+    return [String(player._id), Math.min(totalClasses, presentCount)];
+  }));
+};
+
+const formatPaymentsWithAttendanceCounts = async (payments) => {
+  const paymentRows = Array.isArray(payments) ? payments : [payments].filter(Boolean);
+  const countMap = await getAttendancePresentCountMap(getPaymentPlayers(paymentRows));
+  const formattedRows = paymentRows.map((payment) => {
+    const row = formatPaymentResponse(payment);
+    if (row.playerId && typeof row.playerId === 'object') {
+      row.playerId.attendancePresentCount = countMap.get(getPlayerIdFromPayment(payment)) || 0;
+    }
+    return row;
+  });
+  return Array.isArray(payments) ? formattedRows : formattedRows[0];
+};
+
 const getCurrentSubscriptionPaymentMatch = (player) => {
   const match = { playerId: player._id };
   if (player.currentSubscriptionStartedAt) {
@@ -141,7 +229,7 @@ const getPayments = async (req, res, next) => {
       filter.paymentDate = { $gte: start, $lte: end };
     }
     const payments = await populatePaymentQuery(Payment.find(filter).sort({ paymentDate: -1, _id: -1 }));
-    res.json(payments.map(formatPaymentResponse));
+    res.json(await formatPaymentsWithAttendanceCounts(payments));
   } catch (error) {
     next(error);
   }
@@ -207,7 +295,7 @@ const createPayment = async (req, res, next) => {
     await createAuditLog({ userId: req.user._id, action: 'create payment', entity: 'Payment', entityId: payment._id, req });
     await recalculatePlayerPayments(player._id);
     const createdPayment = await populatePaymentQuery(Payment.findById(payment._id));
-    res.status(201).json(formatPaymentResponse(createdPayment));
+    res.status(201).json(await formatPaymentsWithAttendanceCounts(createdPayment));
   } catch (error) {
     next(error);
   }
@@ -264,7 +352,7 @@ const updatePayment = async (req, res, next) => {
     await createAuditLog({ userId: req.user._id, action: 'update payment', entity: 'Payment', entityId: payment._id, req });
 
     const updatedPayment = await populatePaymentQuery(Payment.findById(payment._id));
-    res.json(formatPaymentResponse(updatedPayment));
+    res.json(await formatPaymentsWithAttendanceCounts(updatedPayment));
   } catch (error) {
     next(error);
   }
@@ -307,7 +395,7 @@ const getPaymentsByPlayer = async (req, res, next) => {
       return res.status(400).json({ message: 'Invalid player ID.' });
     }
     const payments = await populatePaymentQuery(Payment.find({ playerId }).sort({ paymentDate: -1, _id: -1 }));
-    res.json(payments.map(formatPaymentResponse));
+    res.json(await formatPaymentsWithAttendanceCounts(payments));
   } catch (error) {
     next(error);
   }

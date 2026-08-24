@@ -102,7 +102,7 @@ const getPaymentSubscriptionDetails = (payment) => {
     endDate: player?.endDate || null,
     classes: player?.packageClasses ?? payment.packageClassesSnapshot ?? 0,
     hours: player?.packageHours ?? payment.packageHoursSnapshot ?? 0,
-    usedClasses: player?.subscriptionId?.usedSessions ?? 0
+    usedClasses: player?.attendancePresentCount ?? player?.subscriptionId?.usedSessions ?? 0
   };
 };
 
