@@ -330,14 +330,18 @@ const PaymentsPage = () => {
 
   const filteredPlayers = useMemo(() => {
     const query = playerSearch.trim().toLowerCase();
-    if (!query) return players;
-    return players.filter((player) => [
-      player.fullName,
-      player.parentId?.name,
-      player.status,
-      getPlayerGroups(player)
-    ].join(' ').toLowerCase().includes(query));
-  }, [players, playerSearch]);
+    return players
+      .filter((player) => (player.status || 'active') === 'active' || player._id === form.playerId)
+      .filter((player) => {
+        if (!query) return true;
+        return [
+          player.fullName,
+          player.parentId?.name,
+          player.status,
+          getPlayerGroups(player)
+        ].join(' ').toLowerCase().includes(query);
+      });
+  }, [players, playerSearch, form.playerId]);
 
   const visiblePayments = useMemo(() => {
     if (activeView === 'pending') {
