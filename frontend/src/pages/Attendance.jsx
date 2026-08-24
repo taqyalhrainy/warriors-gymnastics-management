@@ -1133,13 +1133,17 @@ const AttendancePage = () => {
           .map((player) => ({ player, groupId: getEntityId(group._id) })));
       const targetPlayerRecord = currentPlayerRecords
         .find((item) => item.groupId === getEntityId(targetGroupId))?.player || null;
+      const previousTargetAttendance = targetPlayerRecord?.todayAttendance || null;
       const hadPresentAttendance = currentPlayerRecords.some((item) => item.player.todayAttendance?.status === 'present');
       const willHavePresentAttendance = currentPlayerRecords.some((item) => (
         item.groupId === getEntityId(targetGroupId)
           ? attendance?.status === 'present'
           : item.player.todayAttendance?.status === 'present'
       ));
-      const presentDelta = Number(willHavePresentAttendance) - Number(hadPresentAttendance);
+      const canSafelyAdjustCount = Boolean(previousTargetAttendance);
+      const presentDelta = canSafelyAdjustCount
+        ? Number(willHavePresentAttendance) - Number(hadPresentAttendance)
+        : 0;
       const basePresentCount = Number((targetPlayerRecord || currentPlayerRecords[0]?.player)?.attendancePresentCount || 0);
       const nextPresentCount = Math.max(0, basePresentCount + presentDelta);
 
