@@ -105,6 +105,7 @@ const Sidebar = () => {
       { path: '/parents', key: 'parents' },
       { path: '/groups', key: 'groups' },
       { path: '/attendance', key: 'attendance' },
+      { path: '/coaches', key: 'coaches' },
       { path: '/payments', key: 'payments' },
       { path: '/notifications', key: 'notifications' },
       { path: '/history', key: 'history' },

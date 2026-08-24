@@ -1,36 +1,65 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
-import { fetchCoaches, createCoach, updateCoach, deleteCoach } from '../services/coaches.js';
+import { fetchCoaches, createCoach, updateCoach, deleteCoach, updateCoachAttendance } from '../services/coaches.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
+
+const initialForm = { name: '', email: '', phone: '', specialization: '' };
+
+const getDateInputValue = (date = new Date()) => {
+  const value = new Date(date);
+  if (Number.isNaN(value.getTime())) return '';
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const formatTime = (date) => {
+  if (!date) return '-';
+  return new Date(date).toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
+const getCoachStatusLabel = (attendance) => {
+  if (!attendance) return 'Not set';
+  if (attendance.status === 'left') return 'Left';
+  if (attendance.status === 'absent') return 'Absent';
+  return 'Present';
+};
 
 const CoachesPage = () => {
   const [coaches, setCoaches] = useState([]);
   const [selectedCoach, setSelectedCoach] = useState(null);
-  const [form, setForm] = useState({ name: '', email: '', phone: '', specialization: '' });
+  const [form, setForm] = useState(initialForm);
   const [message, setMessage] = useState('');
   const [search, setSearch] = useState('');
+  const [selectedDate, setSelectedDate] = useState(getDateInputValue());
+  const [pendingCoachAction, setPendingCoachAction] = useState('');
   const { t } = useLanguage();
 
   const loadCoaches = async () => {
     try {
-      setCoaches(await fetchCoaches());
+      setCoaches(await fetchCoaches({ date: selectedDate, fresh: Date.now() }));
     } catch (error) {
-      console.error(error);
+      setMessage(error.response?.data?.message || 'Unable to load coaches.');
     }
   };
 
   useEffect(() => {
     loadCoaches();
-  }, []);
+  }, [selectedDate]);
 
   const resetForm = () => {
     setSelectedCoach(null);
-    setForm({ name: '', email: '', phone: '', specialization: '' });
+    setForm(initialForm);
     setMessage('');
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setMessage('');
     try {
       if (selectedCoach) {
         await updateCoach(selectedCoach._id, form);
@@ -40,7 +69,7 @@ const CoachesPage = () => {
         setMessage('Coach added successfully.');
       }
       resetForm();
-      loadCoaches();
+      await loadCoaches();
     } catch (error) {
       setMessage(error.response?.data?.message || 'Unable to save coach.');
     }
@@ -48,75 +77,177 @@ const CoachesPage = () => {
 
   const handleEdit = (coach) => {
     setSelectedCoach(coach);
-    setForm({ name: coach.name, email: coach.userId?.email || '', phone: coach.phone || '', specialization: coach.specialization || '' });
+    setForm({
+      name: coach.name || '',
+      email: coach.userId?.email || '',
+      phone: coach.phone || '',
+      specialization: coach.specialization || ''
+    });
     setMessage('');
   };
 
   const handleDelete = async (id) => {
+    if (!window.confirm('Delete coach?')) return;
+    setMessage('');
     try {
       await deleteCoach(id);
+      setCoaches((current) => current.filter((coach) => coach._id !== id));
       setMessage('Coach deleted successfully.');
-      loadCoaches();
     } catch (error) {
       setMessage(error.response?.data?.message || 'Unable to delete coach.');
     }
   };
 
-  const filteredCoaches = coaches.filter((coach) => [
-    coach.name,
-    coach.userId?.email,
-    coach.phone,
-    coach.specialization
-  ].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
+  const handleAttendanceAction = async (coach, action) => {
+    const actionKey = `${coach._id}:${action}`;
+    if (pendingCoachAction) return;
+    setMessage('');
+    setPendingCoachAction(actionKey);
+    try {
+      const attendance = await updateCoachAttendance(coach._id, { action, date: selectedDate });
+      setCoaches((current) => current.map((item) => (
+        item._id === coach._id ? { ...item, todayAttendance: attendance } : item
+      )));
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Unable to update coach attendance.');
+    } finally {
+      setPendingCoachAction('');
+    }
+  };
+
+  const filteredCoaches = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return coaches;
+    return coaches.filter((coach) => [
+      coach.name,
+      coach.userId?.email,
+      coach.phone,
+      coach.specialization,
+      getCoachStatusLabel(coach.todayAttendance)
+    ].join(' ').toLowerCase().includes(query));
+  }, [coaches, search]);
+
+  const attendanceTotals = useMemo(() => ({
+    present: coaches.filter((coach) => coach.todayAttendance?.status === 'present' || coach.todayAttendance?.status === 'left').length,
+    left: coaches.filter((coach) => coach.todayAttendance?.status === 'left').length,
+    absent: coaches.filter((coach) => coach.todayAttendance?.status === 'absent').length
+  }), [coaches]);
 
   return (
     <div className="dashboard-layout">
       <Sidebar />
-      <main className="page-content">
-        <div className="page-header"><h1>{t('coaches')}</h1></div>
-        <div className="grid-two">
-          <div className="form-card">
+      <main className="page-content coaches-page">
+        <div className="page-header coaches-header">
+          <div>
+            <p className="payments-kicker">Warriors Gymnastics</p>
+            <h1>{t('coaches')}</h1>
+          </div>
+          <label className="coach-date-filter">
+            <span>Date</span>
+            <input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value || getDateInputValue())} />
+          </label>
+        </div>
+
+        {message && <p className="alert-info">{message}</p>}
+
+        <section className="coach-summary-row">
+          <div>
+            <span>Total coaches</span>
+            <strong>{coaches.length}</strong>
+          </div>
+          <div>
+            <span>Came today</span>
+            <strong>{attendanceTotals.present}</strong>
+          </div>
+          <div>
+            <span>Left</span>
+            <strong>{attendanceTotals.left}</strong>
+          </div>
+          <div>
+            <span>Absent</span>
+            <strong>{attendanceTotals.absent}</strong>
+          </div>
+        </section>
+
+        <div className="grid-two coaches-workspace">
+          <section className="form-card coach-form-card">
             <h2>{selectedCoach ? t('editCoach') : t('addCoach')}</h2>
-            {message && <p className="alert-info">{message}</p>}
             <form onSubmit={handleSubmit}>
               <label>{t('name')}</label>
-              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+              <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
               <label>{t('emailOptional')}</label>
-              <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              <input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
               <label>{t('phone')}</label>
-              <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              <input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
               <label>{t('specialization')}</label>
-              <input value={form.specialization} onChange={(e) => setForm({ ...form, specialization: e.target.value })} />
-              <button className="btn-primary" type="submit">{selectedCoach ? t('update') : t('add')}</button>
-              {selectedCoach && <button type="button" className="btn-secondary" onClick={resetForm}>{t('cancel')}</button>}
+              <input value={form.specialization} onChange={(event) => setForm({ ...form, specialization: event.target.value })} />
+              <div className="coach-form-actions">
+                <button className="btn-primary" type="submit">{selectedCoach ? t('update') : t('add')}</button>
+                {selectedCoach && <button type="button" className="btn-secondary" onClick={resetForm}>{t('cancel')}</button>}
+              </div>
             </form>
-          </div>
-          <div className="table-card">
+          </section>
+
+          <section className="table-card coach-attendance-card">
             <div className="table-toolbar">
-              <h2>{t('coachList')}</h2>
+              <div>
+                <h2>Coach Attendance</h2>
+                <p className="table-filter-count">{filteredCoaches.length} shown</p>
+              </div>
               <label className="table-search">
                 <span>Search</span>
                 <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search coaches..." />
               </label>
             </div>
-            <table className="data-table">
-              <thead><tr><th>{t('name')}</th><th>{t('email')}</th><th>{t('phone')}</th><th>{t('specialization')}</th><th>{t('actions')}</th></tr></thead>
-              <tbody>
-                {filteredCoaches.length ? filteredCoaches.map((coach) => (
-                  <tr key={coach._id}>
-                    <td>{coach.name}</td>
-                    <td>{coach.userId?.email || '—'}</td>
-                    <td>{coach.phone || '—'}</td>
-                    <td>{coach.specialization || '—'}</td>
-                    <td>
+            <div className="coach-card-grid">
+              {filteredCoaches.length ? filteredCoaches.map((coach) => {
+                const attendance = coach.todayAttendance;
+                const status = getCoachStatusLabel(attendance);
+                return (
+                  <article className={`coach-attendance-item status-${attendance?.status || 'empty'}`} key={coach._id}>
+                    <div className="coach-card-top">
+                      <div>
+                        <h3>{coach.name}</h3>
+                        <p>{coach.specialization || 'Coach'}</p>
+                      </div>
+                      <span>{status}</span>
+                    </div>
+                    <div className="coach-time-grid">
+                      <div>
+                        <small>Came</small>
+                        <strong>{formatTime(attendance?.arrivedAt)}</strong>
+                      </div>
+                      <div>
+                        <small>Left</small>
+                        <strong>{formatTime(attendance?.leftAt)}</strong>
+                      </div>
+                      <div>
+                        <small>Absent</small>
+                        <strong>{formatTime(attendance?.absentAt)}</strong>
+                      </div>
+                    </div>
+                    <div className="coach-card-actions">
+                      <button type="button" className="btn-present" disabled={Boolean(pendingCoachAction)} onClick={() => handleAttendanceAction(coach, 'arrived')}>
+                        {pendingCoachAction === `${coach._id}:arrived` ? 'Saving...' : 'Came'}
+                      </button>
+                      <button type="button" className="btn-secondary" disabled={Boolean(pendingCoachAction)} onClick={() => handleAttendanceAction(coach, 'left')}>
+                        {pendingCoachAction === `${coach._id}:left` ? 'Saving...' : 'Left'}
+                      </button>
+                      <button type="button" className="btn-absent" disabled={Boolean(pendingCoachAction)} onClick={() => handleAttendanceAction(coach, 'absent')}>
+                        {pendingCoachAction === `${coach._id}:absent` ? 'Saving...' : 'Absent'}
+                      </button>
+                    </div>
+                    <div className="coach-admin-actions">
                       <button type="button" onClick={() => handleEdit(coach)}>{t('edit')}</button>
                       <button type="button" onClick={() => handleDelete(coach._id)}>{t('delete')}</button>
-                    </td>
-                  </tr>
-                )) : <tr><td colSpan="5">{t('noCoachesAvailable')}</td></tr>}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  </article>
+                );
+              }) : (
+                <p className="empty-state">{t('noCoachesAvailable')}</p>
+              )}
+            </div>
+          </section>
         </div>
       </main>
     </div>

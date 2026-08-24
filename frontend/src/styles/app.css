@@ -4228,6 +4228,203 @@ body.rtl .new-subscription-summary-card[type='button'] {
   line-height: 1.1;
 }
 
+.coaches-page {
+  display: grid;
+  gap: 18px;
+}
+
+.coaches-header {
+  align-items: end;
+}
+
+.coach-date-filter {
+  display: grid;
+  gap: 6px;
+  min-width: 180px;
+  margin: 0;
+}
+
+.coach-date-filter span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 900;
+}
+
+.coach-summary-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.coach-summary-row div {
+  min-height: 104px;
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  padding: 18px;
+  border: 1px solid color-mix(in srgb, #ef4444 28%, var(--border));
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, #ef4444 10%, transparent), color-mix(in srgb, #06b6d4 7%, transparent)),
+    var(--surface);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.08);
+}
+
+.coach-summary-row span,
+.coach-time-grid small {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.coach-summary-row strong {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.coaches-workspace {
+  align-items: start;
+}
+
+.coach-form-card form {
+  display: grid;
+}
+
+.coach-form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.coach-attendance-card {
+  min-width: 0;
+}
+
+.coach-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.coach-attendance-item {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-top: 4px solid #64748b;
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.08);
+}
+
+.coach-attendance-item.status-present {
+  border-top-color: #16a34a;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, #22c55e 12%, transparent), transparent),
+    var(--surface);
+}
+
+.coach-attendance-item.status-left {
+  border-top-color: #06b6d4;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, #06b6d4 12%, transparent), transparent),
+    var(--surface);
+}
+
+.coach-attendance-item.status-absent {
+  border-top-color: #ef4444;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, #ef4444 12%, transparent), transparent),
+    var(--surface);
+}
+
+.coach-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.coach-card-top h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.coach-card-top p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.coach-card-top > span {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--surface-alt);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.coach-time-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.coach-time-grid div {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-alt) 76%, transparent);
+}
+
+.coach-time-grid strong {
+  font-size: 1rem;
+}
+
+.coach-card-actions,
+.coach-admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.coach-card-actions button {
+  flex: 1;
+  min-width: 84px;
+  min-height: 42px;
+  border-radius: 8px;
+}
+
+.coach-admin-actions {
+  justify-content: flex-end;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.coach-admin-actions button {
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-alt);
+  color: var(--text);
+  font-weight: 850;
+  box-shadow: none;
+}
+
+.coach-admin-actions button:last-child {
+  border-color: color-mix(in srgb, #ef4444 45%, var(--border));
+  color: #ef4444;
+}
+
 .payment-amount-cell,
 .payment-member-cell {
   color: #ffffff;

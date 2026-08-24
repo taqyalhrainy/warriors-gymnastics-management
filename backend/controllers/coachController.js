@@ -1,13 +1,42 @@
 const bcrypt = require('bcryptjs');
 const Coach = require('../models/Coach');
+const CoachAttendance = require('../models/CoachAttendance');
 const User = require('../models/User');
 const { sanitizeObject, validateEmail, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 
+const getDateOnly = (value = new Date()) => {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) {
+    const fallback = new Date();
+    fallback.setHours(0, 0, 0, 0);
+    return fallback;
+  }
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const formatCoachResponse = (coach, attendanceByCoachId = new Map()) => {
+  const obj = coach.toObject ? coach.toObject() : coach;
+  obj.todayAttendance = attendanceByCoachId.get(String(obj._id)) || null;
+  return obj;
+};
+
+const attachTodayAttendance = async (coaches, dateValue) => {
+  const rows = Array.isArray(coaches) ? coaches : [coaches].filter(Boolean);
+  const date = getDateOnly(dateValue);
+  const attendanceRows = rows.length
+    ? await CoachAttendance.find({ coachId: { $in: rows.map((coach) => coach._id) }, date }).lean()
+    : [];
+  const attendanceByCoachId = new Map(attendanceRows.map((row) => [String(row.coachId), row]));
+  const formattedRows = rows.map((coach) => formatCoachResponse(coach, attendanceByCoachId));
+  return Array.isArray(coaches) ? formattedRows : formattedRows[0];
+};
+
 const getCoaches = async (req, res, next) => {
   try {
     const coaches = await Coach.find().sort({ _id: -1 }).populate('userId', 'name email role isActive');
-    res.json(coaches);
+    res.json(await attachTodayAttendance(coaches, req.query.date));
   } catch (error) {
     next(error);
   }
@@ -115,4 +144,65 @@ const deleteCoach = async (req, res, next) => {
   }
 };
 
-module.exports = { getCoaches, createCoach, updateCoach, deleteCoach };
+const updateCoachAttendance = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!validateObjectId(id)) {
+      return res.status(400).json({ message: 'Invalid coach ID.' });
+    }
+
+    const body = sanitizeObject(req.body);
+    const action = String(body.action || '').trim().toLowerCase();
+    if (!['arrived', 'left', 'absent'].includes(action)) {
+      return res.status(400).json({ message: 'Invalid coach attendance action.' });
+    }
+
+    const coach = await Coach.findById(id);
+    if (!coach) {
+      return res.status(404).json({ message: 'Coach not found.' });
+    }
+
+    const now = new Date();
+    const date = getDateOnly(body.date || now);
+    const setFields = {
+      coachId: coach._id,
+      date,
+      updatedBy: req.user._id,
+      updatedAt: now
+    };
+    const unsetFields = {};
+
+    if (action === 'arrived') {
+      setFields.status = 'present';
+      setFields.arrivedAt = now;
+      unsetFields.leftAt = '';
+      unsetFields.absentAt = '';
+    } else if (action === 'left') {
+      setFields.status = 'left';
+      setFields.leftAt = now;
+      unsetFields.absentAt = '';
+    } else {
+      setFields.status = 'absent';
+      setFields.absentAt = now;
+      unsetFields.arrivedAt = '';
+      unsetFields.leftAt = '';
+    }
+
+    const attendance = await CoachAttendance.findOneAndUpdate(
+      { coachId: coach._id, date },
+      {
+        $set: setFields,
+        $unset: unsetFields,
+        $setOnInsert: { createdBy: req.user._id, createdAt: now }
+      },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    ).lean();
+
+    await createAuditLog({ userId: req.user._id, action: `coach ${action}`, entity: 'CoachAttendance', entityId: attendance._id, req });
+    res.json(attendance);
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { getCoaches, createCoach, updateCoach, deleteCoach, updateCoachAttendance };
