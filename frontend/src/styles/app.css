@@ -4409,7 +4409,11 @@ body.rtl .new-subscription-summary-card[type='button'] {
   border-top: 1px solid var(--border);
 }
 
-.coach-admin-actions button {
+.coach-admin-actions button,
+.coach-admin-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 32px;
   padding: 5px 10px;
   border: 1px solid var(--border);
@@ -4417,12 +4421,140 @@ body.rtl .new-subscription-summary-card[type='button'] {
   background: var(--surface-alt);
   color: var(--text);
   font-weight: 850;
+  text-decoration: none;
   box-shadow: none;
 }
 
 .coach-admin-actions button:last-child {
   border-color: color-mix(in srgb, #ef4444 45%, var(--border));
   color: #ef4444;
+}
+
+.coach-back-link {
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
+  border-radius: 8px;
+  text-decoration: none;
+}
+
+.coach-profile-page {
+  display: grid;
+  gap: 18px;
+}
+
+.coach-profile-hero {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.9fr) minmax(320px, 1.6fr);
+  gap: 14px;
+  padding: 22px;
+  border: 1px solid color-mix(in srgb, #ef4444 30%, var(--border));
+  border-top: 4px solid #ef4444;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, #ef4444 10%, transparent), color-mix(in srgb, #06b6d4 7%, transparent)),
+    var(--surface);
+  box-shadow: 0 22px 44px rgba(15, 23, 42, 0.1);
+}
+
+.coach-profile-hero span,
+.coach-profile-details span,
+.coach-history-head span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.coach-profile-hero strong {
+  display: block;
+  margin-top: 8px;
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  line-height: 1;
+}
+
+.coach-profile-hero p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 1.05rem;
+}
+
+.coach-profile-details {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.coach-profile-details article {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  min-height: 108px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-alt) 78%, transparent);
+}
+
+.coach-profile-details strong {
+  font-size: 1.35rem;
+  overflow-wrap: anywhere;
+}
+
+.coach-history-card {
+  min-width: 0;
+}
+
+.coach-history-table {
+  display: grid;
+  gap: 8px;
+}
+
+.coach-history-head,
+.coach-history-row {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr repeat(3, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+}
+
+.coach-history-head {
+  border-bottom: 1px solid var(--border);
+}
+
+.coach-history-row {
+  border: 1px solid var(--border);
+  border-left: 5px solid #64748b;
+  border-radius: 8px;
+  background: var(--surface-alt);
+}
+
+.coach-history-row.status-present {
+  border-left-color: #16a34a;
+}
+
+.coach-history-row.status-left {
+  border-left-color: #06b6d4;
+}
+
+.coach-history-row.status-absent {
+  border-left-color: #ef4444;
+}
+
+.coach-history-row strong {
+  font-weight: 900;
+}
+
+@media (max-width: 900px) {
+  .coach-profile-hero,
+  .coach-profile-details,
+  .coach-history-head,
+  .coach-history-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .payment-amount-cell,

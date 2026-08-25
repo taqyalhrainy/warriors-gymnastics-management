@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchCoaches, createCoach, updateCoach, deleteCoach, updateCoachAttendance } from '../services/coaches.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
-const initialForm = { name: '', email: '', phone: '', specialization: '' };
+const initialForm = { name: '', phone: '', phone2: '', specialization: '' };
 
 const getDateInputValue = (date = new Date()) => {
   const value = new Date(date);
@@ -79,8 +80,8 @@ const CoachesPage = () => {
     setSelectedCoach(coach);
     setForm({
       name: coach.name || '',
-      email: coach.userId?.email || '',
       phone: coach.phone || '',
+      phone2: coach.phone2 || '',
       specialization: coach.specialization || ''
     });
     setMessage('');
@@ -120,8 +121,8 @@ const CoachesPage = () => {
     if (!query) return coaches;
     return coaches.filter((coach) => [
       coach.name,
-      coach.userId?.email,
       coach.phone,
+      coach.phone2,
       coach.specialization,
       getCoachStatusLabel(coach.todayAttendance)
     ].join(' ').toLowerCase().includes(query));
@@ -175,10 +176,10 @@ const CoachesPage = () => {
             <form onSubmit={handleSubmit}>
               <label>{t('name')}</label>
               <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
-              <label>{t('emailOptional')}</label>
-              <input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
-              <label>{t('phone')}</label>
+              <label>Phone 1</label>
               <input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
+              <label>Phone 2</label>
+              <input value={form.phone2} onChange={(event) => setForm({ ...form, phone2: event.target.value })} />
               <label>{t('specialization')}</label>
               <input value={form.specialization} onChange={(event) => setForm({ ...form, specialization: event.target.value })} />
               <div className="coach-form-actions">
@@ -214,9 +215,19 @@ const CoachesPage = () => {
                     </div>
                     <div className="coach-time-grid">
                       <div>
+                        <small>Phone 1</small>
+                        <strong>{coach.phone || '-'}</strong>
+                      </div>
+                      <div>
+                        <small>Phone 2</small>
+                        <strong>{coach.phone2 || '-'}</strong>
+                      </div>
+                      <div>
                         <small>Came</small>
                         <strong>{formatTime(attendance?.arrivedAt)}</strong>
                       </div>
+                    </div>
+                    <div className="coach-time-grid">
                       <div>
                         <small>Left</small>
                         <strong>{formatTime(attendance?.leftAt)}</strong>
@@ -238,6 +249,7 @@ const CoachesPage = () => {
                       </button>
                     </div>
                     <div className="coach-admin-actions">
+                      <Link to={`/coaches/${coach._id}`}>View</Link>
                       <button type="button" onClick={() => handleEdit(coach)}>{t('edit')}</button>
                       <button type="button" onClick={() => handleDelete(coach._id)}>{t('delete')}</button>
                     </div>

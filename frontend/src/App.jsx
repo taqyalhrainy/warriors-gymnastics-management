@@ -13,6 +13,7 @@ const PlayerProfilePage = lazy(() => import('./pages/PlayerProfile.jsx'));
 const GroupsPage = lazy(() => import('./pages/Groups.jsx'));
 const AttendancePage = lazy(() => import('./pages/Attendance.jsx'));
 const CoachesPage = lazy(() => import('./pages/Coaches.jsx'));
+const CoachProfilePage = lazy(() => import('./pages/CoachProfile.jsx'));
 const PaymentsPage = lazy(() => import('./pages/Payments.jsx'));
 const OwnerDashboardPage = lazy(() => import('./pages/OwnerDashboard.jsx'));
 const NotificationsPage = lazy(() => import('./pages/Notifications.jsx'));
@@ -65,6 +66,7 @@ function App() {
               <Route path="/groups" element={<GroupsPage />} />
               <Route path="/attendance" element={<AttendancePage />} />
               <Route path="/coaches" element={<CoachesPage />} />
+              <Route path="/coaches/:id" element={<CoachProfilePage />} />
               <Route path="/payments" element={<PaymentsPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/notifications/:id" element={<NotificationDetailPage />} />

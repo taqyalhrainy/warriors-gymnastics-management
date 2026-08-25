@@ -42,10 +42,32 @@ const getCoaches = async (req, res, next) => {
   }
 };
 
+const getCoachById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!validateObjectId(id)) {
+      return res.status(400).json({ message: 'Invalid coach ID.' });
+    }
+
+    const coach = await Coach.findById(id).populate('userId', 'name email role isActive');
+    if (!coach) {
+      return res.status(404).json({ message: 'Coach not found.' });
+    }
+
+    const attendanceHistory = await CoachAttendance.find({ coachId: coach._id })
+      .sort({ date: -1, updatedAt: -1, _id: -1 })
+      .lean();
+
+    res.json({ ...coach.toObject(), attendanceHistory });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const createCoach = async (req, res, next) => {
   try {
     const body = sanitizeObject(req.body);
-    const { name, email, phone, specialization } = body;
+    const { name, email, phone, phone2, specialization } = body;
     if (!name) {
       return res.status(400).json({ message: 'Coach name is required.' });
     }
@@ -70,7 +92,7 @@ const createCoach = async (req, res, next) => {
       userId = user._id;
     }
 
-    const coach = await Coach.create({ userId, name, phone: phone || '', specialization: specialization || '' });
+    const coach = await Coach.create({ userId, name, phone: phone || '', phone2: phone2 || '', specialization: specialization || '' });
     await createAuditLog({ userId: req.user._id, action: 'create coach', entity: 'Coach', entityId: coach._id, req });
     res.status(201).json(coach);
   } catch (error) {
@@ -85,13 +107,14 @@ const updateCoach = async (req, res, next) => {
       return res.status(400).json({ message: 'Invalid coach ID.' });
     }
     const body = sanitizeObject(req.body);
-    const { name, email, phone, specialization } = body;
+    const { name, email, phone, phone2, specialization } = body;
     const coach = await Coach.findById(id);
     if (!coach) {
       return res.status(404).json({ message: 'Coach not found.' });
     }
     if (name) coach.name = name;
     if (typeof phone !== 'undefined') coach.phone = phone;
+    if (typeof phone2 !== 'undefined') coach.phone2 = phone2;
     if (typeof specialization !== 'undefined') coach.specialization = specialization;
     if (email) {
       if (!validateEmail(email)) {
@@ -205,4 +228,4 @@ const updateCoachAttendance = async (req, res, next) => {
   }
 };
 
-module.exports = { getCoaches, createCoach, updateCoach, deleteCoach, updateCoachAttendance };
+module.exports = { getCoaches, getCoachById, createCoach, updateCoach, deleteCoach, updateCoachAttendance };

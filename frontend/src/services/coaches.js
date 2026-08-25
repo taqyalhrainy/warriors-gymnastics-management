@@ -13,6 +13,11 @@ export const fetchCoaches = async (params = {}) => {
   });
 };
 
+export const fetchCoach = async (id) => {
+  const response = await api.get(`/coaches/${id}`);
+  return response.data;
+};
+
 export const createCoach = async (data) => {
   const response = await api.post('/coaches', data);
   invalidateCache(['coaches:', 'players:', 'reports:']);
