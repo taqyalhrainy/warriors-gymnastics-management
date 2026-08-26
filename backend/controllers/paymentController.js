@@ -142,6 +142,44 @@ const getPaymentPlayers = (payments) => {
   return [...playerMap.values()];
 };
 
+const isPaymentInPlayerCurrentSubscription = (payment, player) => {
+  if (player?.currentSubscriptionStartedAt) {
+    return payment.createdAt && new Date(payment.createdAt) >= new Date(player.currentSubscriptionStartedAt);
+  }
+  const subscriptionStart = getCurrentSubscriptionStart(player);
+  if (!subscriptionStart) return true;
+  return new Date(payment.paymentDate || 0) >= subscriptionStart;
+};
+
+const getCurrentPaymentSummaryMap = async (players) => {
+  const playerIds = players.map((player) => player._id).filter(Boolean);
+  if (!playerIds.length) return new Map();
+
+  const playerById = new Map(players.map((player) => [String(player._id), player]));
+  const paymentRows = await Payment.find({
+    playerId: { $in: playerIds },
+    transactionType: { $in: ['Full payment', 'Partial payment'] }
+  }).select('playerId paidAmount paymentDate createdAt transactionType').lean();
+
+  const summaryMap = new Map(players.map((player) => {
+    const totalAmount = Number(player.previousDueBalance || 0)
+      + Number(player.payment || 0)
+      - Number(player.dueAdjustment || 0);
+    return [String(player._id), { totalAmount, paidAmount: 0, remainingAmount: Math.max(0, totalAmount) }];
+  }));
+
+  paymentRows.forEach((payment) => {
+    const playerId = String(payment.playerId);
+    const player = playerById.get(playerId);
+    const summary = summaryMap.get(playerId);
+    if (!player || !summary || !isPaymentInPlayerCurrentSubscription(payment, player)) return;
+    summary.paidAmount += Number(payment.paidAmount || 0);
+    summary.remainingAmount = Math.max(0, Number(summary.totalAmount || 0) - summary.paidAmount);
+  });
+
+  return summaryMap;
+};
+
 const getAttendancePresentCountMap = async (players) => {
   const playerIds = players.map((player) => player._id).filter(Boolean);
   if (!playerIds.length) return new Map();
@@ -189,11 +227,22 @@ const getAttendancePresentCountMap = async (players) => {
 
 const formatPaymentsWithAttendanceCounts = async (payments) => {
   const paymentRows = Array.isArray(payments) ? payments : [payments].filter(Boolean);
-  const countMap = await getAttendancePresentCountMap(getPaymentPlayers(paymentRows));
+  const paymentPlayers = getPaymentPlayers(paymentRows);
+  const [countMap, paymentSummaryMap] = await Promise.all([
+    getAttendancePresentCountMap(paymentPlayers),
+    getCurrentPaymentSummaryMap(paymentPlayers)
+  ]);
   const formattedRows = paymentRows.map((payment) => {
     const row = formatPaymentResponse(payment);
     if (row.playerId && typeof row.playerId === 'object') {
-      row.playerId.attendancePresentCount = countMap.get(getPlayerIdFromPayment(payment)) || 0;
+      const playerKey = getPlayerIdFromPayment(payment);
+      const paymentSummary = paymentSummaryMap.get(playerKey);
+      row.playerId.attendancePresentCount = countMap.get(playerKey) || 0;
+      row.playerId.currentSubscriptionPaidAmount = paymentSummary?.paidAmount || 0;
+      if (isSubscriptionPaymentType(row.transactionType) && paymentSummary) {
+        row.totalAmount = paymentSummary.totalAmount;
+        row.remainingAmount = paymentSummary.remainingAmount;
+      }
     }
     return row;
   });
