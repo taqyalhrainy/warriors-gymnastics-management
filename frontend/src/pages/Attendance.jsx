@@ -219,7 +219,6 @@ const mergeStablePlayerFields = (incomingPlayer, fallbackPlayer = null) => ({
   packageClasses: firstMeaningfulValue(incomingPlayer?.packageClasses, fallbackPlayer?.packageClasses, 0),
   packageHours: firstMeaningfulValue(incomingPlayer?.packageHours, fallbackPlayer?.packageHours, 0),
   payment: firstMeaningfulValue(incomingPlayer?.payment, fallbackPlayer?.payment, 0),
-  subscriptionNote: firstMeaningfulValue(incomingPlayer?.subscriptionNote, fallbackPlayer?.subscriptionNote, ''),
   paymentRemainingAmount: incomingPlayer?.paymentRemainingAmount ?? fallbackPlayer?.paymentRemainingAmount ?? 0,
   attendancePresentCount: incomingPlayer?.attendancePresentCount ?? fallbackPlayer?.attendancePresentCount ?? 0,
   attendanceGroupId: incomingPlayer?.attendanceGroupId ?? fallbackPlayer?.attendanceGroupId,
@@ -339,7 +338,6 @@ const mapSnapshotPlayerToAttendancePlayer = (player) => {
     packageClasses: Number(player.packageClasses || 0),
     packageHours: Number(player.packageHours || 0),
     payment: Number(player.payment || 0),
-    subscriptionNote: decodeDisplayText(player.subscriptionNote || ''),
     previousDueBalance: Number(player.previousDueBalance || 0),
     dueAdjustment: Number(player.dueAdjustment || 0),
     note: decodeDisplayText(player.note),
@@ -374,8 +372,7 @@ const AttendancePage = () => {
     groupIds: [],
     scheduleMode: 'auto',
     customDays: [],
-    customClasses: '',
-    subscriptionNote: ''
+    customClasses: ''
   });
   const [subscriptionMessage, setSubscriptionMessage] = useState('');
   const [isSavingSubscription, setIsSavingSubscription] = useState(false);
@@ -1895,8 +1892,7 @@ const AttendancePage = () => {
       groupIds,
       scheduleMode: 'auto',
       customDays: [],
-      customClasses: selectedPlayer?.packageClasses || selectedPlayer?.subscriptionId?.totalSessions || '',
-      subscriptionNote: ''
+      customClasses: selectedPlayer?.packageClasses || selectedPlayer?.subscriptionId?.totalSessions || ''
     });
     setSubscriptionMessage('');
     setIsSubscriptionGroupPickerOpen(false);
@@ -1996,7 +1992,6 @@ const AttendancePage = () => {
       groupIds: selectedGroupRefs.length ? selectedGroupRefs : selectedPlayer.groupIds,
       status: selectedPlayer.status === 'expired' ? 'active' : selectedPlayer.status,
       subscriptionNeedsAttention: keepWarning,
-      subscriptionNote: subscriptionForm.subscriptionNote,
       paymentRemainingAmount: Number(selectedPlayer.paymentRemainingAmount || 0),
       currentSubscriptionStartedAt: subscriptionForm.startDate,
       currentSubscriptionAttendanceIds: [],
@@ -2028,8 +2023,7 @@ const AttendancePage = () => {
         packageName: selectedPlayer.packageName || '',
         packageClasses: Number(selectedPlayer.packageClasses || 0),
         packageHours: Number(selectedPlayer.packageHours || 0),
-        payment: Number(selectedPlayer.payment || 0),
-        subscriptionNote: subscriptionForm.subscriptionNote
+        payment: Number(selectedPlayer.payment || 0)
       };
       applyOptimisticSelectedPlayer(optimisticPlayer);
       setSelectedPlayerSubscriptionHistory((current) => [
@@ -2046,7 +2040,6 @@ const AttendancePage = () => {
         groupIds: subscriptionForm.groupIds,
         status: selectedPlayer.status === 'expired' ? 'active' : selectedPlayer.status,
         subscriptionNeedsAttention: keepWarning,
-        subscriptionNote: subscriptionForm.subscriptionNote,
         newSubscription: true
       });
       if (subscriptionSaveSequenceRef.current !== saveSequence) {
@@ -2543,7 +2536,6 @@ const AttendancePage = () => {
       packageClasses: Number(previousCycle.packageClasses || 0),
       packageHours: Number(previousCycle.packageHours || 0),
       payment: Number(previousCycle.payment || 0),
-      subscriptionNote: previousCycle.subscriptionNote || '',
       dueAdjustment: 0,
       currentSubscriptionStartedAt: getDateInputValue(previousCycle.startDate),
       currentSubscriptionAttendanceIds: [],
@@ -2819,8 +2811,7 @@ const AttendancePage = () => {
       packageName: snapshot.packageName || '',
       packageClasses: Number(snapshot.packageClasses || 0),
       packageHours: Number(snapshot.packageHours || 0),
-      payment: Number(snapshot.payment || 0),
-      subscriptionNote: decodeDisplayText(snapshot.subscriptionNote || '')
+      payment: Number(snapshot.payment || 0)
     });
   };
   const deleteSubscriptionCycle = (cyclesByKey, snapshot, allowInitialFallback = false) => {
@@ -2841,8 +2832,7 @@ const AttendancePage = () => {
     cycle.packageName || '',
     Number(cycle.packageClasses || 0),
     Number(cycle.packageHours || 0),
-    Number(cycle.payment || 0),
-    cycle.subscriptionNote || ''
+    Number(cycle.payment || 0)
   ].join('|');
   const normalizeSubscriptionCycles = (cycles) => {
     const sortedAsc = [...cycles]
@@ -2898,8 +2888,7 @@ const AttendancePage = () => {
         packageName: snapshot.packageName || '',
         packageClasses: Number(snapshot.packageClasses || 0),
         packageHours: Number(snapshot.packageHours || 0),
-        payment: Number(snapshot.payment || 0),
-        subscriptionNote: decodeDisplayText(snapshot.subscriptionNote || '')
+        payment: Number(snapshot.payment || 0)
       };
     };
     const initialCycle = makeCycle(initialEntry?.after || player, initialEntry?.changedAt || new Date().toISOString(), true);
@@ -3479,7 +3468,6 @@ const AttendancePage = () => {
                                 <span>
                                   <strong>{cycle.packageName || 'Subscription'}</strong>
                                   <small>{formatDate(cycle.startDate)} - {formatDate(cycle.endDate)}</small>
-                                  {cycle.subscriptionNote && <em className="subscription-history-note">{cycle.subscriptionNote}</em>}
                                 </span>
                                 <b>{presentCount}/{cycle.packageClasses || 0}</b>
                               </button>
@@ -3717,15 +3705,6 @@ const AttendancePage = () => {
                     </div>
                   )}
                 </div>
-                <label className="subscription-note-field">
-                  <span>Subscription note</span>
-                  <textarea
-                    value={subscriptionForm.subscriptionNote}
-                    onChange={(event) => setSubscriptionForm({ ...subscriptionForm, subscriptionNote: event.target.value })}
-                    placeholder="Write a note for this subscription..."
-                    rows="3"
-                  />
-                </label>
                 <div className="student-modal-edit-actions">
                   <button className="btn-primary" type="submit" disabled={isSavingSubscription}>
                     {isSavingSubscription ? 'Saving...' : 'Start normally'}

@@ -874,21 +874,6 @@ body.theme-light .new-subscription-warning {
   font-size: 0.92rem;
 }
 
-.subscription-note-field {
-  display: grid;
-  gap: 8px;
-}
-
-.subscription-note-field span {
-  color: var(--muted);
-  font-weight: 900;
-}
-
-.subscription-note-field textarea {
-  min-height: 84px;
-  resize: vertical;
-}
-
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -3227,19 +3212,6 @@ body.attendance-touch-dragging {
 
 .subscription-history-summary small {
   color: var(--muted);
-}
-
-.subscription-history-note {
-  max-width: 620px;
-  padding: 6px 9px;
-  border: 1px solid color-mix(in srgb, #14b8a6 28%, var(--border));
-  border-radius: 7px;
-  background: color-mix(in srgb, #14b8a6 8%, transparent);
-  color: var(--text);
-  font-size: 0.88rem;
-  font-style: normal;
-  font-weight: 800;
-  overflow-wrap: anywhere;
 }
 
 .subscription-history-summary b {
