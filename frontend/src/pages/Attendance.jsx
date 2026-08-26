@@ -75,7 +75,10 @@ const getGroupScheduledDayIndexes = (group) => {
 
 const getScheduledEndDateValue = (startDate, player, availableGroups = [], options = {}) => {
   const totalClasses = Number(options.totalClasses || player?.packageClasses || player?.subscriptionId?.totalSessions || 0);
-  const playerGroups = player?.groupIds?.length ? player.groupIds : [player?.groupId].filter(Boolean);
+  const selectedGroupIds = Array.isArray(options.groupIds) ? options.groupIds.map(String).filter(Boolean) : [];
+  const playerGroups = selectedGroupIds.length
+    ? selectedGroupIds
+    : (player?.groupIds?.length ? player.groupIds : [player?.groupId].filter(Boolean));
   const groups = playerGroups.map((group) => {
     if (group?.days) return group;
     const groupId = getEntityId(group);
@@ -364,9 +367,11 @@ const AttendancePage = () => {
   const [showUnsavedExitConfirm, setShowUnsavedExitConfirm] = useState(false);
   const [pendingFrozenVisibilitySave, setPendingFrozenVisibilitySave] = useState(null);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [isSubscriptionGroupPickerOpen, setIsSubscriptionGroupPickerOpen] = useState(false);
   const [subscriptionForm, setSubscriptionForm] = useState({
     startDate: '',
     endDate: '',
+    groupIds: [],
     scheduleMode: 'auto',
     customDays: [],
     customClasses: '',
@@ -1881,15 +1886,20 @@ const AttendancePage = () => {
 
   const openSubscriptionModal = () => {
     const startDate = getDateInputValue();
+    const groupIds = (selectedPlayer?.groupIds?.length ? selectedPlayer.groupIds : [selectedPlayer?.groupId].filter(Boolean))
+      .map((group) => getEntityId(group._id || group))
+      .filter(Boolean);
     setSubscriptionForm({
       startDate,
-      endDate: getScheduledEndDateValue(startDate, selectedPlayer, groupColumns),
+      endDate: getScheduledEndDateValue(startDate, selectedPlayer, groupColumns, { groupIds }),
+      groupIds,
       scheduleMode: 'auto',
       customDays: [],
       customClasses: selectedPlayer?.packageClasses || selectedPlayer?.subscriptionId?.totalSessions || '',
       subscriptionNote: ''
     });
     setSubscriptionMessage('');
+    setIsSubscriptionGroupPickerOpen(false);
     setShowSubscriptionModal(true);
   };
 
@@ -1900,9 +1910,10 @@ const AttendancePage = () => {
     form.scheduleMode === 'custom'
       ? {
         dayIndexes: form.customDays,
-        totalClasses: form.customClasses
+        totalClasses: form.customClasses,
+        groupIds: form.groupIds
       }
-      : {}
+      : { groupIds: form.groupIds }
   );
 
   const handleSubscriptionStartDateChange = (startDate) => {
@@ -1937,6 +1948,16 @@ const AttendancePage = () => {
     });
   };
 
+  const handleSubscriptionGroupToggle = (groupId) => {
+    setSubscriptionForm((current) => {
+      const groupIds = current.groupIds.includes(groupId)
+        ? current.groupIds.filter((id) => id !== groupId)
+        : [...current.groupIds, groupId];
+      const next = { ...current, groupIds };
+      return { ...next, endDate: getSubscriptionEndDate(next) };
+    });
+  };
+
   useEffect(() => {
     if (!showSubscriptionModal || !subscriptionForm.startDate) return;
     const nextEndDate = getSubscriptionEndDate(subscriptionForm);
@@ -1945,11 +1966,15 @@ const AttendancePage = () => {
         ? current
         : { ...current, endDate: nextEndDate }
     ));
-  }, [showSubscriptionModal, subscriptionForm.startDate, subscriptionForm.scheduleMode, subscriptionForm.customDays, subscriptionForm.customClasses, selectedPlayer, groupColumns]);
+  }, [showSubscriptionModal, subscriptionForm.startDate, subscriptionForm.groupIds, subscriptionForm.scheduleMode, subscriptionForm.customDays, subscriptionForm.customClasses, selectedPlayer, groupColumns]);
 
   const handleSubscriptionSave = async (event, keepWarning = false) => {
     event.preventDefault();
     if (!selectedPlayer?._id || isSavingSubscription) {
+      return;
+    }
+    if (!subscriptionForm.groupIds.length) {
+      setSubscriptionMessage('Choose at least one group for this subscription.');
       return;
     }
 
@@ -1960,10 +1985,15 @@ const AttendancePage = () => {
     subscriptionSaveSequenceRef.current = saveSequence;
     selectedPlayerLoadRequestIdRef.current += 1;
     const previousPlayer = selectedPlayer;
+    const availableGroups = editGroups.length ? editGroups : groupColumns;
+    const selectedGroupRefs = subscriptionForm.groupIds
+      .map((groupId) => availableGroups.find((group) => getEntityId(group._id) === getEntityId(groupId)) || { _id: groupId, name: '' });
     const optimisticPlayerBase = {
       ...selectedPlayer,
       startDate: subscriptionForm.startDate,
       endDate: subscriptionForm.endDate,
+      groupId: selectedGroupRefs[0] || selectedPlayer.groupId,
+      groupIds: selectedGroupRefs.length ? selectedGroupRefs : selectedPlayer.groupIds,
       status: selectedPlayer.status === 'expired' ? 'active' : selectedPlayer.status,
       subscriptionNeedsAttention: keepWarning,
       subscriptionNote: subscriptionForm.subscriptionNote,
@@ -2012,6 +2042,8 @@ const AttendancePage = () => {
       savedPlayer = await updatePlayer(selectedPlayer._id, {
         startDate: subscriptionForm.startDate,
         endDate: subscriptionForm.endDate,
+        groupId: subscriptionForm.groupIds[0] || '',
+        groupIds: subscriptionForm.groupIds,
         status: selectedPlayer.status === 'expired' ? 'active' : selectedPlayer.status,
         subscriptionNeedsAttention: keepWarning,
         subscriptionNote: subscriptionForm.subscriptionNote,
@@ -2941,6 +2973,13 @@ const AttendancePage = () => {
   const selectedPlayerParentOptions = selectedPlayer?.parentId && typeof selectedPlayer.parentId === 'object' && !editParents.some((parent) => parent._id === selectedPlayer.parentId._id)
     ? [{ ...selectedPlayer.parentId, phone: selectedPlayer.parentPhone || selectedPlayer.parentId.phone || '' }, ...editParents]
     : editParents;
+  const subscriptionGroupOptions = [...(editGroups.length ? editGroups : groupColumns)];
+  (selectedPlayer?.groupIds?.length ? selectedPlayer.groupIds : [selectedPlayer?.groupId].filter(Boolean)).forEach((group) => {
+    const groupId = getEntityId(group._id || group);
+    if (groupId && !subscriptionGroupOptions.some((item) => getEntityId(item._id) === groupId)) {
+      subscriptionGroupOptions.push(typeof group === 'object' ? group : { _id: groupId, name: 'Current group' });
+    }
+  });
   const filteredGroupColumns = groupColumns
     .map((group) => {
       const query = search.trim().toLowerCase();
@@ -3587,6 +3626,44 @@ const AttendancePage = () => {
                   </label>
                 </div>
                 <div className="subscription-schedule-box">
+                  <div className="subscription-group-picker">
+                    <div>
+                      <strong>Attendance days</strong>
+                      <small>Choose the group schedule for this new subscription.</small>
+                    </div>
+                    <button
+                      type="button"
+                      className="waiting-picker-trigger"
+                      onClick={() => setIsSubscriptionGroupPickerOpen((current) => !current)}
+                    >
+                      <b>{subscriptionForm.groupIds.length ? `${subscriptionForm.groupIds.length} selected` : 'Choose groups'}</b>
+                      <small>
+                        {subscriptionGroupOptions
+                          .filter((group) => subscriptionForm.groupIds.includes(getEntityId(group._id)))
+                          .slice(0, 2)
+                          .map((group) => group.name)
+                          .join(', ') || 'Tap to show options'}
+                      </small>
+                    </button>
+                    {isSubscriptionGroupPickerOpen && (
+                      <div className="waiting-picker-menu">
+                        {subscriptionGroupOptions.map((group) => {
+                          const groupId = getEntityId(group._id);
+                          return (
+                            <label key={groupId}>
+                              <input
+                                type="checkbox"
+                                checked={subscriptionForm.groupIds.includes(groupId)}
+                                onChange={() => handleSubscriptionGroupToggle(groupId)}
+                              />
+                              <b>{group.name}</b>
+                              <small>{group.days?.join(', ')} {group.startTime} - {group.endTime}</small>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                   <div className="subscription-schedule-toggle">
                     <button
                       type="button"

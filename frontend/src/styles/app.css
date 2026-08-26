@@ -793,6 +793,24 @@ body.theme-light .new-subscription-warning {
   flex-wrap: wrap;
 }
 
+.subscription-group-picker {
+  display: grid;
+  gap: 10px;
+}
+
+.subscription-group-picker > div {
+  display: grid;
+  gap: 3px;
+}
+
+.subscription-group-picker strong {
+  font-size: 1rem;
+}
+
+.subscription-group-picker small {
+  color: var(--muted);
+}
+
 .subscription-schedule-toggle button,
 .subscription-day-picker button {
   min-height: 42px;
