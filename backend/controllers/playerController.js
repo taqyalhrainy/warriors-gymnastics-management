@@ -204,7 +204,7 @@ const createPlayer = async (req, res, next) => {
   try {
     const data = cleanPlayerPayload(sanitizeObject(req.body));
     const groupIds = normalizeGroupIds(data);
-    const { fullName, dateOfBirth, parentId, parentPhone, programId, coachId, level, startDate, endDate, packageName, packageClasses, packageHours, payment, previousDueBalance, dueAdjustment, attendanceDueManual, subscriptionNeedsAttention, note, profileImage, status = 'active' } = data;
+    const { fullName, dateOfBirth, parentId, parentPhone, programId, coachId, level, startDate, endDate, packageName, packageClasses, packageHours, payment, subscriptionNote, previousDueBalance, dueAdjustment, attendanceDueManual, subscriptionNeedsAttention, note, profileImage, status = 'active' } = data;
     if (!fullName || !parentId) {
       return res.status(400).json({ message: 'Required player fields are missing.' });
     }
@@ -240,6 +240,7 @@ const createPlayer = async (req, res, next) => {
       packageClasses: parseLocalizedNumber(packageClasses),
       packageHours: parseLocalizedNumber(packageHours),
       payment: parseLocalizedNumber(payment),
+      subscriptionNote: subscriptionNote || '',
       previousDueBalance: typeof previousDueBalance !== 'undefined' ? parseLocalizedNumber(previousDueBalance) : 0,
       dueAdjustment: typeof dueAdjustment !== 'undefined' ? parseLocalizedNumber(dueAdjustment) : 0,
       attendanceDueManual: Boolean(attendanceDueManual),
