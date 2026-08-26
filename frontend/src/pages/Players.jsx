@@ -30,6 +30,8 @@ const initialMovePlayerForm = {
   packageClasses: '',
   packageHours: '',
   payment: '',
+  attendanceDueAmount: '',
+  subscriptionNeedsAttention: false,
   status: 'active',
   note: '',
   parentId: '',
@@ -169,8 +171,12 @@ const PlayersPage = () => {
   };
 
   const handleMovePlayerFormChange = (event) => {
-    const { name, value } = event.target;
-    if (name === 'payment' || name === 'packageClasses' || name === 'packageHours') {
+    const { name, value, type, checked } = event.target;
+    if (type === 'checkbox') {
+      setMovePlayerForm((current) => ({ ...current, [name]: checked }));
+      return;
+    }
+    if (name === 'payment' || name === 'packageClasses' || name === 'packageHours' || name === 'attendanceDueAmount') {
       setMovePlayerForm((current) => ({ ...current, [name]: normalizeDigits(value) }));
       return;
     }
@@ -333,7 +339,7 @@ const PlayersPage = () => {
         setParents((current) => [parent, ...current]);
       }
 
-      const player = await createPlayer({
+      const playerPayload = {
         fullName: movePlayerForm.fullName.trim(),
         parentId: parent._id,
         parentPhone: movePlayerForm.parentPhone.trim(),
@@ -345,9 +351,18 @@ const PlayersPage = () => {
         packageClasses: parseLocalizedNumber(movePlayerForm.packageClasses),
         packageHours: parseLocalizedNumber(movePlayerForm.packageHours),
         payment: parseLocalizedNumber(movePlayerForm.payment),
+        subscriptionNeedsAttention: movePlayerForm.subscriptionNeedsAttention,
         status: movePlayerForm.status,
         note: movePlayerForm.note
-      });
+      };
+
+      if (movePlayerForm.attendanceDueAmount !== '') {
+        playerPayload.previousDueBalance = parseLocalizedNumber(movePlayerForm.attendanceDueAmount);
+        playerPayload.dueAdjustment = 0;
+        playerPayload.attendanceDueManual = true;
+      }
+
+      const player = await createPlayer(playerPayload);
 
       await deleteWaitingListEntry(movingWaitingEntry._id);
       setPlayers((current) => [player, ...current.filter((item) => item._id !== player._id)]);
@@ -804,6 +819,17 @@ const PlayersPage = () => {
                       <input name="payment" type="text" inputMode="decimal" value={movePlayerForm.payment} onChange={handleMovePlayerFormChange} />
                     </label>
                     <label>
+                      <span>Attendance due</span>
+                      <input
+                        name="attendanceDueAmount"
+                        type="text"
+                        inputMode="decimal"
+                        value={movePlayerForm.attendanceDueAmount}
+                        onChange={handleMovePlayerFormChange}
+                        placeholder="100 due / -100 credit"
+                      />
+                    </label>
+                    <label>
                       <span>Classes</span>
                       <input name="packageClasses" type="text" inputMode="decimal" value={movePlayerForm.packageClasses} onChange={handleMovePlayerFormChange} />
                     </label>
@@ -814,6 +840,18 @@ const PlayersPage = () => {
                     <label className="move-player-wide">
                       <span>Note</span>
                       <input name="note" value={movePlayerForm.note} onChange={handleMovePlayerFormChange} />
+                    </label>
+                    <label className="move-player-wide move-player-toggle">
+                      <input
+                        name="subscriptionNeedsAttention"
+                        type="checkbox"
+                        checked={movePlayerForm.subscriptionNeedsAttention}
+                        onChange={handleMovePlayerFormChange}
+                      />
+                      <span>
+                        <b>Enable highlight</b>
+                        <small>Show this player in red for admin review.</small>
+                      </span>
                     </label>
                   </div>
                 </div>

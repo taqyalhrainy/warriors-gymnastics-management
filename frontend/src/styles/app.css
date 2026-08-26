@@ -1231,6 +1231,41 @@ body.theme-light .new-subscription-warning {
   width: 100%;
 }
 
+.move-player-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, #ef4444 36%, var(--border));
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, #ef4444 10%, transparent), color-mix(in srgb, #06b6d4 7%, transparent)),
+    var(--surface-alt);
+}
+
+.move-player-toggle input {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+}
+
+.move-player-toggle span {
+  margin: 0;
+}
+
+.move-player-toggle b {
+  display: block;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.move-player-toggle small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
 .move-player-wide {
   grid-column: 1 / -1;
 }
