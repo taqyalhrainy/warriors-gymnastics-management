@@ -9,6 +9,22 @@ const { sanitizeObject, validateEmail, validateObjectId } = require('../middlewa
 const { createAuditLog } = require('../utils/audit');
 const { encrypt, decrypt } = require('../utils/encryption');
 
+const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
+
+const getCurrentSubscriptionPaymentMatch = (player) => {
+  const match = { playerId: player._id, transactionType: { $in: ['Full payment', 'Partial payment'] } };
+  if (player.currentSubscriptionStartedAt) {
+    match.createdAt = { $gte: new Date(player.currentSubscriptionStartedAt) };
+  } else if (player.startDate) {
+    match.paymentDate = { $gte: new Date(player.startDate) };
+  }
+  return match;
+};
+
+const getPlayerPaymentTotal = (player) => Math.max(0, Number(player.previousDueBalance || 0)
+  + Number(player.payment || 0)
+  - Number(player.dueAdjustment || 0));
+
 const formatParentResponse = (parent) => {
   const obj = parent.toObject({ virtuals: true });
   if (obj.phoneEncrypted) {
@@ -206,10 +222,13 @@ const getParentAttendance = async (req, res, next) => {
     if (!parent) {
       return res.status(404).json({ message: 'Parent record not found.' });
     }
-    const children = await Player.find({ parentId: parent._id }).sort({ createdAt: -1, _id: -1 }).select('_id fullName');
+    const children = await Player.find({ parentId: parent._id })
+      .sort({ createdAt: -1, _id: -1 })
+      .select('_id fullName startDate endDate packageName packageClasses packageHours payment currentSubscriptionStartedAt currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId')
+      .populate('subscriptionId', 'totalSessions usedSessions remainingSessions startDate endDate status price');
     const childIds = children.map((child) => child._id);
     const attendance = await Attendance.find({ playerId: { $in: childIds } }).sort({ date: -1, _id: -1 }).populate('playerId', 'fullName');
-    res.json(attendance);
+    res.json({ children, attendance });
   } catch (error) {
     next(error);
   }
@@ -221,10 +240,30 @@ const getParentPayments = async (req, res, next) => {
     if (!parent) {
       return res.status(404).json({ message: 'Parent record not found.' });
     }
-    const children = await Player.find({ parentId: parent._id }).sort({ createdAt: -1, _id: -1 }).select('_id fullName');
+    const children = await Player.find({ parentId: parent._id })
+      .sort({ createdAt: -1, _id: -1 })
+      .select('_id fullName startDate payment previousDueBalance dueAdjustment currentSubscriptionStartedAt');
     const childIds = children.map((child) => child._id);
-    const payments = await Payment.find({ playerId: { $in: childIds } }).sort({ paymentDate: -1, _id: -1 }).populate('playerId', 'fullName').populate('subscriptionId', 'price');
-    res.json(payments);
+    const payments = await Payment.find({ playerId: { $in: childIds } })
+      .sort({ paymentDate: -1, _id: -1 })
+      .populate('playerId', 'fullName startDate payment previousDueBalance dueAdjustment currentSubscriptionStartedAt')
+      .populate('subscriptionId', 'price')
+      .lean();
+    const remainingByPlayer = new Map();
+
+    await Promise.all(children.map(async (child) => {
+      const paidRows = await Payment.find(getCurrentSubscriptionPaymentMatch(child)).select('paidAmount').lean();
+      const totalAmount = getPlayerPaymentTotal(child);
+      const paidAmount = paidRows.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
+      remainingByPlayer.set(String(child._id), Math.max(0, totalAmount - paidAmount));
+    }));
+
+    res.json(payments.map((payment) => {
+      const playerId = String(payment.playerId?._id || payment.playerId || '');
+      return isSubscriptionPaymentType(payment.transactionType)
+        ? { ...payment, remainingAmount: remainingByPlayer.get(playerId) || 0 }
+        : { ...payment, remainingAmount: 0 };
+    }));
   } catch (error) {
     next(error);
   }

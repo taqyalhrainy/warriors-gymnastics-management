@@ -4611,6 +4611,51 @@ body.rtl .new-subscription-summary-card[type='button'] {
   font-weight: 900;
 }
 
+.parent-attendance-page {
+  display: grid;
+  gap: 16px;
+}
+
+.parent-package-list {
+  display: grid;
+  gap: 12px;
+}
+
+.parent-package-card {
+  padding: 0;
+}
+
+.parent-payment-card .data-table td {
+  vertical-align: middle;
+}
+
+.parent-paid-amount {
+  color: var(--success);
+  font-weight: 950;
+}
+
+.parent-remaining-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.parent-remaining-pill.is-due {
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.parent-remaining-pill.is-paid {
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--success);
+}
+
 @media (max-width: 900px) {
   .coach-profile-hero,
   .coach-profile-details,
