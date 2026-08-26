@@ -21,6 +21,28 @@ const decodeGroupName = (value) => String(value || '')
   .replace(/\s+/g, ' ')
   .trim();
 
+const dayNames = new Set([
+  'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday',
+  'sun', 'mon', 'tue', 'tues', 'wed', 'thu', 'thurs', 'fri', 'sat'
+]);
+
+const normalizeGroupDays = (days = []) => [...new Set((Array.isArray(days) ? days : [days])
+  .flatMap((day) => String(day || '').split(/[\/,|]+/))
+  .map((day) => decodeGroupName(day).trim())
+  .filter((day) => {
+    const normalized = day.toLowerCase();
+    return day && day.length <= 12 && !/\d|:|-/.test(day) && dayNames.has(normalized);
+  }))];
+
+const formatGroupResponse = (group) => {
+  const obj = group.toObject ? group.toObject({ virtuals: true }) : group;
+  return {
+    ...obj,
+    name: decodeGroupName(obj.name),
+    days: normalizeGroupDays(obj.days)
+  };
+};
+
 const getDateOnly = (value) => {
   const date = value ? new Date(value) : new Date(0);
   date.setHours(0, 0, 0, 0);
@@ -56,11 +78,13 @@ const ensureGroupPresentationFields = async () => {
   const updates = groups
     .map((group, index) => {
       const normalizedName = decodeGroupName(group.name);
+      const normalizedDays = normalizeGroupDays(group.days);
       const hasValidColor = hexColorPattern.test(group.color || '');
       const hasValidOrder = Number.isFinite(group.displayOrder) && group.displayOrder > 0;
       const needsNameUpdate = normalizedName !== group.name;
+      const needsDaysUpdate = JSON.stringify(normalizedDays) !== JSON.stringify(group.days || []);
 
-      if (hasValidColor && hasValidOrder && !needsNameUpdate) {
+      if (hasValidColor && hasValidOrder && !needsNameUpdate && !needsDaysUpdate) {
         return null;
       }
 
@@ -70,6 +94,7 @@ const ensureGroupPresentationFields = async () => {
           update: {
             $set: {
               name: normalizedName,
+              days: normalizedDays,
               color: hasValidColor ? group.color.toLowerCase() : defaultGroupColors[index % defaultGroupColors.length],
               displayOrder: hasValidOrder ? group.displayOrder : index + 1
             }
@@ -142,6 +167,14 @@ const scheduleGroupMaintenance = () => {
 
 const formatPlayerResponse = (player) => {
   const obj = player.toObject({ virtuals: true });
+  if (obj.groupId && typeof obj.groupId === 'object') {
+    obj.groupId = formatGroupResponse(obj.groupId);
+  }
+  if (Array.isArray(obj.groupIds)) {
+    obj.groupIds = obj.groupIds.map((group) => (
+      group && typeof group === 'object' ? formatGroupResponse(group) : group
+    ));
+  }
   if (obj.parentPhoneEncrypted) {
     try {
       obj.parentPhone = decrypt(obj.parentPhoneEncrypted);
@@ -158,7 +191,7 @@ const getGroups = async (req, res, next) => {
   try {
     scheduleGroupMaintenance();
     const groups = await TrainingGroup.find().sort({ displayOrder: 1, _id: -1 }).populate('coachId', 'name');
-    res.json(groups);
+    res.json(groups.map(formatGroupResponse));
   } catch (error) {
     next(error);
   }
@@ -172,7 +205,7 @@ const createGroup = async (req, res, next) => {
     payload.color = hexColorPattern.test(payload.color || '') ? payload.color : defaultGroupColors[(payload.displayOrder - 1) % defaultGroupColors.length];
     const group = await TrainingGroup.create(payload);
     await createAuditLog({ userId: req.user._id, action: 'create group', entity: 'TrainingGroup', entityId: group._id, req });
-    res.status(201).json(group);
+    res.status(201).json(formatGroupResponse(group));
   } catch (error) {
     next(error);
   }
@@ -190,7 +223,7 @@ const updateGroup = async (req, res, next) => {
       return res.status(404).json({ message: 'Group not found.' });
     }
     await createAuditLog({ userId: req.user._id, action: 'update group', entity: 'TrainingGroup', entityId: group._id, req });
-    res.json(group);
+    res.json(formatGroupResponse(group));
   } catch (error) {
     next(error);
   }
@@ -220,7 +253,7 @@ const reorderGroups = async (req, res, next) => {
 
     await createAuditLog({ userId: req.user._id, action: 'reorder groups', entity: 'TrainingGroup', req });
     const groups = await TrainingGroup.find().sort({ displayOrder: 1, _id: -1 }).populate('coachId', 'name');
-    res.json(groups);
+    res.json(groups.map(formatGroupResponse));
   } catch (error) {
     next(error);
   }

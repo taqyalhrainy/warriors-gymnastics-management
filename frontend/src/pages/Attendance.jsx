@@ -64,8 +64,16 @@ const getDayIndexFromText = (value) => {
   return match ? match[1] : null;
 };
 
+const getCleanGroupDays = (group) => {
+  const rawDays = Array.isArray(group?.days) ? group.days : [group?.days].filter(Boolean);
+  return [...new Set(rawDays
+    .flatMap((value) => String(value || '').split(/[\/,|]+/))
+    .map((value) => value.trim())
+    .filter((value) => value && Number.isInteger(getDayIndexFromText(value)) && !/\d|:|-/.test(value)))];
+};
+
 const getGroupScheduledDayIndexes = (group) => {
-  const daySources = Array.isArray(group?.days) ? group.days : [group?.days].filter(Boolean);
+  const daySources = getCleanGroupDays(group);
   if (group?.name) daySources.push(group.name);
   return daySources
     .flatMap((value) => String(value || '').split(/[\/,|]+/))
@@ -2975,7 +2983,7 @@ const AttendancePage = () => {
       if (!query) return group;
       const groupMatches = [
         group.name,
-        group.days?.join(' '),
+        getCleanGroupDays(group).join(' '),
         group.startTime,
         group.endTime
       ].join(' ').toLowerCase().includes(query);
@@ -2987,7 +2995,7 @@ const AttendancePage = () => {
     })
     .filter((group) => !search.trim() || group.players.length || [
       group.name,
-      group.days?.join(' '),
+      getCleanGroupDays(group).join(' '),
       group.startTime,
       group.endTime
     ].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
@@ -3155,7 +3163,7 @@ const AttendancePage = () => {
                   <div>
                     <h2>{group.name}</h2>
                     <p>
-                      {group.days?.join(', ') || t('noDaysSet')}
+                      {getCleanGroupDays(group).join(', ') || t('noDaysSet')}
                       {formatGroupTime(group) && ` | ${formatGroupTime(group)}`}
                     </p>
                   </div>
@@ -3340,7 +3348,7 @@ const AttendancePage = () => {
                           />
                           <span>
                             <strong>{group.name}</strong>
-                            <small>{[group.days?.join(', '), [group.startTime, group.endTime].filter(Boolean).join(' - ')].filter(Boolean).join(' | ')}</small>
+                            <small>{[getCleanGroupDays(group).join(', '), [group.startTime, group.endTime].filter(Boolean).join(' - ')].filter(Boolean).join(' | ')}</small>
                           </span>
                         </label>
                       )) : <p className="empty-state">{t('noGroupsFound')}</p>}
@@ -3647,7 +3655,7 @@ const AttendancePage = () => {
                                 onChange={() => handleSubscriptionGroupToggle(groupId)}
                               />
                               <b>{group.name}</b>
-                              <small>{group.days?.join(', ')} {group.startTime} - {group.endTime}</small>
+                              <small>{getCleanGroupDays(group).join(', ')} {group.startTime} - {group.endTime}</small>
                             </label>
                           );
                         })}
@@ -3730,7 +3738,7 @@ const AttendancePage = () => {
               <div className="student-modal-header">
                 <div>
                   <h2>{selectedSummaryGroup.name}</h2>
-                  <p>{t('schedule')}: {selectedSummaryGroup.days?.join(', ') || t('noDaysSet')} {formatGroupTime(selectedSummaryGroup) && `| ${formatGroupTime(selectedSummaryGroup)}`}</p>
+                  <p>{t('schedule')}: {getCleanGroupDays(selectedSummaryGroup).join(', ') || t('noDaysSet')} {formatGroupTime(selectedSummaryGroup) && `| ${formatGroupTime(selectedSummaryGroup)}`}</p>
                 </div>
                 <button type="button" className="btn-secondary" onClick={() => setSelectedSummaryGroup(null)}>{t('close')}</button>
               </div>
