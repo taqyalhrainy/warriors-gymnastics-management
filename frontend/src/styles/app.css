@@ -794,6 +794,7 @@ body.theme-light .new-subscription-warning {
 }
 
 .subscription-group-picker {
+  position: relative;
   display: grid;
   gap: 10px;
 }
@@ -809,6 +810,23 @@ body.theme-light .new-subscription-warning {
 
 .subscription-group-picker small {
   color: var(--muted);
+}
+
+.subscription-group-trigger-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.subscription-group-trigger-row em {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #14b8a6 14%, var(--surface-alt));
+  color: #14b8a6;
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 950;
 }
 
 .subscription-schedule-toggle button,

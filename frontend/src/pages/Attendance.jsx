@@ -3636,11 +3636,13 @@ const AttendancePage = () => {
                       className="waiting-picker-trigger"
                       onClick={() => setIsSubscriptionGroupPickerOpen((current) => !current)}
                     >
-                      <b>{subscriptionForm.groupIds.length ? `${subscriptionForm.groupIds.length} selected` : 'Choose groups'}</b>
+                      <span className="subscription-group-trigger-row">
+                        <b>{subscriptionForm.groupIds.length ? `${subscriptionForm.groupIds.length} selected` : 'Choose groups'}</b>
+                        <em>{isSubscriptionGroupPickerOpen ? 'Close list' : 'Change groups'}</em>
+                      </span>
                       <small>
                         {subscriptionGroupOptions
                           .filter((group) => subscriptionForm.groupIds.includes(getEntityId(group._id)))
-                          .slice(0, 2)
                           .map((group) => group.name)
                           .join(', ') || 'Tap to show options'}
                       </small>
