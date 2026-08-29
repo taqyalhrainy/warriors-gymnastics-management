@@ -965,6 +965,7 @@ body.theme-light .new-subscription-warning {
 
 .waiting-list-modal {
   width: min(1080px, 100%);
+  scrollbar-gutter: stable;
   border-top: 0;
   border-color: color-mix(in srgb, #06b6d4 38%, var(--border));
   background:
@@ -2932,14 +2933,34 @@ body.attendance-touch-dragging {
 }
 
 .waiting-list-modal.is-expanded {
-  width: 100vw;
+  width: calc(100vw - 36px);
   max-width: none;
-  height: 100vh;
-  max-height: none;
+  height: calc(100vh - 36px);
+  max-height: calc(100vh - 36px);
   border-radius: 0;
-  border-left: 0;
-  border-right: 0;
-  overflow: auto;
+  overflow-y: scroll;
+  overflow-x: hidden;
+  scrollbar-width: auto;
+  scrollbar-color: rgba(237, 28, 36, 0.72) rgba(15, 23, 42, 0.08);
+}
+
+.waiting-list-modal.is-expanded::-webkit-scrollbar {
+  width: 14px;
+}
+
+.waiting-list-modal.is-expanded::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.08);
+}
+
+.waiting-list-modal.is-expanded::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: rgba(237, 28, 36, 0.72);
+  background-clip: padding-box;
+}
+
+.waiting-list-modal.is-expanded .waiting-list-table-wrap {
+  overflow-x: auto;
 }
 
 .frozen-visibility-option.frozen-only {
