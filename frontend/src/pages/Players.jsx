@@ -123,6 +123,10 @@ const PlayersPage = () => {
     .filter(Boolean))]
     .sort((first, second) => first.localeCompare(second));
 
+  const normalizePhoneForMatch = (value) => normalizeDigits(value).replace(/\D/g, '');
+  const searchText = search.trim().toLowerCase();
+  const searchPhone = normalizePhoneForMatch(search);
+
   const filteredPlayers = players
     .filter((player) => statusView === 'all' || (player.status || 'active') === statusView)
     .filter((player) => groupFilter === 'all' || getPlayerGroupIds(player).includes(groupFilter))
@@ -136,8 +140,11 @@ const PlayersPage = () => {
       getPlayerGroups(player),
       getPlayerSubscriptionName(player),
       player.status,
-      player.parentId?.name
-    ].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
+      player.parentId?.name,
+      player.parentPhone,
+      player.parentId?.phone
+    ].join(' ').toLowerCase().includes(searchText)
+      || (searchPhone && normalizePhoneForMatch(`${player.parentPhone || ''} ${player.parentId?.phone || ''}`).includes(searchPhone)));
 
   const hasActiveFilters = groupFilter !== 'all' || subscriptionFilter !== 'all' || search.trim();
 
@@ -290,8 +297,6 @@ const PlayersPage = () => {
     setMovePlayerMessage('');
     setIsMoveGroupPickerOpen(false);
   };
-
-  const normalizePhoneForMatch = (value) => normalizeDigits(value).replace(/\D/g, '');
 
   const findParentByPhone = (phone) => {
     const normalizedPhone = normalizePhoneForMatch(phone);
@@ -463,7 +468,7 @@ const PlayersPage = () => {
             <div className="player-filter-bar">
               <label className="table-search">
                 <span>Search</span>
-                <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search players..." />
+                <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search players or parent phone..." />
               </label>
               <label className="table-filter-field">
                 <span>Group</span>
