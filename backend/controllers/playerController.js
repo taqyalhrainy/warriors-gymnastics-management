@@ -123,16 +123,19 @@ const incrementGroups = async (groupIds, amount) => {
 
 const recalculatePlayerPayments = async (player) => {
   const payments = await Payment.find({ playerId: player._id }).sort({ paymentDate: 1, _id: 1 });
-  const totalAmount = Number(player.previousDueBalance || 0) + Number(player.payment || 0);
-  const subscriptionStart = player.startDate ? new Date(player.startDate) : null;
-  const subscriptionCycleStart = player.currentSubscriptionStartedAt ? new Date(player.currentSubscriptionStartedAt) : null;
+  const totalAmount = Number(player.previousDueBalance || 0)
+    + Number(player.payment || 0)
+    - Number(player.dueAdjustment || 0);
+  const subscriptionStart = getDateAtStartOfDay(getPlayerCycleStart(player));
   let runningPaid = 0;
 
   for (const payment of payments) {
-    if (subscriptionCycleStart && (!payment.createdAt || new Date(payment.createdAt) < subscriptionCycleStart)) {
-      continue;
-    }
-    if (!subscriptionCycleStart && subscriptionStart && new Date(payment.paymentDate) < subscriptionStart) {
+    const paymentDate = getDateAtStartOfDay(payment.paymentDate);
+    const createdAt = getDateAtStartOfDay(payment.createdAt);
+    const belongsToCurrentSubscription = !subscriptionStart
+      || (paymentDate && paymentDate >= subscriptionStart)
+      || (createdAt && createdAt >= subscriptionStart);
+    if (!belongsToCurrentSubscription) {
       continue;
     }
     if (isSubscriptionPaymentType(payment.transactionType)) {

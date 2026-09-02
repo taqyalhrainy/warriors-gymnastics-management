@@ -18,12 +18,18 @@ const getPlayerGroups = (player) => {
   return [...new Set(groups.map((group) => group?.name).filter(Boolean))].join(', ');
 };
 
+const isOnOrAfter = (value, date) => {
+  if (!value || !date) return false;
+  const parsed = new Date(value);
+  return !Number.isNaN(parsed.getTime()) && parsed >= date;
+};
+
 const getCurrentPayments = (player, payments) => payments.filter((payment) => {
-  if (player.currentSubscriptionStartedAt) {
-    return payment.createdAt && new Date(payment.createdAt) >= new Date(player.currentSubscriptionStartedAt);
-  }
-  if (!player.startDate) return true;
-  return new Date(payment.paymentDate || 0) >= new Date(player.startDate);
+  const subscriptionStart = player.currentSubscriptionStartedAt || player.startDate;
+  if (!subscriptionStart) return true;
+  const startDate = new Date(subscriptionStart);
+  if (Number.isNaN(startDate.getTime())) return true;
+  return isOnOrAfter(payment.paymentDate, startDate) || isOnOrAfter(payment.createdAt, startDate);
 });
 
 const exportPlayersBackup = async (req, res, next) => {

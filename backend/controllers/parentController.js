@@ -11,12 +11,27 @@ const { encrypt, decrypt } = require('../utils/encryption');
 
 const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
 
+const isOnOrAfter = (value, date) => {
+  if (!value || !date) return false;
+  const parsed = new Date(value);
+  return !Number.isNaN(parsed.getTime()) && parsed >= date;
+};
+
+const getCurrentSubscriptionStart = (player) => {
+  const rawDate = player?.currentSubscriptionStartedAt || player?.startDate || player?.subscriptionId?.startDate;
+  if (!rawDate) return null;
+  const date = new Date(rawDate);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
 const getCurrentSubscriptionPaymentMatch = (player) => {
   const match = { playerId: player._id, transactionType: { $in: ['Full payment', 'Partial payment'] } };
-  if (player.currentSubscriptionStartedAt) {
-    match.createdAt = { $gte: new Date(player.currentSubscriptionStartedAt) };
-  } else if (player.startDate) {
-    match.paymentDate = { $gte: new Date(player.startDate) };
+  const subscriptionStart = getCurrentSubscriptionStart(player);
+  if (subscriptionStart) {
+    match.$or = [
+      { paymentDate: { $gte: subscriptionStart } },
+      { createdAt: { $gte: subscriptionStart } }
+    ];
   }
   return match;
 };
@@ -290,7 +305,18 @@ const getParentDashboard = async (req, res, next) => {
       .populate('playerId', 'fullName')
       .populate('subscriptionId', 'price')
       .sort({ paymentDate: -1, _id: -1 });
+    const childById = new Map(children.map((child) => [String(child._id), child]));
     const paymentGroups = payments.reduce((acc, payment) => {
+      const child = childById.get(String(payment.playerId?._id || payment.playerId || ''));
+      const subscriptionStart = child ? getCurrentSubscriptionStart(child) : null;
+      if (
+        child
+        && subscriptionStart
+        && !isOnOrAfter(payment.paymentDate, subscriptionStart)
+        && !isOnOrAfter(payment.createdAt, subscriptionStart)
+      ) {
+        return acc;
+      }
       const key = payment.subscriptionId?._id?.toString() || payment.playerId._id.toString();
       acc[key] = (acc[key] || 0) + payment.paidAmount;
       return acc;

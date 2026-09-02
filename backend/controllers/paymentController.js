@@ -42,6 +42,27 @@ const decryptOptional = (value) => {
   }
 };
 
+const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
+
+const isOnOrAfter = (value, date) => {
+  if (!value || !date) return false;
+  const parsed = new Date(value);
+  return !Number.isNaN(parsed.getTime()) && parsed >= date;
+};
+
+const getCurrentSubscriptionStart = (player) => {
+  const rawDate = player?.currentSubscriptionStartedAt || player?.startDate || player?.subscriptionId?.startDate;
+  if (!rawDate) return null;
+  const date = new Date(rawDate);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const isPaymentInPlayerCurrentSubscription = (payment, player) => {
+  const subscriptionStart = getCurrentSubscriptionStart(player);
+  if (!subscriptionStart) return true;
+  return isOnOrAfter(payment.paymentDate, subscriptionStart) || isOnOrAfter(payment.createdAt, subscriptionStart);
+};
+
 const formatPaymentResponse = (payment) => {
   const obj = payment.toObject();
   if (obj.notesEncrypted) {
@@ -71,16 +92,13 @@ const recalculatePlayerPayments = async (playerId) => {
   if (!player) return;
 
   const payments = await Payment.find({ playerId }).sort({ paymentDate: 1, _id: 1 });
-  const totalAmount = Number(player.previousDueBalance || 0) + Number(player.payment || 0);
-  const subscriptionStart = player.startDate ? new Date(player.startDate) : null;
-  const subscriptionCycleStart = player.currentSubscriptionStartedAt ? new Date(player.currentSubscriptionStartedAt) : null;
+  const totalAmount = Number(player.previousDueBalance || 0)
+    + Number(player.payment || 0)
+    - Number(player.dueAdjustment || 0);
   let runningPaid = 0;
 
   for (const payment of payments) {
-    if (subscriptionCycleStart && (!payment.createdAt || new Date(payment.createdAt) < subscriptionCycleStart)) {
-      continue;
-    }
-    if (!subscriptionCycleStart && subscriptionStart && new Date(payment.paymentDate) < subscriptionStart) {
+    if (!isPaymentInPlayerCurrentSubscription(payment, player)) {
       continue;
     }
     if (isSubscriptionPaymentType(payment.transactionType)) {
@@ -111,19 +129,10 @@ const getTransactionType = (value, remainingAmount) => {
   return Number(remainingAmount || 0) <= 0 ? 'Full payment' : 'Partial payment';
 };
 
-const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
-
 const getDateOnly = (value) => {
   const date = value ? new Date(value) : new Date(0);
   date.setHours(0, 0, 0, 0);
   return date;
-};
-
-const getCurrentSubscriptionStart = (player) => {
-  const rawDate = player?.currentSubscriptionStartedAt || player?.startDate || player?.subscriptionId?.startDate;
-  if (!rawDate) return null;
-  const date = new Date(rawDate);
-  return Number.isNaN(date.getTime()) ? null : date;
 };
 
 const getPlayerIdFromPayment = (payment) => {
@@ -140,15 +149,6 @@ const getPaymentPlayers = (payments) => {
     }
   });
   return [...playerMap.values()];
-};
-
-const isPaymentInPlayerCurrentSubscription = (payment, player) => {
-  if (player?.currentSubscriptionStartedAt) {
-    return payment.createdAt && new Date(payment.createdAt) >= new Date(player.currentSubscriptionStartedAt);
-  }
-  const subscriptionStart = getCurrentSubscriptionStart(player);
-  if (!subscriptionStart) return true;
-  return new Date(payment.paymentDate || 0) >= subscriptionStart;
 };
 
 const getCurrentPaymentSummaryMap = async (players) => {
@@ -251,10 +251,12 @@ const formatPaymentsWithAttendanceCounts = async (payments) => {
 
 const getCurrentSubscriptionPaymentMatch = (player) => {
   const match = { playerId: player._id };
-  if (player.currentSubscriptionStartedAt) {
-    match.createdAt = { $gte: new Date(player.currentSubscriptionStartedAt) };
-  } else if (player.startDate) {
-    match.paymentDate = { $gte: new Date(player.startDate) };
+  const subscriptionStart = getCurrentSubscriptionStart(player);
+  if (subscriptionStart) {
+    match.$or = [
+      { paymentDate: { $gte: subscriptionStart } },
+      { createdAt: { $gte: subscriptionStart } }
+    ];
   }
   return match;
 };
