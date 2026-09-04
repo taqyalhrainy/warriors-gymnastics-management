@@ -289,9 +289,42 @@ const getPayments = async (req, res, next) => {
 const createPayment = async (req, res, next) => {
   try {
     const payload = sanitizeObject(req.body);
-    const { playerId, paidAmount, paymentMethod, paymentDate, receiptImage, notes, transactionType } = payload;
-    if (!validateObjectId(playerId) || paidAmount == null) {
-      return res.status(400).json({ message: 'Payment requires player and paid amount.' });
+    const { playerId, customPlayerName, paidAmount, paymentMethod, paymentDate, receiptImage, notes, transactionType } = payload;
+    const customName = String(customPlayerName || '').trim();
+    const hasPlayer = validateObjectId(playerId);
+    if ((!hasPlayer && !customName) || paidAmount == null) {
+      return res.status(400).json({ message: 'Payment requires a player or custom name and paid amount.' });
+    }
+    if (!hasPlayer) {
+      const payment = await Payment.create({
+        playerNameSnapshot: customName,
+        parentNameSnapshot: '',
+        parentPhoneSnapshot: '',
+        packageNameSnapshot: 'Custom',
+        packageClassesSnapshot: 0,
+        packageHoursSnapshot: 0,
+        totalAmount: 0,
+        paidAmount: parseLocalizedNumber(paidAmount),
+        remainingAmount: 0,
+        transactionType: getTransactionType(transactionType, 0),
+        paymentMethod,
+        paymentDate: parsePaymentDate(paymentDate),
+        receiptImage: receiptImage || '',
+        notesEncrypted: encrypt(notes || ''),
+        createdBy: req.user._id
+      });
+      const paymentForHistory = await loadPaymentForHistory(payment._id);
+      await createHistoryEntry({
+        entityType: 'payment',
+        entityId: payment._id,
+        action: 'create',
+        after: snapshotPaymentDocument(paymentForHistory),
+        userId: req.user._id,
+        req
+      });
+      await createAuditLog({ userId: req.user._id, action: 'create custom payment', entity: 'Payment', entityId: payment._id, req });
+      const createdPayment = await populatePaymentQuery(Payment.findById(payment._id));
+      return res.status(201).json(await formatPaymentsWithAttendanceCounts(createdPayment));
     }
     const player = await Player.findById(playerId);
     if (!player) {
@@ -386,10 +419,15 @@ const updatePayment = async (req, res, next) => {
     if (typeof payload.notes !== 'undefined') {
       payment.notesEncrypted = encrypt(payload.notes || '');
     }
+    if (!payment.playerId && typeof payload.customPlayerName !== 'undefined') {
+      payment.playerNameSnapshot = String(payload.customPlayerName || '').trim();
+    }
     payment.updatedBy = req.user._id;
     payment.updatedAt = new Date();
     await payment.save();
-    await recalculatePlayerPayments(payment.playerId);
+    if (payment.playerId) {
+      await recalculatePlayerPayments(payment.playerId);
+    }
     const afterPayment = await loadPaymentForHistory(id);
     await createHistoryEntry({
       entityType: 'payment',
@@ -423,7 +461,9 @@ const deletePayment = async (req, res, next) => {
     const beforeSnapshot = snapshotPaymentDocument(paymentForHistory);
     const { playerId } = payment;
     await payment.deleteOne();
-    await recalculatePlayerPayments(playerId);
+    if (playerId) {
+      await recalculatePlayerPayments(playerId);
+    }
     await createHistoryEntry({
       entityType: 'payment',
       entityId: payment._id,

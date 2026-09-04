@@ -115,7 +115,9 @@ const getPlayerGroups = (player) => {
 };
 
 const initialPaymentForm = {
+  payerMode: 'player',
   playerId: '',
+  customPlayerName: '',
   paidAmount: 0,
   transactionType: 'Partial payment',
   customTransactionType: '',
@@ -215,6 +217,7 @@ const PaymentsPage = () => {
   };
 
   const getAutoTransactionType = (playerId, paidAmount) => {
+    if (form.payerMode === 'custom') return form.transactionType || 'Partial payment';
     const player = players.find((item) => item._id === playerId);
     if (!player) return 'Partial payment';
     const totalAmount = getPlayerSubscriptionTotal(player);
@@ -243,19 +246,20 @@ const PaymentsPage = () => {
     const subscriptionTotal = getPlayerSubscriptionTotal(player);
     const paidAmount = Number(payload.paidAmount || 0);
     const subscriptionPayment = isSubscriptionPaymentType(payload.transactionType);
-    const remainingAmount = subscriptionPayment ? Math.max(0, subscriptionTotal - paidBefore - paidAmount) : 0;
+    const isCustomPayer = payload.payerMode === 'custom';
+    const remainingAmount = !isCustomPayer && subscriptionPayment ? Math.max(0, subscriptionTotal - paidBefore - paidAmount) : 0;
 
     return {
       ...(editingPaymentId ? payments.find((payment) => payment._id === editingPaymentId) : {}),
       _id: id,
-      playerId: player || payload.playerId,
-      playerNameSnapshot: player?.fullName || '',
+      playerId: isCustomPayer ? null : (player || payload.playerId),
+      playerNameSnapshot: isCustomPayer ? payload.customPlayerName : (player?.fullName || ''),
       parentNameSnapshot: player?.parentId?.name || '',
       parentPhoneSnapshot: player?.parentId?.phone || player?.parentPhone || '',
-      packageNameSnapshot: player?.packageName || '',
+      packageNameSnapshot: isCustomPayer ? 'Custom' : (player?.packageName || ''),
       packageClassesSnapshot: Number(player?.packageClasses || 0),
       packageHoursSnapshot: Number(player?.packageHours || 0),
-      totalAmount: subscriptionPayment ? subscriptionTotal : 0,
+      totalAmount: !isCustomPayer && subscriptionPayment ? subscriptionTotal : 0,
       paidAmount,
       remainingAmount,
       transactionType: payload.transactionType,
@@ -268,11 +272,12 @@ const PaymentsPage = () => {
 
   useEffect(() => {
     if (isTransactionTouched) return;
+    if (form.payerMode === 'custom') return;
     setForm((current) => ({
       ...current,
       transactionType: getAutoTransactionType(current.playerId, current.paidAmount)
     }));
-  }, [form.playerId, form.paidAmount, players, payments, editingPaymentId, isTransactionTouched]);
+  }, [form.payerMode, form.playerId, form.paidAmount, players, payments, editingPaymentId, isTransactionTouched]);
 
   const totals = useMemo(() => {
     const paid = payments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
@@ -404,6 +409,12 @@ const PaymentsPage = () => {
         paidAmount: parseLocalizedNumber(form.paidAmount),
         transactionType: form.transactionType === 'custom' ? form.customTransactionType : form.transactionType
       };
+      if (payload.payerMode === 'custom') {
+        payload.playerId = '';
+        payload.customPlayerName = payload.customPlayerName.trim();
+      } else {
+        payload.customPlayerName = '';
+      }
       delete payload.customTransactionType;
       const optimisticPayment = buildOptimisticPayment(payload, optimisticId);
 
@@ -448,7 +459,9 @@ const PaymentsPage = () => {
   const handleEditPayment = (payment) => {
     setEditingPaymentId(payment._id);
     setForm({
+      payerMode: payment.playerId ? 'player' : 'custom',
       playerId: payment.playerId?._id || payment.playerId || '',
+      customPlayerName: payment.playerId ? '' : getMemberName(payment),
       paidAmount: String(payment.paidAmount ?? 0),
       transactionType: ['Full payment', 'Partial payment'].includes(getTransactionLabel(payment)) ? getTransactionLabel(payment) : 'custom',
       customTransactionType: ['Full payment', 'Partial payment'].includes(getTransactionLabel(payment)) ? '' : getTransactionLabel(payment),
@@ -554,26 +567,56 @@ const PaymentsPage = () => {
                 {error && <p className="alert-error">{error}</p>}
                 <div className="payment-entry-grid">
                   <label>
-                    <span>{t('player')}</span>
-                    <input
-                      className="select-search-input"
-                      value={playerSearch}
-                      onChange={(event) => setPlayerSearch(event.target.value)}
-                      placeholder="Search player..."
-                      type="search"
-                    />
-                    <select
-                      value={form.playerId}
-                      onChange={(e) => {
-                        setIsTransactionTouched(false);
-                        setForm({ ...form, playerId: e.target.value });
-                      }}
-                      required
-                      disabled={Boolean(editingPaymentId)}
-                    >
-                      <option value="">{t('selectPlayer')}</option>
-                      {filteredPlayers.map((player) => <option key={player._id} value={player._id}>{player.fullName}</option>)}
-                    </select>
+                    <span>Payment for</span>
+                    {!editingPaymentId && (
+                      <select
+                        value={form.payerMode}
+                        onChange={(event) => {
+                          setIsTransactionTouched(false);
+                          setForm({
+                            ...form,
+                            payerMode: event.target.value,
+                            playerId: '',
+                            customPlayerName: ''
+                          });
+                          setPlayerSearch('');
+                        }}
+                      >
+                        <option value="player">{t('player')}</option>
+                        <option value="custom">Custom name</option>
+                      </select>
+                    )}
+                    {form.payerMode === 'custom' ? (
+                      <input
+                        value={form.customPlayerName}
+                        onChange={(event) => setForm({ ...form, customPlayerName: event.target.value })}
+                        placeholder="Write member name..."
+                        required
+                        disabled={Boolean(editingPaymentId && form.playerId)}
+                      />
+                    ) : (
+                      <>
+                        <input
+                          className="select-search-input"
+                          value={playerSearch}
+                          onChange={(event) => setPlayerSearch(event.target.value)}
+                          placeholder="Search player..."
+                          type="search"
+                        />
+                        <select
+                          value={form.playerId}
+                          onChange={(e) => {
+                            setIsTransactionTouched(false);
+                            setForm({ ...form, playerId: e.target.value });
+                          }}
+                          required
+                          disabled={Boolean(editingPaymentId)}
+                        >
+                          <option value="">{t('selectPlayer')}</option>
+                          {filteredPlayers.map((player) => <option key={player._id} value={player._id}>{player.fullName}</option>)}
+                        </select>
+                      </>
+                    )}
                   </label>
 
                   <label>
@@ -636,7 +679,11 @@ const PaymentsPage = () => {
                 </div>
 
                 <div className="payment-entry-footer">
-                  <span>{form.playerId ? `Package: ${getPackageName({ playerId: players.find((player) => player._id === form.playerId) })}` : 'Select a player to see the package.'}</span>
+                  <span>{form.payerMode === 'custom'
+                    ? 'Custom payment: not linked to a player subscription.'
+                    : form.playerId
+                      ? `Package: ${getPackageName({ playerId: players.find((player) => player._id === form.playerId) })}`
+                      : 'Select a player to see the package.'}</span>
                   <div className="payment-entry-actions">
                     {editingPaymentId && <button className="btn-secondary" type="button" onClick={handleCancelEdit}>Cancel Edit</button>}
                     <button className="btn-primary" type="submit">{isSubmitting ? 'Saving...' : (editingPaymentId ? 'Update Payment' : t('recordPayment'))}</button>

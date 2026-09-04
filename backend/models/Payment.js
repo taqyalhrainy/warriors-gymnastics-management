@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const paymentSchema = new mongoose.Schema({
-  playerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Player', required: true },
+  playerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Player' },
   playerNameSnapshot: { type: String, trim: true, default: '' },
   parentNameSnapshot: { type: String, trim: true, default: '' },
   parentPhoneSnapshot: { type: String, trim: true, default: '' },
