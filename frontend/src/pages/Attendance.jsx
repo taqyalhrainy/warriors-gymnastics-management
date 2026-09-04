@@ -13,7 +13,7 @@ import { getCacheVersion } from '../services/cache.js';
 
 const ATTENDANCE_BOARD_CACHE_TTL_MS = 5 * 60 * 1000;
 const LOCAL_ATTENDANCE_OVERRIDE_TTL_MS = 60 * 1000;
-const LOCAL_PLAYER_OVERRIDE_TTL_MS = 45 * 1000;
+const LOCAL_PLAYER_OVERRIDE_TTL_MS = 3 * 60 * 1000;
 let attendanceBoardCache = null;
 let attendanceBoardCacheTimestamp = 0;
 let attendanceBoardCacheDate = '';
@@ -742,12 +742,15 @@ const AttendancePage = () => {
     const currentCacheVersion = getCacheVersion();
     const hasCachedBoardForDate = attendanceBoardCache && attendanceBoardCacheDate === date && attendanceBoardCacheVersion === currentCacheVersion && (Date.now() - attendanceBoardCacheTimestamp) < ATTENDANCE_BOARD_CACHE_TTL_MS;
     if (!force && hasCachedBoardForDate) {
-      groupColumnsRef.current = attendanceBoardCache;
-      setGroupColumns(attendanceBoardCache);
+      const cachedBoardWithOverrides = applyLocalPlayerOverridesToGroups(attendanceBoardCache);
+      attendanceBoardCache = cachedBoardWithOverrides;
+      attendanceBoardCacheTimestamp = Date.now();
+      groupColumnsRef.current = cachedBoardWithOverrides;
+      setGroupColumns(cachedBoardWithOverrides);
       loadedAttendanceDateRef.current = date;
       setIsLoading(false);
       setIsRefreshing(false);
-      return attendanceBoardCache;
+      return cachedBoardWithOverrides;
     }
 
     try {
