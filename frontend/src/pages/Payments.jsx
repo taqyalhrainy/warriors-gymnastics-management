@@ -105,7 +105,9 @@ const getPaymentSubscriptionDetails = (payment) => {
     endDate: player?.endDate || null,
     classes: player?.packageClasses ?? payment.packageClassesSnapshot ?? 0,
     hours: player?.packageHours ?? payment.packageHoursSnapshot ?? 0,
-    usedClasses: player?.attendancePresentCount ?? player?.subscriptionId?.usedSessions ?? 0
+    usedClasses: player?.attendancePresentCount ?? player?.subscriptionId?.usedSessions ?? 0,
+    paidAmount: payment.paidAmount ?? 0,
+    remainingAmount: payment.remainingAmount ?? 0
   };
 };
 
@@ -869,6 +871,14 @@ const PaymentsPage = () => {
                 <div>
                   <span>Package</span>
                   <strong>{viewingPaymentDetails.packageName}</strong>
+                </div>
+                <div>
+                  <span>Paid Amount</span>
+                  <strong>{formatMoney(viewingPaymentDetails.paidAmount)}</strong>
+                </div>
+                <div>
+                  <span>Remaining Amount</span>
+                  <strong>{formatMoney(viewingPaymentDetails.remainingAmount)}</strong>
                 </div>
               </div>
             </section>
