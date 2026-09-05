@@ -8,6 +8,7 @@ import { fetchPackageOptions } from '../services/packageOptions.js';
 import { createWaitingListEntry, deleteWaitingListEntry, fetchWaitingList, updateWaitingListEntry } from '../services/waitingList.js';
 import { confirmAction } from '../utils/confirmAction.js';
 import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
+import { compressProfileImage } from '../utils/imageUpload.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
 const initialWaitingForm = {
@@ -202,12 +203,16 @@ const PlayersPage = () => {
     setMovePlayerForm((current) => ({ ...current, [name]: value }));
   };
 
-  const handleMovePlayerProfileImageChange = (event) => {
+  const handleMovePlayerProfileImageChange = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setMovePlayerForm((current) => ({ ...current, profileImage: String(reader.result || '') }));
-    reader.readAsDataURL(file);
+    try {
+      const profileImage = await compressProfileImage(file);
+      setMovePlayerForm((current) => ({ ...current, profileImage }));
+      setMovePlayerMessage('');
+    } catch (error) {
+      setMovePlayerMessage(error.message || 'Unable to load image.');
+    }
   };
 
   const handleMoveParentSelect = (event) => {

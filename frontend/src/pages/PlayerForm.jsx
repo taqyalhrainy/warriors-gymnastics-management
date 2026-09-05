@@ -7,6 +7,7 @@ import { fetchParents } from '../services/parents.js';
 import { fetchPackageOptions } from '../services/packageOptions.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
+import { compressProfileImage } from '../utils/imageUpload.js';
 
 const PlayerFormPage = () => {
   const { id } = useParams();
@@ -116,12 +117,16 @@ const PlayerFormPage = () => {
     setPlayer({ ...player, [name]: value });
   };
 
-  const handleProfileImageChange = (event) => {
+  const handleProfileImageChange = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setPlayer((current) => ({ ...current, profileImage: String(reader.result || '') }));
-    reader.readAsDataURL(file);
+    try {
+      const profileImage = await compressProfileImage(file);
+      setPlayer((current) => ({ ...current, profileImage }));
+      setMessage('');
+    } catch (error) {
+      setMessage(error.message || 'Unable to load image.');
+    }
   };
 
   const handleGroupToggle = (groupId) => {

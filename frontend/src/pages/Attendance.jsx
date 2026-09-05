@@ -9,6 +9,7 @@ import { fetchPackageOptions } from '../services/packageOptions.js';
 import { createWaitingListEntry } from '../services/waitingList.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
+import { compressProfileImage } from '../utils/imageUpload.js';
 import { getCacheVersion } from '../services/cache.js';
 
 const ATTENDANCE_BOARD_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -1845,13 +1846,17 @@ const AttendancePage = () => {
     setSelectedPlayerForm((current) => ({ ...current, [name]: value }));
   };
 
-  const handleSelectedPlayerProfileImageChange = (event) => {
+  const handleSelectedPlayerProfileImageChange = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
     selectedPlayerFormDirtyRef.current = true;
-    const reader = new FileReader();
-    reader.onload = () => setSelectedPlayerForm((current) => ({ ...current, profileImage: String(reader.result || '') }));
-    reader.readAsDataURL(file);
+    try {
+      const profileImage = await compressProfileImage(file);
+      setSelectedPlayerForm((current) => ({ ...current, profileImage }));
+      setMessage('');
+    } catch (error) {
+      setMessage(error.message || 'Unable to load image.');
+    }
   };
 
   const handleSelectedPlayerGroupToggle = (groupId) => {
