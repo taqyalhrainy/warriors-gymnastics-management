@@ -35,6 +35,15 @@ const ParentAttendancePage = () => {
   const [openKey, setOpenKey] = useState('');
   const { t } = useLanguage();
 
+  const renderChildName = (child) => (
+    <span className="player-name-with-photo">
+      <span className="player-avatar">
+        {child.profileImage ? <img src={child.profileImage} alt="" /> : <span>{child.fullName?.charAt(0) || '?'}</span>}
+      </span>
+      <span>{child.fullName}</span>
+    </span>
+  );
+
   useEffect(() => {
     fetchParentAttendance()
       .then((data) => {
@@ -95,7 +104,7 @@ const ParentAttendancePage = () => {
               <section className="subscription-history-group parent-package-card" key={item.key}>
                 <button type="button" className={`subscription-history-summary${item.current ? ' is-current-subscription' : ''}`} onClick={() => setOpenKey(isOpen ? '' : item.key)}>
                   <span>
-                    <strong>{item.child.fullName}</strong>
+                    <strong>{renderChildName(item.child)}</strong>
                     <small>{item.title}</small>
                     <small>{formatDate(item.startDate)} - {formatDate(item.endDate)}</small>
                   </span>

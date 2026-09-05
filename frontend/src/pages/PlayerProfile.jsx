@@ -95,6 +95,17 @@ const getScheduledEndDateValue = (startDate, player) => {
   return getDateInputValue(date);
 };
 
+const getPlayerAge = (dateOfBirth) => {
+  if (!dateOfBirth) return '';
+  const birthDate = new Date(dateOfBirth);
+  if (Number.isNaN(birthDate.getTime())) return '';
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age -= 1;
+  return age >= 0 ? age : '';
+};
+
 const PlayerProfilePage = () => {
   const { id } = useParams();
   const [player, setPlayer] = useState(null);
@@ -199,7 +210,17 @@ const PlayerProfilePage = () => {
         </div>
         {player ? (
           <div className="card details-card">
+            <div className="player-profile-summary">
+              <div className="player-avatar is-large">
+                {player.profileImage ? <img src={player.profileImage} alt="" /> : <span>{player.fullName?.charAt(0) || '?'}</span>}
+              </div>
+              <div>
+                <strong>{player.fullName}</strong>
+                <span>{player.dateOfBirth ? `Age ${getPlayerAge(player.dateOfBirth)}` : 'Age not set'}</span>
+              </div>
+            </div>
             <div><strong>{t('name')}:</strong> {player.fullName}</div>
+            <div><strong>{t('dateOfBirth')}:</strong> {player.dateOfBirth ? `${player.dateOfBirth.split('T')[0]} (${getPlayerAge(player.dateOfBirth)} years)` : t('notSet')}</div>
             <div><strong>{t('status')}:</strong> {player.status}</div>
             <div><strong>{t('group')}:</strong> {getPlayerGroups(player) || t('unassigned')}</div>
             <div><strong>{t('parent')}:</strong> {player.parentId?.name || t('unknown')}</div>

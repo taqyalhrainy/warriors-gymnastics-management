@@ -13,6 +13,8 @@ const PlayerFormPage = () => {
   const navigate = useNavigate();
   const [player, setPlayer] = useState({
     fullName: '',
+    dateOfBirth: '',
+    profileImage: '',
     parentId: '',
     parentPhone: '',
     groupId: '',
@@ -36,6 +38,17 @@ const PlayerFormPage = () => {
   const [groupSearch, setGroupSearch] = useState('');
   const { t } = useLanguage();
 
+  const getAge = (dateOfBirth) => {
+    if (!dateOfBirth) return '';
+    const birthDate = new Date(dateOfBirth);
+    if (Number.isNaN(birthDate.getTime())) return '';
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age -= 1;
+    return age >= 0 ? age : '';
+  };
+
   useEffect(() => {
     Promise.all([fetchParents(), fetchGroups(), fetchPackageOptions()])
       .then(([parentData, groupData, packageData]) => {
@@ -56,6 +69,8 @@ const PlayerFormPage = () => {
         }
         setPlayer({
           fullName: data.fullName,
+          dateOfBirth: data.dateOfBirth?.split('T')[0] || '',
+          profileImage: data.profileImage || '',
           parentId,
           parentPhone: data.parentPhone || '',
           groupId: data.groupId?._id || '',
@@ -99,6 +114,14 @@ const PlayerFormPage = () => {
       return;
     }
     setPlayer({ ...player, [name]: value });
+  };
+
+  const handleProfileImageChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setPlayer((current) => ({ ...current, profileImage: String(reader.result || '') }));
+    reader.readAsDataURL(file);
   };
 
   const handleGroupToggle = (groupId) => {
@@ -172,6 +195,25 @@ const PlayerFormPage = () => {
           <form onSubmit={handleSubmit}>
             <label>{t('name')}</label>
             <input name="fullName" value={player.fullName} onChange={handleChange} required />
+
+            <div className="player-form-photo-row">
+              <div className="player-avatar is-large">
+                {player.profileImage ? <img src={player.profileImage} alt="" /> : <span>{player.fullName?.charAt(0) || '?'}</span>}
+              </div>
+              <label>
+                Profile picture
+                <input type="file" accept="image/*" onChange={handleProfileImageChange} />
+              </label>
+              {player.profileImage && (
+                <button type="button" className="btn-secondary" onClick={() => setPlayer((current) => ({ ...current, profileImage: '' }))}>
+                  Remove picture
+                </button>
+              )}
+            </div>
+
+            <label>{t('dateOfBirth')}</label>
+            <input name="dateOfBirth" type="date" value={player.dateOfBirth} onChange={handleChange} />
+            {player.dateOfBirth && <p className="form-help">Age: {getAge(player.dateOfBirth)}</p>}
 
             <label>{t('parent')}</label>
             <input className="select-search-input" type="search" value={parentSearch} onChange={(event) => setParentSearch(event.target.value)} placeholder="Search parent..." />

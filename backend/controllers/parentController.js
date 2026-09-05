@@ -221,6 +221,7 @@ const getParentChildren = async (req, res, next) => {
     }
     const children = await Player.find({ parentId: parent._id })
       .sort({ createdAt: -1, _id: -1 })
+      .select('_id fullName dateOfBirth profileImage status programId groupId groupIds subscriptionId')
       .populate('programId', 'name level')
       .populate('groupId', 'name')
       .populate('groupIds', 'name')
@@ -239,7 +240,7 @@ const getParentAttendance = async (req, res, next) => {
     }
     const children = await Player.find({ parentId: parent._id })
       .sort({ createdAt: -1, _id: -1 })
-      .select('_id fullName startDate endDate packageName packageClasses packageHours payment currentSubscriptionStartedAt currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId')
+      .select('_id fullName dateOfBirth profileImage startDate endDate packageName packageClasses packageHours payment currentSubscriptionStartedAt currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId')
       .populate('subscriptionId', 'totalSessions usedSessions remainingSessions startDate endDate status price');
     const childIds = children.map((child) => child._id);
     const attendance = await Attendance.find({ playerId: { $in: childIds } }).sort({ date: -1, _id: -1 }).populate('playerId', 'fullName');
@@ -261,7 +262,7 @@ const getParentPayments = async (req, res, next) => {
     const childIds = children.map((child) => child._id);
     const payments = await Payment.find({ playerId: { $in: childIds } })
       .sort({ paymentDate: -1, _id: -1 })
-      .populate('playerId', 'fullName startDate payment previousDueBalance dueAdjustment currentSubscriptionStartedAt')
+      .populate('playerId', 'fullName profileImage startDate payment previousDueBalance dueAdjustment currentSubscriptionStartedAt')
       .populate('subscriptionId', 'price')
       .lean();
     const remainingByPlayer = new Map();
@@ -292,6 +293,7 @@ const getParentDashboard = async (req, res, next) => {
     }
     const children = await Player.find({ parentId: parent._id })
       .sort({ createdAt: -1, _id: -1 })
+      .select('_id fullName dateOfBirth profileImage status programId groupId groupIds coachId subscriptionId startDate endDate packageName packageClasses packageHours payment previousDueBalance dueAdjustment currentSubscriptionStartedAt')
       .populate('programId', 'name')
       .populate('groupId', 'name')
       .populate('groupIds', 'name')
@@ -299,10 +301,10 @@ const getParentDashboard = async (req, res, next) => {
       .populate('subscriptionId', 'type status remainingSessions usedSessions startDate endDate price');
     const childIds = children.map((child) => child._id);
     const attendanceRecords = await Attendance.find({ playerId: { $in: childIds } })
-      .populate('playerId', 'fullName')
+      .populate('playerId', 'fullName profileImage')
       .sort({ date: -1, _id: -1 });
     const payments = await Payment.find({ playerId: { $in: childIds } })
-      .populate('playerId', 'fullName')
+      .populate('playerId', 'fullName profileImage')
       .populate('subscriptionId', 'price')
       .sort({ paymentDate: -1, _id: -1 });
     const childById = new Map(children.map((child) => [String(child._id), child]));

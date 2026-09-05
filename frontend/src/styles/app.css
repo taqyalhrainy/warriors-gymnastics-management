@@ -677,6 +677,62 @@ body.theme-light .auth-loading-overlay {
   flex-wrap: wrap;
 }
 
+.player-avatar {
+  width: 36px;
+  height: 36px;
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--border));
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+  color: var(--primary);
+  font-weight: 900;
+}
+
+.player-avatar.is-large {
+  width: 78px;
+  height: 78px;
+  font-size: 1.65rem;
+}
+
+.player-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.player-name-with-photo,
+.player-profile-summary,
+.player-form-photo-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.player-profile-summary {
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.player-profile-summary div:last-child,
+.player-form-photo-row label {
+  display: grid;
+  gap: 4px;
+}
+
+.player-profile-summary span,
+.form-help {
+  color: var(--muted);
+}
+
+.player-form-photo-row {
+  flex-wrap: wrap;
+  margin: 8px 0 12px;
+}
+
 .new-subscription-button {
   position: relative;
   isolation: isolate;

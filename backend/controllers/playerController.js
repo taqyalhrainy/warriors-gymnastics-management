@@ -69,7 +69,7 @@ const cleanPlayerPayload = (payload) => {
     payload.groupId = payload.groupIds[0] || undefined;
   }
   if (payload.dateOfBirth === '') {
-    delete payload.dateOfBirth;
+    payload.dateOfBirth = null;
   }
   if (payload.startDate === '') {
     delete payload.startDate;

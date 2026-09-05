@@ -210,6 +210,8 @@ const firstMeaningfulValue = (...values) => values.find((value) => value !== und
 
 const mergeStablePlayerFields = (incomingPlayer, fallbackPlayer = null) => ({
   ...incomingPlayer,
+  dateOfBirth: incomingPlayer?.dateOfBirth ?? fallbackPlayer?.dateOfBirth ?? null,
+  profileImage: incomingPlayer?.profileImage ?? fallbackPlayer?.profileImage ?? '',
   parentId: incomingPlayer?.parentId ?? fallbackPlayer?.parentId,
   parentPhone: incomingPlayer?.parentPhone ?? fallbackPlayer?.parentPhone,
   groupId: incomingPlayer?.groupId ?? fallbackPlayer?.groupId,
@@ -248,6 +250,17 @@ const parseManualAttendanceDue = (value) => {
   const normalized = normalizeDigits(value).trim();
   const amount = Math.abs(parseLocalizedNumber(normalized));
   return normalized.startsWith('-') ? -amount : amount;
+};
+
+const getPlayerAge = (dateOfBirth) => {
+  if (!dateOfBirth) return '';
+  const birthDate = new Date(dateOfBirth);
+  if (Number.isNaN(birthDate.getTime())) return '';
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age -= 1;
+  return age >= 0 ? age : '';
 };
 
 const getAttendanceMoneyState = (value) => {
@@ -1738,6 +1751,8 @@ const AttendancePage = () => {
 
   const createSelectedPlayerForm = (player) => ({
     fullName: player?.fullName || '',
+    dateOfBirth: player?.dateOfBirth?.split?.('T')?.[0] || '',
+    profileImage: player?.profileImage || '',
     parentId: player?.parentId?._id || player?.parentId || '',
     parentPhone: player?.parentPhone || '',
     groupIds: player?.groupIds?.length ? player.groupIds.map((group) => group._id || group) : (player?.groupId?._id ? [player.groupId._id] : []),
@@ -1828,6 +1843,15 @@ const AttendancePage = () => {
     }
 
     setSelectedPlayerForm((current) => ({ ...current, [name]: value }));
+  };
+
+  const handleSelectedPlayerProfileImageChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    selectedPlayerFormDirtyRef.current = true;
+    const reader = new FileReader();
+    reader.onload = () => setSelectedPlayerForm((current) => ({ ...current, profileImage: String(reader.result || '') }));
+    reader.readAsDataURL(file);
   };
 
   const handleSelectedPlayerGroupToggle = (groupId) => {
@@ -3273,9 +3297,35 @@ const AttendancePage = () => {
               {isEditingSelectedPlayer && selectedPlayerForm ? (
                 <form className="student-modal-edit-form" onSubmit={handleSaveSelectedPlayerEdit}>
                   <div className="student-modal-edit-grid">
+                    <div className="student-modal-edit-grid-full player-form-photo-row">
+                      <div className="player-avatar is-large">
+                        {selectedPlayerForm.profileImage ? <img src={selectedPlayerForm.profileImage} alt="" /> : <span>{selectedPlayerForm.fullName?.charAt(0) || '?'}</span>}
+                      </div>
+                      <label>
+                        <span>Profile picture</span>
+                        <input type="file" accept="image/*" onChange={handleSelectedPlayerProfileImageChange} />
+                      </label>
+                      {selectedPlayerForm.profileImage && (
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => {
+                            selectedPlayerFormDirtyRef.current = true;
+                            setSelectedPlayerForm((current) => ({ ...current, profileImage: '' }));
+                          }}
+                        >
+                          Remove picture
+                        </button>
+                      )}
+                    </div>
                     <label>
                       <span>{t('name')}</span>
                       <input name="fullName" value={selectedPlayerForm.fullName} onChange={handleSelectedPlayerFormChange} required />
+                    </label>
+                    <label>
+                      <span>{t('dateOfBirth')}</span>
+                      <input name="dateOfBirth" type="date" value={selectedPlayerForm.dateOfBirth} onChange={handleSelectedPlayerFormChange} />
+                      {selectedPlayerForm.dateOfBirth && <small>Age: {getPlayerAge(selectedPlayerForm.dateOfBirth)}</small>}
                     </label>
                     <label>
                       <span>{t('parent')}</span>
@@ -3367,6 +3417,13 @@ const AttendancePage = () => {
                 <>
                   <div className="student-info-grid">
                     <div><span>{t('name')}</span><strong>{selectedPlayer.fullName || t('notSet')}</strong></div>
+                    {selectedPlayer.profileImage && (
+                      <div className="student-info-grid-full">
+                        <span>Profile picture</span>
+                        <div className="player-avatar is-large"><img src={selectedPlayer.profileImage} alt="" /></div>
+                      </div>
+                    )}
+                    <div><span>{t('dateOfBirth')}</span><strong>{selectedPlayer.dateOfBirth ? `${formatDate(selectedPlayer.dateOfBirth)} (${getPlayerAge(selectedPlayer.dateOfBirth)} years)` : t('notSet')}</strong></div>
                     <div><span>{t('parent')}</span><strong>{selectedPlayer.parentId?.name || selectedPlayer.parentName || t('notSet')}</strong></div>
                     <div><span>{t('parentPhone')}</span><strong>{selectedPlayer.parentPhone || t('notSet')}</strong></div>
                     <div>

@@ -17,6 +17,15 @@ const ParentDashboard = () => {
     return groups.map((group) => group?.name).filter(Boolean).join(', ');
   };
 
+  const renderChildName = (child) => (
+    <span className="player-name-with-photo">
+      <span className="player-avatar">
+        {child.profileImage ? <img src={child.profileImage} alt="" /> : <span>{child.fullName?.charAt(0) || '?'}</span>}
+      </span>
+      <span>{child.fullName}</span>
+    </span>
+  );
+
   return (
     <div className="dashboard-layout">
       <Sidebar />
@@ -30,7 +39,7 @@ const ParentDashboard = () => {
               <tbody>
                 {dashboard?.children?.length ? dashboard.children.map((child) => (
                   <tr key={child._id}>
-                    <td>{child.fullName}</td>
+                    <td>{renderChildName(child)}</td>
                     <td>{child.programId?.name || t('notAssigned')}</td>
                     <td>{getChildGroups(child) || t('notAssigned')}</td>
                     <td>{child.coachId?.name || t('unassigned')}</td>
@@ -47,7 +56,7 @@ const ParentDashboard = () => {
               <tbody>
                 {dashboard?.children?.length ? dashboard.children.map((child) => (
                   <tr key={child._id}>
-                    <td>{child.fullName}</td>
+                    <td>{renderChildName(child)}</td>
                     <td>{child.subscriptionId?.status || t('notAvailable')}</td>
                     <td>{child.paidTotal != null ? formatCurrency(child.paidTotal) : formatCurrency(0)}</td>
                     <td>{child.remainingAmount != null ? formatCurrency(child.remainingAmount) : '-'}</td>

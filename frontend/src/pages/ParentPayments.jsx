@@ -13,6 +13,15 @@ const ParentPaymentsPage = () => {
     fetchParentPayments().then(setPayments).catch(console.error);
   }, []);
 
+  const renderChildName = (child) => (
+    <span className="player-name-with-photo">
+      <span className="player-avatar">
+        {child?.profileImage ? <img src={child.profileImage} alt="" /> : <span>{child?.fullName?.charAt(0) || '?'}</span>}
+      </span>
+      <span>{child?.fullName || t('child')}</span>
+    </span>
+  );
+
   return (
     <div className="dashboard-layout">
       <Sidebar />
@@ -24,7 +33,7 @@ const ParentPaymentsPage = () => {
             <tbody>
               {payments.length ? payments.map((payment) => (
                 <tr key={payment._id}>
-                  <td>{payment.playerId?.fullName || t('child')}</td>
+                  <td>{renderChildName(payment.playerId)}</td>
                   <td>{new Date(payment.paymentDate).toLocaleDateString()}</td>
                   <td><strong className="parent-paid-amount">{formatMoney(payment.paidAmount)}</strong></td>
                   <td>

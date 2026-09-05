@@ -21,6 +21,8 @@ const initialWaitingForm = {
 
 const initialMovePlayerForm = {
   fullName: '',
+  dateOfBirth: '',
+  profileImage: '',
   parentName: '',
   parentPhone: '',
   groupIds: [],
@@ -200,6 +202,14 @@ const PlayersPage = () => {
     setMovePlayerForm((current) => ({ ...current, [name]: value }));
   };
 
+  const handleMovePlayerProfileImageChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setMovePlayerForm((current) => ({ ...current, profileImage: String(reader.result || '') }));
+    reader.readAsDataURL(file);
+  };
+
   const handleMoveParentSelect = (event) => {
     const parentId = event.target.value;
     const parent = parents.find((item) => item._id === parentId);
@@ -346,6 +356,8 @@ const PlayersPage = () => {
 
       const playerPayload = {
         fullName: movePlayerForm.fullName.trim(),
+        dateOfBirth: movePlayerForm.dateOfBirth || '',
+        profileImage: movePlayerForm.profileImage || '',
         parentId: parent._id,
         parentPhone: movePlayerForm.parentPhone.trim(),
         groupId: movePlayerForm.groupIds[0] || '',
@@ -695,6 +707,24 @@ const PlayersPage = () => {
                       <span>Player name</span>
                       <input name="fullName" value={movePlayerForm.fullName} onChange={handleMovePlayerFormChange} required />
                     </label>
+                    <label>
+                      <span>{t('dateOfBirth')}</span>
+                      <input name="dateOfBirth" type="date" value={movePlayerForm.dateOfBirth} onChange={handleMovePlayerFormChange} />
+                    </label>
+                    <div className="player-form-photo-row">
+                      <div className="player-avatar">
+                        {movePlayerForm.profileImage ? <img src={movePlayerForm.profileImage} alt="" /> : <span>{movePlayerForm.fullName?.charAt(0) || '?'}</span>}
+                      </div>
+                      <label>
+                        <span>Profile picture</span>
+                        <input type="file" accept="image/*" onChange={handleMovePlayerProfileImageChange} />
+                      </label>
+                      {movePlayerForm.profileImage && (
+                        <button type="button" className="btn-secondary" onClick={() => setMovePlayerForm((current) => ({ ...current, profileImage: '' }))}>
+                          Remove
+                        </button>
+                      )}
+                    </div>
                     <label>
                       <span>Status</span>
                       <select name="status" value={movePlayerForm.status} onChange={handleMovePlayerFormChange}>
