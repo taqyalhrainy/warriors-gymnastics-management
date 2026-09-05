@@ -96,7 +96,16 @@ const ParentAttendancePage = () => {
     <div className="dashboard-layout">
       <Sidebar />
       <main className="page-content parent-attendance-page">
-        <div className="page-header"><h1>{t('attendanceHistory')}</h1></div>
+        <section className="parent-hero is-compact">
+          <div>
+            <span className="parent-kicker">Attendance</span>
+            <h1>{t('attendanceHistory')}</h1>
+          </div>
+          <div className="parent-hero-stats">
+            <div><span>{t('yourChildren')}</span><strong>{children.length}</strong></div>
+            <div><span>{t('classes')}</span><strong>{packages.reduce((sum, item) => sum + Number(item.used || 0), 0)}</strong></div>
+          </div>
+        </section>
         <div className="parent-package-list">
           {packages.length ? packages.map((item) => {
             const isOpen = openKey === item.key;

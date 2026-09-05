@@ -22,11 +22,24 @@ const ParentPaymentsPage = () => {
     </span>
   );
 
+  const totalPaid = payments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
+  const totalRemaining = payments.reduce((sum, payment) => sum + Number(payment.remainingAmount || 0), 0);
+
   return (
     <div className="dashboard-layout">
       <Sidebar />
-      <main className="page-content">
-        <div className="page-header"><h1>{t('paymentHistory')}</h1></div>
+      <main className="page-content parent-portal-page">
+        <section className="parent-hero is-compact">
+          <div>
+            <span className="parent-kicker">Payments</span>
+            <h1>{t('paymentHistory')}</h1>
+          </div>
+          <div className="parent-hero-stats">
+            <div><span>{t('paid')}</span><strong>{formatMoney(totalPaid)}</strong></div>
+            <div><span>{t('remaining')}</span><strong>{formatMoney(totalRemaining)}</strong></div>
+            <div><span>Records</span><strong>{payments.length}</strong></div>
+          </div>
+        </section>
         <div className="table-card parent-payment-card">
           <table className="data-table">
             <thead><tr><th>{t('child')}</th><th>{t('date')}</th><th>{t('paid')}</th><th>{t('remaining')}</th><th>{t('method')}</th></tr></thead>

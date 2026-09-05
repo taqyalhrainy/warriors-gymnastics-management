@@ -15,9 +15,18 @@ const ParentNotificationsPage = () => {
   return (
     <div className="dashboard-layout">
       <Sidebar />
-      <main className="page-content">
-        <div className="page-header"><h1>{t('notifications')}</h1></div>
-        <div className="table-card">
+      <main className="page-content parent-portal-page">
+        <section className="parent-hero is-compact">
+          <div>
+            <span className="parent-kicker">Messages</span>
+            <h1>{t('notifications')}</h1>
+          </div>
+          <div className="parent-hero-stats">
+            <div><span>{t('unreadStatus')}</span><strong>{notifications.filter((note) => !note.isRead).length}</strong></div>
+            <div><span>{t('readStatus')}</span><strong>{notifications.filter((note) => note.isRead).length}</strong></div>
+          </div>
+        </section>
+        <div className="table-card parent-panel parent-notifications-card">
           <table className="data-table">
             <thead><tr><th>{t('title')}</th><th>{t('receivedStatus')}</th><th>{t('status')}</th><th>{t('action')}</th></tr></thead>
             <tbody>

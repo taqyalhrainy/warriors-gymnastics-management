@@ -113,7 +113,7 @@ const Sidebar = () => {
     ];
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar${isParentArea ? ' parent-sidebar' : ''}`}>
       <div className="brand-panel">
         <img className="brand-logo" src={warriorsLogo} alt="Warriors Gymnastics Academy" />
         <div className="brand-name">{t('appName')}</div>
