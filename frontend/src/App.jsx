@@ -41,6 +41,12 @@ function App() {
     document.body.classList.toggle('theme-dark', theme === 'dark');
   }, [theme]);
 
+  useEffect(() => {
+    const openParentSettings = () => setIsParentSettingsOpen(true);
+    window.addEventListener('parent-settings:open', openParentSettings);
+    return () => window.removeEventListener('parent-settings:open', openParentSettings);
+  }, []);
+
   const toggleTheme = () => {
     setTheme((current) => (current === 'dark' ? 'light' : 'dark'));
   };
@@ -49,10 +55,6 @@ function App() {
     <div className={`app-shell${user?.role === 'parent' ? ' parent-app-shell' : ''}`}>
       {user?.role === 'parent' ? (
         <>
-          <button className={`parent-settings-button ${language === 'ar' ? 'left' : 'right'}`} type="button" onClick={() => setIsParentSettingsOpen(true)}>
-            <span aria-hidden="true" />
-            <strong>Settings</strong>
-          </button>
           {isParentSettingsOpen && (
             <div className="parent-settings-backdrop" role="presentation" onClick={() => setIsParentSettingsOpen(false)}>
               <section className="parent-settings-panel" role="dialog" aria-modal="true" aria-label="Parent settings" onClick={(event) => event.stopPropagation()}>

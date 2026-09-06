@@ -106,8 +106,13 @@ const ParentDashboard = () => {
   const appTiles = [
     { path: '/parent/attendance', label: t('attendance'), icon: 'attendance' },
     { path: '/parent/payments', label: t('payments'), icon: 'payments' },
-    { path: '/parent/notifications', label: t('notifications'), icon: 'notifications', badge: notifications.filter((note) => !note.isRead).length }
+    { path: '/parent/notifications', label: t('notifications'), icon: 'notifications', badge: notifications.filter((note) => !note.isRead).length },
+    { action: 'settings', label: 'Settings', icon: 'settings' }
   ];
+
+  const openSettings = () => {
+    window.dispatchEvent(new CustomEvent('parent-settings:open'));
+  };
 
   return (
     <div className="dashboard-layout parent-app-layout">
@@ -133,11 +138,19 @@ const ParentDashboard = () => {
         <>
         <section className="parent-app-tile-grid" aria-label="Parent navigation">
           {appTiles.map((tile) => (
+            tile.action === 'settings' ? (
+            <button className="parent-app-tile" type="button" onClick={openSettings} key={tile.label}>
+              <span className={`parent-app-icon is-${tile.icon}`} aria-hidden="true" />
+              <strong>{tile.label}</strong>
+              {tile.badge > 0 && <em>{tile.badge}</em>}
+            </button>
+            ) : (
             <Link className="parent-app-tile" to={tile.path} key={tile.label}>
               <span className={`parent-app-icon is-${tile.icon}`} aria-hidden="true" />
               <strong>{tile.label}</strong>
               {tile.badge > 0 && <em>{tile.badge}</em>}
             </Link>
+            )
           ))}
         </section>
 
