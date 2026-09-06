@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchNotifications, getCachedNotifications } from '../services/notifications.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
+import warriorsLogo from '../assets/warriors-logo.png';
 
 const ParentNotificationsPage = () => {
   const [notifications, setNotifications] = useState(() => getCachedNotifications() || []);
@@ -44,6 +45,7 @@ const ParentNotificationsPage = () => {
         </section>
         {isLoading ? (
           <div className="parent-loading-panel">
+            <img src={warriorsLogo} alt="" />
             <span className="parent-loading-spinner" />
             <strong>Loading notifications...</strong>
           </div>

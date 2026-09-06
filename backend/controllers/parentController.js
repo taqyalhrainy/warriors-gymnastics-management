@@ -58,7 +58,7 @@ const getParents = async (req, res, next) => {
     const parents = await Parent.find()
       .sort({ _id: -1 })
       .populate('userId', 'name email role isActive')
-      .populate('children', 'fullName status programId groupId groupIds subscriptionId');
+      .populate('children', 'fullName profileImage status programId groupId groupIds subscriptionId');
     const childCounts = await Player.aggregate([
       { $match: { isDeleted: { $ne: true } } },
       { $group: { _id: '$parentId', count: { $sum: 1 } } }
@@ -81,7 +81,7 @@ const getParentById = async (req, res, next) => {
     }
     const parent = await Parent.findById(id)
       .populate('userId', 'name email role isActive')
-      .populate('children', 'fullName status programId groupId groupIds subscriptionId');
+      .populate('children', 'fullName profileImage status programId groupId groupIds subscriptionId');
     if (!parent) {
       return res.status(404).json({ message: 'Parent not found.' });
     }
@@ -203,7 +203,7 @@ const deleteParent = async (req, res, next) => {
 const getParentMe = async (req, res, next) => {
   try {
     const parent = await Parent.findOne({ userId: req.user._id })
-      .populate('children', 'fullName status programId groupId groupIds subscriptionId');
+      .populate('children', 'fullName profileImage status programId groupId groupIds subscriptionId');
     if (!parent) {
       return res.status(404).json({ message: 'Parent record not found.' });
     }
@@ -243,7 +243,7 @@ const getParentAttendance = async (req, res, next) => {
       .select('_id fullName dateOfBirth profileImage startDate endDate packageName packageClasses packageHours payment currentSubscriptionStartedAt currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId')
       .populate('subscriptionId', 'totalSessions usedSessions remainingSessions startDate endDate status price');
     const childIds = children.map((child) => child._id);
-    const attendance = await Attendance.find({ playerId: { $in: childIds } }).sort({ date: -1, _id: -1 }).populate('playerId', 'fullName');
+    const attendance = await Attendance.find({ playerId: { $in: childIds } }).sort({ date: -1, _id: -1 }).populate('playerId', 'fullName profileImage');
     res.json({ children, attendance });
   } catch (error) {
     next(error);

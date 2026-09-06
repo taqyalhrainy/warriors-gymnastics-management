@@ -1,5 +1,6 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import warriorsLogo from '../assets/warriors-logo.png';
 
 const ProtectedRoute = ({ roles }) => {
   const { user, isServerReady, isServerChecking } = useAuth();
@@ -9,6 +10,7 @@ const ProtectedRoute = ({ roles }) => {
   if (!isServerReady) {
     return (
       <div className="route-loading server-wake-loading" role="status" aria-live="polite">
+        <img src={warriorsLogo} alt="" />
         <span className="loading-spinner" />
         <strong>{isServerChecking ? 'Preparing the system...' : 'Still preparing the system...'}</strong>
         <p>Please wait a moment.</p>

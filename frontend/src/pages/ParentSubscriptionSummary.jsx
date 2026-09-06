@@ -10,15 +10,36 @@ const getDateTime = (date) => {
   return Number.isNaN(value) ? 0 : value;
 };
 
+const getStatusScore = (status) => {
+  const normalized = String(status || 'active').toLowerCase();
+  if (normalized === 'active') return 5;
+  if (normalized === 'tryout') return 4;
+  if (normalized === 'frozen') return 3;
+  if (normalized === 'expired') return 2;
+  if (normalized === 'left') return 0;
+  return 1;
+};
+
 const getUniqueChildren = (children = []) => {
   const byName = new Map();
+  const mergeChild = (selected, fallback) => ({
+    ...selected,
+    profileImage: selected?.profileImage || fallback?.profileImage || ''
+  });
+
   children.forEach((child) => {
     const key = String(child?.fullName || child?._id || '').trim().toLowerCase().replace(/\s+/g, ' ');
     if (!key) return;
     const current = byName.get(key);
-    const currentDate = getDateTime(current?.currentSubscriptionStartedAt || current?.updatedAt);
-    const nextDate = getDateTime(child?.currentSubscriptionStartedAt || child?.updatedAt);
-    if (!current || nextDate >= currentDate) byName.set(key, child);
+    const currentScore = getStatusScore(current?.status);
+    const nextScore = getStatusScore(child?.status);
+    const currentDate = getDateTime(current?.currentSubscriptionStartedAt || current?.updatedAt || current?.createdAt);
+    const nextDate = getDateTime(child?.currentSubscriptionStartedAt || child?.updatedAt || child?.createdAt);
+    if (!current || nextScore > currentScore || (nextScore === currentScore && nextDate >= currentDate)) {
+      byName.set(key, mergeChild(child, current));
+    } else {
+      byName.set(key, mergeChild(current, child));
+    }
   });
   return [...byName.values()];
 };

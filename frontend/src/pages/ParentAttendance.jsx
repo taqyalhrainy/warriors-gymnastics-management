@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchParentAttendance, getCachedParentAttendance } from '../services/parents.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
+import warriorsLogo from '../assets/warriors-logo.png';
 
 const formatDate = (date) => (date ? new Date(date).toLocaleDateString() : '-');
 const formatTime = (date) => (date ? new Date(date).toLocaleTimeString() : '-');
@@ -177,6 +178,7 @@ const ParentAttendancePage = () => {
         </section>
         {isLoading ? (
           <div className="parent-loading-panel">
+            <img src={warriorsLogo} alt="" />
             <span className="parent-loading-spinner" />
             <strong>Loading attendance...</strong>
           </div>

@@ -113,6 +113,7 @@ const ParentDashboard = () => {
 
         {isLoading ? (
           <div className="parent-loading-panel">
+            <img src={warriorsLogo} alt="" />
             <span className="parent-loading-spinner" />
             <strong>Loading parent data...</strong>
           </div>

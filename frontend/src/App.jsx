@@ -4,6 +4,7 @@ import { useAuth } from './context/AuthContext.jsx';
 import { useLanguage } from './context/LanguageContext.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import NetworkGuard from './components/NetworkGuard.jsx';
+import warriorsLogo from './assets/warriors-logo.png';
 
 const LoginPage = lazy(() => import('./pages/Login.jsx'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard.jsx'));
@@ -62,7 +63,7 @@ function App() {
         </>
       )}
       <NetworkGuard />
-      <Suspense fallback={<div className="route-loading"><span className="loading-spinner" />Loading...</div>}>
+      <Suspense fallback={<div className="route-loading"><img src={warriorsLogo} alt="" /><span className="loading-spinner" />Loading...</div>}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route element={<ProtectedRoute />}>

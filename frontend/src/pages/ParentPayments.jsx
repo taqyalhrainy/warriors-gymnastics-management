@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchParentPayments, getCachedParentPayments } from '../services/parents.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
+import warriorsLogo from '../assets/warriors-logo.png';
 
 const formatMoney = (value) => Number(value || 0).toLocaleString('en-US');
 
@@ -59,6 +60,7 @@ const ParentPaymentsPage = () => {
         </section>
         {isLoading ? (
           <div className="parent-loading-panel">
+            <img src={warriorsLogo} alt="" />
             <span className="parent-loading-spinner" />
             <strong>Loading payments...</strong>
           </div>
