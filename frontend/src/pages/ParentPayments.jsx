@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchParentPayments, getCachedParentPayments } from '../services/parents.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
@@ -8,6 +9,7 @@ const formatMoney = (value) => Number(value || 0).toLocaleString('en-US');
 const ParentPaymentsPage = () => {
   const [payments, setPayments] = useState(() => getCachedParentPayments() || []);
   const [isLoading, setIsLoading] = useState(() => !getCachedParentPayments());
+  const navigate = useNavigate();
   const { t } = useLanguage();
 
   useEffect(() => {
@@ -41,6 +43,9 @@ const ParentPaymentsPage = () => {
     <div className="dashboard-layout parent-app-layout">
       <Sidebar />
       <main className="page-content parent-portal-page">
+        <button type="button" className="parent-back-button" onClick={() => navigate('/parent')} aria-label="Back to parent home">
+          <span aria-hidden="true">‹</span>
+        </button>
         <section className="parent-hero is-compact">
           <div>
             <span className="parent-kicker">Payments</span>

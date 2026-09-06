@@ -36,7 +36,9 @@ const NotificationDetailPage = () => {
       <main className="page-content">
         <div className="page-header">
           <h1>{t('notification')}</h1>
-          <button className="btn-secondary" type="button" onClick={() => navigate(backPath)}>{t('back')}</button>
+          <button className={isParentArea ? 'parent-back-button' : 'btn-secondary'} type="button" onClick={() => navigate(backPath)} aria-label={t('back')}>
+            {isParentArea ? <span aria-hidden="true">‹</span> : t('back')}
+          </button>
         </div>
         {error && <p className="alert-error">{error}</p>}
         {notification ? (

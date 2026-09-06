@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchParentAttendance, getCachedParentAttendance } from '../services/parents.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
@@ -89,6 +90,7 @@ const ParentAttendancePage = () => {
   const [attendance, setAttendance] = useState(() => cachedAttendance?.attendance || []);
   const [openKey, setOpenKey] = useState('');
   const [isLoading, setIsLoading] = useState(() => !cachedAttendance);
+  const navigate = useNavigate();
   const { t } = useLanguage();
 
   const renderChildName = (child) => (
@@ -160,6 +162,9 @@ const ParentAttendancePage = () => {
     <div className="dashboard-layout parent-app-layout">
       <Sidebar />
       <main className="page-content parent-attendance-page">
+        <button type="button" className="parent-back-button" onClick={() => navigate('/parent')} aria-label="Back to parent home">
+          <span aria-hidden="true">‹</span>
+        </button>
         <section className="parent-hero is-compact">
           <div>
             <span className="parent-kicker">Attendance</span>

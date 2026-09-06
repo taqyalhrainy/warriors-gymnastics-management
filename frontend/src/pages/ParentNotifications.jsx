@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchNotifications, getCachedNotifications } from '../services/notifications.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
@@ -7,6 +7,7 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 const ParentNotificationsPage = () => {
   const [notifications, setNotifications] = useState(() => getCachedNotifications() || []);
   const [isLoading, setIsLoading] = useState(() => !getCachedNotifications());
+  const navigate = useNavigate();
   const { t } = useLanguage();
 
   useEffect(() => {
@@ -28,6 +29,9 @@ const ParentNotificationsPage = () => {
     <div className="dashboard-layout parent-app-layout">
       <Sidebar />
       <main className="page-content parent-portal-page">
+        <button type="button" className="parent-back-button" onClick={() => navigate('/parent')} aria-label="Back to parent home">
+          <span aria-hidden="true">‹</span>
+        </button>
         <section className="parent-hero is-compact">
           <div>
             <span className="parent-kicker">Messages</span>

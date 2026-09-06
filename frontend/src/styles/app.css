@@ -4893,13 +4893,24 @@ body.rtl .new-subscription-summary-card[type='button'] {
   position: absolute;
   inset: 0;
   background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.05), rgba(15, 23, 42, 0.45)),
+    var(--parent-hero-image, linear-gradient(transparent, transparent)) center / cover no-repeat,
     linear-gradient(145deg, rgba(255, 255, 255, 0.2), transparent 48%),
     repeating-linear-gradient(132deg, rgba(255, 255, 255, 0.22) 0 2px, transparent 2px 28px);
+  opacity: 0.96;
+}
+
+.parent-app-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 0%, rgba(17, 24, 39, 0.42) 100%);
 }
 
 .parent-app-hero-brand {
   position: absolute;
   inset: 26px 26px auto auto;
+  z-index: 2;
   width: 112px;
   height: 112px;
   display: grid;
@@ -4917,7 +4928,7 @@ body.rtl .new-subscription-summary-card[type='button'] {
 
 .parent-app-hero-copy {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   color: #ffffff;
   text-align: center;
 }
@@ -4939,6 +4950,26 @@ body.rtl .new-subscription-summary-card[type='button'] {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
+}
+
+.parent-back-button {
+  width: 52px;
+  height: 52px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #a3131d;
+  font-size: 2.3rem;
+  font-weight: 950;
+  line-height: 1;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.12);
+}
+
+.parent-back-button span {
+  display: block;
+  transform: translateY(-2px);
 }
 
 .parent-app-tile {

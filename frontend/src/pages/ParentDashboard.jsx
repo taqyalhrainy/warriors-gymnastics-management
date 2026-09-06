@@ -114,7 +114,7 @@ const ParentDashboard = () => {
     <div className="dashboard-layout parent-app-layout">
       <Sidebar />
       <main className="page-content parent-portal-page">
-        <section className="parent-app-hero">
+        <section className="parent-app-hero" style={{ '--parent-hero-image': `url(${warriorsLogo})` }}>
           <div className="parent-app-hero-brand">
             <img src={warriorsLogo} alt="" />
           </div>
