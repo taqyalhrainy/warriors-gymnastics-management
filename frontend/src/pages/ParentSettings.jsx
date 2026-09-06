@@ -8,7 +8,7 @@ const ParentSettingsPage = ({ theme, toggleTheme }) => {
   const navigate = useNavigate();
   const { language, toggleLanguage } = useLanguage();
   const { logout } = useAuth();
-  const [openPanel, setOpenPanel] = useState('display');
+  const [openPanel, setOpenPanel] = useState('');
 
   const togglePanel = (panel) => {
     setOpenPanel((current) => (current === panel ? '' : panel));
@@ -36,20 +36,40 @@ const ParentSettingsPage = ({ theme, toggleTheme }) => {
 
         <section className="parent-settings-page-card">
           <div className="parent-setting-group">
-            <button type="button" className="parent-setting-header" onClick={() => togglePanel('display')}>
-              <span>Display</span>
-              <strong>{language === 'en' ? 'English' : 'Arabic'} / {theme === 'dark' ? 'Dark' : 'Light'}</strong>
-              <i className={openPanel === 'display' ? 'is-open' : ''} aria-hidden="true" />
+            <button type="button" className="parent-setting-header" onClick={() => togglePanel('language')}>
+              <span>Language</span>
+              <strong>{language === 'en' ? 'English' : 'Arabic'}</strong>
+              <i className={openPanel === 'language' ? 'is-open' : ''} aria-hidden="true" />
             </button>
-            {openPanel === 'display' && (
+            {openPanel === 'language' && (
               <div className="parent-setting-panel">
-                <button type="button" className="parent-setting-choice" onClick={toggleLanguage}>
-                  <span>Language</span>
-                  <strong>{language === 'en' ? 'English' : 'Arabic'}</strong>
+                <button type="button" className={`parent-setting-choice ${language === 'en' ? 'is-selected' : ''}`} onClick={() => language !== 'en' && toggleLanguage()}>
+                  <span>English</span>
+                  <strong>{language === 'en' ? 'Selected' : 'Choose'}</strong>
                 </button>
-                <button type="button" className="parent-setting-choice" onClick={toggleTheme}>
-                  <span>Mode</span>
-                  <strong>{theme === 'dark' ? 'Dark' : 'Light'}</strong>
+                <button type="button" className={`parent-setting-choice ${language === 'ar' ? 'is-selected' : ''}`} onClick={() => language !== 'ar' && toggleLanguage()}>
+                  <span>Arabic</span>
+                  <strong>{language === 'ar' ? 'Selected' : 'Choose'}</strong>
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="parent-setting-group">
+            <button type="button" className="parent-setting-header" onClick={() => togglePanel('mode')}>
+              <span>Mode</span>
+              <strong>{theme === 'dark' ? 'Dark' : 'Light'}</strong>
+              <i className={openPanel === 'mode' ? 'is-open' : ''} aria-hidden="true" />
+            </button>
+            {openPanel === 'mode' && (
+              <div className="parent-setting-panel">
+                <button type="button" className={`parent-setting-choice ${theme === 'light' ? 'is-selected' : ''}`} onClick={() => theme !== 'light' && toggleTheme()}>
+                  <span>Light</span>
+                  <strong>{theme === 'light' ? 'Selected' : 'Choose'}</strong>
+                </button>
+                <button type="button" className={`parent-setting-choice ${theme === 'dark' ? 'is-selected' : ''}`} onClick={() => theme !== 'dark' && toggleTheme()}>
+                  <span>Dark</span>
+                  <strong>{theme === 'dark' ? 'Selected' : 'Choose'}</strong>
                 </button>
               </div>
             )}
