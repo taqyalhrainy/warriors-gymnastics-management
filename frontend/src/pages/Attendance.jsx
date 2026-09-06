@@ -3348,6 +3348,14 @@ const AttendancePage = () => {
                       <input name="parentPhone" value={selectedPlayerForm.parentPhone} onChange={handleSelectedPlayerFormChange} />
                     </label>
                     <label>
+                      <span>{t('startDate')}</span>
+                      <input name="startDate" type="date" value={selectedPlayerForm.startDate} onChange={handleSelectedPlayerFormChange} />
+                    </label>
+                    <label>
+                      <span>{t('endDate')}</span>
+                      <input name="endDate" type="date" value={selectedPlayerForm.endDate} onChange={handleSelectedPlayerFormChange} />
+                    </label>
+                    <label>
                       <span>{t('status')}</span>
                       <select name="status" value={selectedPlayerForm.status} onChange={handleSelectedPlayerFormChange}>
                         <option value="active">{t('activeStatus')}</option>
@@ -3357,14 +3365,6 @@ const AttendancePage = () => {
                         <option value="left">{t('leftStatus')}</option>
                         <option value="waiting-list">Waiting List</option>
                       </select>
-                    </label>
-                    <label>
-                      <span>{t('startDate')}</span>
-                      <input name="startDate" type="date" value={selectedPlayerForm.startDate} onChange={handleSelectedPlayerFormChange} />
-                    </label>
-                    <label>
-                      <span>{t('endDate')}</span>
-                      <input name="endDate" type="date" value={selectedPlayerForm.endDate} onChange={handleSelectedPlayerFormChange} />
                     </label>
                     <label>
                       <span>{t('package')}</span>
@@ -3431,6 +3431,8 @@ const AttendancePage = () => {
                     <div><span>{t('dateOfBirth')}</span><strong>{selectedPlayer.dateOfBirth ? `${formatDate(selectedPlayer.dateOfBirth)} (${getPlayerAge(selectedPlayer.dateOfBirth)} years)` : t('notSet')}</strong></div>
                     <div><span>{t('parent')}</span><strong>{selectedPlayer.parentId?.name || selectedPlayer.parentName || t('notSet')}</strong></div>
                     <div><span>{t('parentPhone')}</span><strong>{selectedPlayer.parentPhone || t('notSet')}</strong></div>
+                    <div><span>{t('startDate')}</span><strong>{formatDate(selectedPlayer.startDate)}</strong></div>
+                    <div><span>{t('endDate')}</span><strong>{formatDate(selectedPlayer.endDate)}</strong></div>
                     <div>
                       <span>{t('status')}</span>
                       <strong>{selectedPlayer.status || t('notSet')}</strong>
@@ -3446,8 +3448,6 @@ const AttendancePage = () => {
                         <strong>{decodeDisplayText(selectedPlayer.freezeNote)}</strong>
                       </div>
                     )}
-                    <div><span>{t('startDate')}</span><strong>{formatDate(selectedPlayer.startDate)}</strong></div>
-                    <div><span>{t('endDate')}</span><strong>{formatDate(selectedPlayer.endDate)}</strong></div>
                     <div><span>{t('package')}</span><strong>{selectedPlayer.packageName ? (selectedPlayer.packageName === 'custom' ? t('customPackage') : selectedPlayer.packageName) : t('notSet')}</strong></div>
                     <div><span>{t('payment')}</span><strong>{selectedPlayer.payment ?? 0}</strong></div>
                     <div><span>{t('classes')}</span><strong>{selectedPlayer.packageClasses ?? 0}</strong></div>

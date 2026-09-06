@@ -11,6 +11,49 @@ const dateOnly = (date) => {
   return value;
 };
 
+const getDateTime = (date) => {
+  const value = new Date(date || 0).getTime();
+  return Number.isNaN(value) ? 0 : value;
+};
+
+const getChildPriority = (child) => {
+  const status = child?.status || 'active';
+  const statusScore = status === 'active' ? 4 : status === 'tryout' ? 3 : status === 'frozen' ? 2 : status === 'expired' ? 1 : 0;
+  const dateScore = Math.max(
+    getDateTime(child?.currentSubscriptionStartedAt),
+    getDateTime(child?.startDate),
+    getDateTime(child?.updatedAt),
+    getDateTime(child?.createdAt)
+  );
+  return { statusScore, dateScore };
+};
+
+const getUniqueParentChildren = (children = []) => {
+  const byName = new Map();
+
+  children.forEach((child) => {
+    const key = String(child?.fullName || child?._id || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    if (!key) return;
+
+    const current = byName.get(key);
+    if (!current) {
+      byName.set(key, child);
+      return;
+    }
+
+    const nextPriority = getChildPriority(child);
+    const currentPriority = getChildPriority(current);
+    if (
+      nextPriority.statusScore > currentPriority.statusScore
+      || (nextPriority.statusScore === currentPriority.statusScore && nextPriority.dateScore >= currentPriority.dateScore)
+    ) {
+      byName.set(key, child);
+    }
+  });
+
+  return [...byName.values()];
+};
+
 const getPackageTitle = (child) => {
   const classes = child.packageClasses || child.subscriptionId?.totalSessions || 0;
   const hours = child.packageHours || '';
@@ -51,7 +94,7 @@ const ParentAttendancePage = () => {
           setAttendance(data);
           return;
         }
-        setChildren(data.children || []);
+        setChildren(getUniqueParentChildren(data.children || []));
         setAttendance(data.attendance || []);
       })
       .catch(console.error);
