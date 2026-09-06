@@ -58,7 +58,7 @@ const getParents = async (req, res, next) => {
     const parents = await Parent.find()
       .sort({ _id: -1 })
       .populate('userId', 'name email role isActive')
-      .populate('children', 'fullName profileImage status programId groupId groupIds subscriptionId');
+      .populate('children', 'fullName status programId groupId groupIds subscriptionId');
     const childCounts = await Player.aggregate([
       { $match: { isDeleted: { $ne: true } } },
       { $group: { _id: '$parentId', count: { $sum: 1 } } }
@@ -81,7 +81,7 @@ const getParentById = async (req, res, next) => {
     }
     const parent = await Parent.findById(id)
       .populate('userId', 'name email role isActive')
-      .populate('children', 'fullName profileImage status programId groupId groupIds subscriptionId');
+      .populate('children', 'fullName status programId groupId groupIds subscriptionId');
     if (!parent) {
       return res.status(404).json({ message: 'Parent not found.' });
     }
@@ -203,7 +203,7 @@ const deleteParent = async (req, res, next) => {
 const getParentMe = async (req, res, next) => {
   try {
     const parent = await Parent.findOne({ userId: req.user._id })
-      .populate('children', 'fullName profileImage status programId groupId groupIds subscriptionId');
+      .populate('children', 'fullName status programId groupId groupIds subscriptionId');
     if (!parent) {
       return res.status(404).json({ message: 'Parent record not found.' });
     }
@@ -300,13 +300,11 @@ const getParentDashboard = async (req, res, next) => {
       .populate('coachId', 'name')
       .populate('subscriptionId', 'type status remainingSessions usedSessions startDate endDate price');
     const childIds = children.map((child) => child._id);
-    const attendanceRecords = await Attendance.find({ playerId: { $in: childIds } })
-      .populate('playerId', 'fullName profileImage')
-      .sort({ date: -1, _id: -1 });
     const payments = await Payment.find({ playerId: { $in: childIds } })
-      .populate('playerId', 'fullName profileImage')
+      .select('playerId subscriptionId paidAmount paymentDate createdAt transactionType')
       .populate('subscriptionId', 'price')
-      .sort({ paymentDate: -1, _id: -1 });
+      .sort({ paymentDate: -1, _id: -1 })
+      .lean();
     const childById = new Map(children.map((child) => [String(child._id), child]));
     const paymentGroups = payments.reduce((acc, payment) => {
       const child = childById.get(String(payment.playerId?._id || payment.playerId || ''));
@@ -319,14 +317,15 @@ const getParentDashboard = async (req, res, next) => {
       ) {
         return acc;
       }
-      const key = payment.subscriptionId?._id?.toString() || payment.playerId._id.toString();
+      const paymentPlayerId = payment.playerId?._id || payment.playerId;
+      const key = payment.subscriptionId?._id?.toString() || payment.subscriptionId?.toString?.() || paymentPlayerId?.toString();
+      if (!key) return acc;
       acc[key] = (acc[key] || 0) + payment.paidAmount;
       return acc;
     }, {});
     const childSummaries = children.map((child) => {
       const subscription = child.subscriptionId || {};
       const paidTotal = paymentGroups[subscription._id?.toString()] || 0;
-      const latestAttendance = attendanceRecords.find((att) => att.playerId._id.toString() === child._id.toString());
       const daysRemaining = subscription.type === 'time' && subscription.endDate
         ? Math.max(0, Math.ceil((subscription.endDate - new Date()) / (1000 * 60 * 60 * 24)))
         : null;
@@ -334,12 +333,11 @@ const getParentDashboard = async (req, res, next) => {
         ...child.toObject({ virtuals: true }),
         paidTotal,
         remainingAmount: subscription.price ? Math.max(0, subscription.price - paidTotal) : null,
-        latestAttendance,
         daysRemaining
       };
     });
     const notifications = await Notification.find({ recipientUserId: req.user._id }).sort({ createdAt: -1 }).limit(10);
-    res.json({ children: childSummaries, attendance: attendanceRecords, payments, notifications });
+    res.json({ children: childSummaries, attendance: [], payments: [], notifications });
   } catch (error) {
     next(error);
   }
