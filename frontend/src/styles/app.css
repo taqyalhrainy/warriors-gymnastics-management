@@ -4787,25 +4787,11 @@ body.rtl .new-subscription-summary-card[type='button'] {
 .parent-app-layout .page-content {
   width: min(980px, 100%);
   margin: 0 auto;
-  padding: 24px 22px 108px;
+  padding: 24px 22px 36px;
 }
 
 .parent-sidebar {
-  position: fixed;
-  inset: auto 0 0 0;
-  z-index: 900;
-  width: 100%;
-  height: 78px;
-  display: grid;
-  align-items: center;
-  padding: 8px max(14px, calc((100vw - 980px) / 2 + 14px));
-  border: 0;
-  border-top: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.94);
-  color: #111827;
-  box-shadow: 0 -14px 34px rgba(15, 23, 42, 0.12);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  display: none;
 }
 
 .parent-sidebar .brand-panel,
@@ -5137,6 +5123,79 @@ body.rtl .new-subscription-summary-card[type='button'] {
 
 .parent-home-child-details > strong {
   min-width: 72px;
+}
+
+.parent-children-list {
+  display: grid;
+  gap: 12px;
+}
+
+.parent-child-summary-card,
+.parent-child-detail-card {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #111827;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+}
+
+.parent-child-summary-card {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) auto minmax(92px, auto) minmax(92px, auto);
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  text-align: start;
+}
+
+.parent-child-summary-card .player-avatar,
+.parent-child-detail-card .player-avatar {
+  width: 54px;
+  height: 54px;
+}
+
+.parent-child-summary-card div,
+.parent-child-detail-grid div {
+  display: grid;
+  gap: 4px;
+}
+
+.parent-child-summary-card div span,
+.parent-child-detail-grid span {
+  color: #6b7280;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.parent-child-summary-card div strong,
+.parent-child-detail-grid strong {
+  font-weight: 950;
+}
+
+.parent-child-detail-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.parent-child-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.parent-child-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.parent-child-detail-grid div {
+  padding: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.03);
 }
 
 .parent-hero {
@@ -6577,20 +6636,11 @@ body.rtl .payment-table-wrap {
 .dashboard-layout.parent-app-layout .page-content {
   width: min(980px, 100%);
   margin: 0 auto;
-  padding: 24px 22px 108px;
+  padding: 24px 22px 36px;
 }
 
 .dashboard-layout.parent-app-layout .parent-sidebar {
-  position: fixed !important;
-  inset: auto 0 0 0 !important;
-  width: 100% !important;
-  height: 78px !important;
-  display: grid !important;
-  align-items: center !important;
-  padding: 8px max(14px, calc((100vw - 980px) / 2 + 14px)) !important;
-  border: 0 !important;
-  border-top: 1px solid rgba(15, 23, 42, 0.08) !important;
-  background: rgba(255, 255, 255, 0.94) !important;
+  display: none !important;
 }
 
 .dashboard-layout.parent-app-layout .parent-sidebar .brand-panel,
@@ -6709,6 +6759,8 @@ body.theme-dark .dashboard-layout.parent-app-layout {
 body.theme-dark .parent-app-tile,
 body.theme-dark .parent-home-summary div,
 body.theme-dark .parent-home-list,
+body.theme-dark .parent-child-summary-card,
+body.theme-dark .parent-child-detail-card,
 body.theme-dark .parent-settings-page-card,
 body.theme-dark .parent-setting-group,
 body.theme-dark .parent-child-card,
@@ -6727,6 +6779,7 @@ body.theme-dark .table-card {
 
 body.theme-dark .parent-setting-choice,
 body.theme-dark .parent-home-summary div,
+body.theme-dark .parent-child-detail-grid div,
 body.theme-dark .parent-hero-stats div,
 body.theme-dark .parent-child-meta div,
 body.theme-dark .parent-panel .data-table th,
@@ -6742,6 +6795,8 @@ body.theme-dark .parent-notifications-card .data-table th {
 body.theme-dark .parent-app-tile,
 body.theme-dark .parent-home-summary strong,
 body.theme-dark .parent-home-child-details > strong,
+body.theme-dark .parent-child-summary-card div strong,
+body.theme-dark .parent-child-detail-grid strong,
 body.theme-dark .parent-child-card strong,
 body.theme-dark .parent-panel h2,
 body.theme-dark .parent-panel h3,
@@ -6753,6 +6808,8 @@ body.theme-dark .parent-notifications-card .data-table {
 body.theme-dark .parent-kicker,
 body.theme-dark .parent-home-summary span,
 body.theme-dark .parent-home-child-details span,
+body.theme-dark .parent-child-summary-card div span,
+body.theme-dark .parent-child-detail-grid span,
 body.theme-dark .parent-child-card span,
 body.theme-dark .parent-panel .data-table td,
 body.theme-dark .parent-payment-card .data-table td,
@@ -6788,6 +6845,14 @@ body.theme-dark .parent-home-child-row {
 
   .parent-home-child-details > span:first-child {
     max-width: 48%;
+  }
+
+  .parent-child-summary-card {
+    grid-template-columns: 1fr;
+  }
+
+  .parent-child-detail-grid {
+    grid-template-columns: 1fr;
   }
 }
 

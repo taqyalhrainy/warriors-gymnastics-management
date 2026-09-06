@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchParentDashboard, getCachedParentDashboard } from '../services/parents.js';
+import { formatCurrency } from '../utils/format.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
 const getDateTime = (date) => {
@@ -31,6 +32,7 @@ const ParentChildrenPage = () => {
   const cached = getCachedParentDashboard();
   const [dashboard, setDashboard] = useState(() => cached || null);
   const [isLoading, setIsLoading] = useState(() => !cached);
+  const [selectedChild, setSelectedChild] = useState(null);
   const navigate = useNavigate();
   const { t } = useLanguage();
   const children = getUniqueChildren(dashboard?.children || []);
@@ -75,21 +77,31 @@ const ParentChildrenPage = () => {
         {isLoading ? (
           <div className="parent-loading-panel"><span className="parent-loading-spinner" /><strong>Loading children...</strong></div>
         ) : (
-          <div className="table-card parent-panel">
-            <table className="data-table">
-              <thead><tr><th>{t('name')}</th><th>{t('program')}</th><th>{t('group')}</th><th>{t('coach')}</th><th>{t('status')}</th></tr></thead>
-              <tbody>
-                {children.length ? children.map((child) => (
-                  <tr key={child._id}>
-                    <td>{renderChildName(child)}</td>
-                    <td>{child.programId?.name || t('notAssigned')}</td>
-                    <td>{getChildGroups(child) || t('notAssigned')}</td>
-                    <td>{child.coachId?.name || t('unassigned')}</td>
-                    <td>{child.status}</td>
-                  </tr>
-                )) : <tr><td colSpan="5">{t('noChildRecords')}</td></tr>}
-              </tbody>
-            </table>
+          <section className="parent-children-list">
+            {children.length ? children.map((child) => (
+              <button type="button" className="parent-child-summary-card" key={child._id} onClick={() => setSelectedChild(child)}>
+                {renderChildName(child)}
+                <span className={`parent-status-pill status-${child.status || 'active'}`}>{child.status || t('status')}</span>
+                <div><span>{t('paid')}</span><strong>{formatCurrency(child.paidTotal || 0)}</strong></div>
+                <div><span>{t('remaining')}</span><strong>{child.remainingAmount != null ? formatCurrency(child.remainingAmount) : '-'}</strong></div>
+              </button>
+            )) : <div className="parent-panel"><p className="empty-state">{t('noChildRecords')}</p></div>}
+          </section>
+        )}
+        {selectedChild && (
+          <div className="parent-child-detail-card">
+            <div className="parent-child-detail-head">
+              {renderChildName(selectedChild)}
+              <button type="button" className="btn-secondary" onClick={() => setSelectedChild(null)}>Close</button>
+            </div>
+            <div className="parent-child-detail-grid">
+              <div><span>{t('program')}</span><strong>{selectedChild.programId?.name || t('notAssigned')}</strong></div>
+              <div><span>{t('group')}</span><strong>{getChildGroups(selectedChild) || t('notAssigned')}</strong></div>
+              <div><span>{t('coach')}</span><strong>{selectedChild.coachId?.name || t('unassigned')}</strong></div>
+              <div><span>{t('status')}</span><strong>{selectedChild.status || '-'}</strong></div>
+              <div><span>{t('paid')}</span><strong>{formatCurrency(selectedChild.paidTotal || 0)}</strong></div>
+              <div><span>{t('remaining')}</span><strong>{selectedChild.remainingAmount != null ? formatCurrency(selectedChild.remainingAmount) : '-'}</strong></div>
+            </div>
           </div>
         )}
       </main>

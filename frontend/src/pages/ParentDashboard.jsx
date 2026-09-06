@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchParentDashboard, getCachedParentDashboard } from '../services/parents.js';
+import { formatCurrency } from '../utils/format.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import warriorsLogo from '../assets/warriors-logo.png';
@@ -84,6 +85,8 @@ const ParentDashboard = () => {
 
   const children = getUniqueParentChildren(dashboard?.children || []);
   const notifications = dashboard?.notifications || [];
+  const totalRemaining = children.reduce((sum, child) => sum + Number(child.remainingAmount || 0), 0);
+  const activeChildren = children.filter((child) => child.status === 'active').length;
   const appTiles = [
     { path: '/parent/attendance', label: t('attendance'), icon: 'attendance' },
     { path: '/parent/payments', label: t('payments'), icon: 'payments' },
@@ -123,6 +126,17 @@ const ParentDashboard = () => {
               {tile.badge > 0 && <em>{tile.badge}</em>}
             </Link>
           ))}
+        </section>
+        <section className="parent-hero parent-dashboard-strip">
+          <div>
+            <span className="parent-kicker">Overview</span>
+            <h1>{t('parentDashboard')}</h1>
+          </div>
+          <div className="parent-hero-stats">
+            <div><span>{t('yourChildren')}</span><strong>{children.length}</strong></div>
+            <div><span>{t('status')}</span><strong>{activeChildren}</strong></div>
+            <div><span>{t('remaining')}</span><strong>{formatCurrency(totalRemaining)}</strong></div>
+          </div>
         </section>
         </>
         )}
