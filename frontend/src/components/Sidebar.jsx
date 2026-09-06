@@ -35,7 +35,7 @@ const getUnreadExpiredAlertCount = (players) => {
 
 const Sidebar = () => {
   const { user, logout } = useAuth();
-  const { language, toggleLanguage, t } = useLanguage();
+  const { t } = useLanguage();
   const { pathname } = useLocation();
   const [unreadCount, setUnreadCount] = useState(0);
   const [expiredAlertCount, setExpiredAlertCount] = useState(0);
@@ -94,7 +94,7 @@ const Sidebar = () => {
 
   const links = isParentArea
     ? [
-      { path: '/parent', key: 'dashboard' },
+      { path: '/parent', key: 'home', label: 'Home' },
       { path: '/parent/attendance', key: 'attendance' },
       { path: '/parent/payments', key: 'payments' },
       { path: '/parent/notifications', key: 'notifications' }
@@ -121,7 +121,7 @@ const Sidebar = () => {
       <div className="sidebar-links">
         {links.map((link) => (
           <NavLink key={link.path} to={link.path} className={({ isActive }) => isActive ? 'active' : ''}>
-            <span>{t(link.key)}</span>
+            <span>{link.label || t(link.key)}</span>
             {user?.role === 'parent' && link.key === 'notifications' && unreadCount > 0 && (
               <span className="notification-badge">{unreadCount}</span>
             )}

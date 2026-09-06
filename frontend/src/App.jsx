@@ -33,6 +33,7 @@ function App() {
   const { user } = useAuth();
   const { language, toggleLanguage } = useLanguage();
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+  const [isParentSettingsOpen, setIsParentSettingsOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('theme', theme);
@@ -46,12 +47,46 @@ function App() {
 
   return (
     <div className={`app-shell${user?.role === 'parent' ? ' parent-app-shell' : ''}`}>
-      <button className={`theme-toggle-btn ${language === 'ar' ? 'left' : 'right'}`} type="button" onClick={toggleTheme}>
-        <span>{theme === 'dark' ? 'LIGHT' : 'DARK'}</span>
-      </button>
-      <button className={`language-toggle-btn ${language === 'ar' ? 'left' : 'right'}`} type="button" onClick={toggleLanguage}>
-        <span>{language === 'en' ? 'AR' : 'EN'}</span>
-      </button>
+      {user?.role === 'parent' ? (
+        <>
+          <button className={`parent-settings-button ${language === 'ar' ? 'left' : 'right'}`} type="button" onClick={() => setIsParentSettingsOpen(true)}>
+            <span aria-hidden="true" />
+            <strong>Settings</strong>
+          </button>
+          {isParentSettingsOpen && (
+            <div className="parent-settings-backdrop" role="presentation" onClick={() => setIsParentSettingsOpen(false)}>
+              <section className="parent-settings-panel" role="dialog" aria-modal="true" aria-label="Parent settings" onClick={(event) => event.stopPropagation()}>
+                <div className="parent-settings-heading">
+                  <div>
+                    <span>Parent app</span>
+                    <h2>Settings</h2>
+                  </div>
+                  <button type="button" className="btn-secondary" onClick={() => setIsParentSettingsOpen(false)}>Close</button>
+                </div>
+                <div className="parent-settings-options">
+                  <button type="button" className="parent-setting-row" onClick={toggleLanguage}>
+                    <span>Language</span>
+                    <strong>{language === 'en' ? 'English' : 'Arabic'}</strong>
+                  </button>
+                  <button type="button" className="parent-setting-row" onClick={toggleTheme}>
+                    <span>Mode</span>
+                    <strong>{theme === 'dark' ? 'Dark' : 'Light'}</strong>
+                  </button>
+                </div>
+              </section>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <button className={`theme-toggle-btn ${language === 'ar' ? 'left' : 'right'}`} type="button" onClick={toggleTheme}>
+            <span>{theme === 'dark' ? 'LIGHT' : 'DARK'}</span>
+          </button>
+          <button className={`language-toggle-btn ${language === 'ar' ? 'left' : 'right'}`} type="button" onClick={toggleLanguage}>
+            <span>{language === 'en' ? 'AR' : 'EN'}</span>
+          </button>
+        </>
+      )}
       <NetworkGuard />
       <Suspense fallback={<div className="route-loading"><span className="loading-spinner" />Loading...</div>}>
         <Routes>

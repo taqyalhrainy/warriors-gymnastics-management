@@ -106,8 +106,7 @@ const ParentDashboard = () => {
   const appTiles = [
     { path: '/parent/attendance', label: t('attendance'), icon: 'attendance' },
     { path: '/parent/payments', label: t('payments'), icon: 'payments' },
-    { path: '/parent/notifications', label: t('notifications'), icon: 'notifications', badge: notifications.filter((note) => !note.isRead).length },
-    { path: '/parent', label: t('dashboard'), icon: 'dashboard' }
+    { path: '/parent/notifications', label: t('notifications'), icon: 'notifications', badge: notifications.filter((note) => !note.isRead).length }
   ];
 
   return (
