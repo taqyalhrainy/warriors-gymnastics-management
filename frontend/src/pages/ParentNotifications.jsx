@@ -25,7 +25,7 @@ const ParentNotificationsPage = () => {
   }, []);
 
   return (
-    <div className="dashboard-layout">
+    <div className="dashboard-layout parent-app-layout">
       <Sidebar />
       <main className="page-content parent-portal-page">
         <section className="parent-hero is-compact">

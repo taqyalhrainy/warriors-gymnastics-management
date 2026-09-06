@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchParentDashboard, getCachedParentDashboard } from '../services/parents.js';
 import { formatCurrency } from '../utils/format.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
+import warriorsLogo from '../assets/warriors-logo.png';
 
 const getDateTime = (date) => {
   const value = new Date(date || 0).getTime();
@@ -63,6 +66,7 @@ const ParentDashboard = () => {
   const [dashboard, setDashboard] = useState(() => getCachedParentDashboard() || null);
   const [isLoading, setIsLoading] = useState(() => !getCachedParentDashboard());
   const { t } = useLanguage();
+  const { user } = useAuth();
 
   useEffect(() => {
     let isMounted = true;
@@ -99,20 +103,25 @@ const ParentDashboard = () => {
   const notifications = dashboard?.notifications || [];
   const totalRemaining = children.reduce((sum, child) => sum + Number(child.remainingAmount || 0), 0);
   const activeChildren = children.filter((child) => child.status === 'active').length;
+  const appTiles = [
+    { path: '/parent/attendance', label: t('attendance'), icon: 'attendance' },
+    { path: '/parent/payments', label: t('payments'), icon: 'payments' },
+    { path: '/parent/notifications', label: t('notifications'), icon: 'notifications', badge: notifications.filter((note) => !note.isRead).length },
+    { path: '/parent', label: t('dashboard'), icon: 'dashboard' }
+  ];
 
   return (
-    <div className="dashboard-layout">
+    <div className="dashboard-layout parent-app-layout">
       <Sidebar />
       <main className="page-content parent-portal-page">
-        <section className="parent-hero">
-          <div>
-            <span className="parent-kicker">Warriors Gymnastics</span>
-            <h1>{t('parentDashboard')}</h1>
+        <section className="parent-app-hero">
+          <div className="parent-app-hero-brand">
+            <img src={warriorsLogo} alt="" />
           </div>
-          <div className="parent-hero-stats">
-            <div><span>{t('yourChildren')}</span><strong>{children.length}</strong></div>
-            <div><span>{t('status')}</span><strong>{activeChildren}</strong></div>
-            <div><span>{t('remaining')}</span><strong>{formatCurrency(totalRemaining)}</strong></div>
+          <div className="parent-app-hero-copy">
+            <span className="parent-kicker">Warriors Gymnastics</span>
+            <h1>Welcome</h1>
+            <p>{user?.name || t('parentDashboard')}</p>
           </div>
         </section>
 
@@ -123,6 +132,28 @@ const ParentDashboard = () => {
           </div>
         ) : (
         <>
+        <section className="parent-app-tile-grid" aria-label="Parent navigation">
+          {appTiles.map((tile) => (
+            <Link className="parent-app-tile" to={tile.path} key={tile.label}>
+              <span className={`parent-app-icon is-${tile.icon}`} aria-hidden="true" />
+              <strong>{tile.label}</strong>
+              {tile.badge > 0 && <em>{tile.badge}</em>}
+            </Link>
+          ))}
+        </section>
+
+        <section className="parent-hero parent-dashboard-strip">
+          <div>
+            <span className="parent-kicker">Overview</span>
+            <h1>{t('parentDashboard')}</h1>
+          </div>
+          <div className="parent-hero-stats">
+            <div><span>{t('yourChildren')}</span><strong>{children.length}</strong></div>
+            <div><span>{t('status')}</span><strong>{activeChildren}</strong></div>
+            <div><span>{t('remaining')}</span><strong>{formatCurrency(totalRemaining)}</strong></div>
+          </div>
+        </section>
+
         <section className="parent-child-grid">
           {children.length ? children.map((child) => (
             <article className="parent-child-card" key={child._id}>

@@ -4778,9 +4778,232 @@ body.rtl .new-subscription-summary-card[type='button'] {
   gap: 20px;
 }
 
+.parent-app-layout {
+  display: block;
+  min-height: 100vh;
+  background: #eef3f4;
+}
+
+.parent-app-layout .page-content {
+  width: min(980px, 100%);
+  margin: 0 auto;
+  padding: 24px 22px 108px;
+}
+
 .parent-sidebar {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 900;
+  width: 100%;
+  height: 78px;
+  display: grid;
+  align-items: center;
+  padding: 8px max(14px, calc((100vw - 980px) / 2 + 14px));
+  border: 0;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.94);
+  color: #111827;
+  box-shadow: 0 -14px 34px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.parent-sidebar .brand-panel,
+.parent-sidebar .sidebar-footer {
+  display: none;
+}
+
+.parent-sidebar .sidebar-links {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.parent-sidebar .sidebar-links a {
+  min-height: 60px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 3px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  color: #9ca3af;
+  font-size: 0.78rem;
+  font-weight: 900;
+  box-shadow: none;
+}
+
+.parent-sidebar .sidebar-links a::before {
+  content: '';
+  width: 24px;
+  height: 24px;
+  display: block;
+  background: currentColor;
+}
+
+.parent-sidebar .sidebar-links a[href="/parent"]::before {
+  clip-path: polygon(50% 8%, 92% 42%, 82% 42%, 82% 90%, 58% 90%, 58% 62%, 42% 62%, 42% 90%, 18% 90%, 18% 42%, 8% 42%);
+}
+
+.parent-sidebar .sidebar-links a[href="/parent/attendance"]::before {
+  clip-path: polygon(12% 10%, 88% 10%, 88% 28%, 12% 28%, 12% 10%, 16% 36%, 36% 36%, 36% 56%, 16% 56%, 16% 36%, 44% 36%, 84% 36%, 84% 44%, 44% 44%, 44% 36%, 44% 54%, 84% 54%, 84% 62%, 44% 62%, 44% 54%, 16% 66%, 36% 66%, 36% 86%, 16% 86%, 16% 66%, 44% 70%, 84% 70%, 84% 78%, 44% 78%);
+}
+
+.parent-sidebar .sidebar-links a[href="/parent/payments"]::before {
+  clip-path: polygon(18% 16%, 82% 16%, 82% 32%, 18% 32%, 18% 16%, 18% 42%, 82% 42%, 82% 86%, 18% 86%, 18% 42%, 30% 52%, 70% 52%, 70% 62%, 30% 62%, 30% 52%, 30% 70%, 56% 70%, 56% 80%, 30% 80%);
+}
+
+.parent-sidebar .sidebar-links a[href="/parent/notifications"]::before {
+  clip-path: polygon(50% 10%, 68% 18%, 78% 36%, 78% 62%, 92% 80%, 8% 80%, 22% 62%, 22% 36%, 32% 18%, 50% 10%, 39% 86%, 61% 86%, 56% 94%, 44% 94%);
+}
+
+.parent-sidebar .sidebar-links a.active,
+.parent-sidebar .sidebar-links a:hover {
+  background: transparent;
+  color: #a3131d;
+  border-color: transparent;
+}
+
+.parent-sidebar .notification-badge {
+  position: absolute;
+  margin: -30px 0 0 28px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  font-size: 0.7rem;
+}
+
+.parent-app-hero {
+  position: relative;
+  min-height: 300px;
+  display: grid;
+  align-items: end;
+  overflow: hidden;
+  padding: 28px;
+  border-radius: 24px;
   background:
-    linear-gradient(180deg, #111827 0%, #161616 58%, #7f1117 145%);
+    linear-gradient(180deg, rgba(15, 23, 42, 0.04), rgba(15, 23, 42, 0.62)),
+    linear-gradient(135deg, #dff4fa 0%, #ffffff 45%, #f6dfe2 100%);
+  box-shadow: 0 24px 58px rgba(15, 23, 42, 0.16);
+}
+
+.parent-app-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.2), transparent 48%),
+    repeating-linear-gradient(132deg, rgba(255, 255, 255, 0.22) 0 2px, transparent 2px 28px);
+}
+
+.parent-app-hero-brand {
+  position: absolute;
+  inset: 26px 26px auto auto;
+  width: 112px;
+  height: 112px;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.12);
+}
+
+.parent-app-hero-brand img {
+  width: 100%;
+  height: auto;
+}
+
+.parent-app-hero-copy {
+  position: relative;
+  z-index: 1;
+  color: #ffffff;
+  text-align: center;
+}
+
+.parent-app-hero-copy h1 {
+  margin: 0;
+  font-size: 2.25rem;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.parent-app-hero-copy p {
+  margin: 10px 0 0;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.parent-app-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.parent-app-tile {
+  position: relative;
+  min-height: 166px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 18px;
+  padding: 22px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+  text-align: center;
+  text-decoration: none;
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.08);
+}
+
+.parent-app-tile strong {
+  font-size: 1.08rem;
+  font-weight: 950;
+}
+
+.parent-app-tile em {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  min-width: 26px;
+  height: 26px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #ed1c24;
+  color: #ffffff;
+  font-style: normal;
+  font-weight: 950;
+}
+
+.parent-app-icon {
+  width: 62px;
+  height: 62px;
+  display: block;
+  background: #a3131d;
+}
+
+.parent-app-icon.is-dashboard {
+  clip-path: polygon(10% 14%, 90% 14%, 90% 86%, 10% 86%, 10% 14%, 22% 26%, 42% 26%, 42% 46%, 22% 46%, 22% 26%, 52% 26%, 78% 26%, 78% 36%, 52% 36%, 52% 26%, 52% 46%, 78% 46%, 78% 56%, 52% 56%, 52% 46%, 22% 58%, 42% 58%, 42% 74%, 22% 74%, 22% 58%, 52% 66%, 78% 66%, 78% 76%, 52% 76%);
+}
+
+.parent-app-icon.is-attendance {
+  clip-path: polygon(50% 8%, 86% 22%, 86% 76%, 50% 92%, 14% 76%, 14% 22%, 50% 8%, 34% 34%, 66% 34%, 66% 44%, 34% 44%, 34% 34%, 34% 54%, 66% 54%, 66% 64%, 34% 64%);
+}
+
+.parent-app-icon.is-payments {
+  clip-path: polygon(18% 16%, 82% 16%, 82% 32%, 18% 32%, 18% 16%, 18% 42%, 82% 42%, 82% 86%, 18% 86%, 18% 42%, 30% 52%, 70% 52%, 70% 62%, 30% 62%, 30% 52%, 30% 70%, 56% 70%, 56% 80%, 30% 80%);
+}
+
+.parent-app-icon.is-notifications {
+  clip-path: polygon(50% 10%, 68% 18%, 78% 36%, 78% 62%, 92% 80%, 8% 80%, 22% 62%, 22% 36%, 32% 18%, 50% 10%, 39% 86%, 61% 86%, 56% 94%, 44% 94%);
+}
+
+.parent-dashboard-strip {
+  margin-top: 2px;
 }
 
 .parent-hero {
@@ -6211,4 +6434,60 @@ body.rtl .payment-table-wrap {
 .student-modal-edit-grid > .student-modal-date-row > label,
 .student-info-grid > .student-info-date-row > div {
   min-width: 0;
+}
+
+.dashboard-layout.parent-app-layout {
+  display: block;
+  min-height: 100dvh;
+}
+
+.dashboard-layout.parent-app-layout .page-content {
+  width: min(980px, 100%);
+  margin: 0 auto;
+  padding: 24px 22px 108px;
+}
+
+.dashboard-layout.parent-app-layout .parent-sidebar {
+  position: fixed !important;
+  inset: auto 0 0 0 !important;
+  width: 100% !important;
+  height: 78px !important;
+  display: grid !important;
+  align-items: center !important;
+  padding: 8px max(14px, calc((100vw - 980px) / 2 + 14px)) !important;
+  border: 0 !important;
+  border-top: 1px solid rgba(15, 23, 42, 0.08) !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+}
+
+.dashboard-layout.parent-app-layout .parent-sidebar .brand-panel,
+.dashboard-layout.parent-app-layout .parent-sidebar .sidebar-footer {
+  display: none !important;
+}
+
+.dashboard-layout.parent-app-layout .parent-sidebar .sidebar-links {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+.parent-app-shell .theme-toggle-btn,
+.parent-app-shell .language-toggle-btn {
+  top: 18px;
+  bottom: auto;
+}
+
+.parent-app-shell .theme-toggle-btn.right {
+  right: 92px;
+}
+
+.parent-app-shell .language-toggle-btn.right {
+  right: 18px;
+}
+
+.parent-app-shell .theme-toggle-btn.left {
+  left: 92px;
+}
+
+.parent-app-shell .language-toggle-btn.left {
+  left: 18px;
 }

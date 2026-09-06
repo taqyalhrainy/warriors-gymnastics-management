@@ -157,7 +157,7 @@ const ParentAttendancePage = () => {
   }), [children, attendance]);
 
   return (
-    <div className="dashboard-layout">
+    <div className="dashboard-layout parent-app-layout">
       <Sidebar />
       <main className="page-content parent-attendance-page">
         <section className="parent-hero is-compact">

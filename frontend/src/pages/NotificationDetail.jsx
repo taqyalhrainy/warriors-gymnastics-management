@@ -28,8 +28,10 @@ const NotificationDetailPage = () => {
     loadNotification();
   }, [id]);
 
+  const isParentArea = location.pathname.startsWith('/parent');
+
   return (
-    <div className="dashboard-layout">
+    <div className={`dashboard-layout${isParentArea ? ' parent-app-layout' : ''}`}>
       <Sidebar />
       <main className="page-content">
         <div className="page-header">

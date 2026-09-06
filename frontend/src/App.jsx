@@ -45,7 +45,7 @@ function App() {
   };
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${user?.role === 'parent' ? ' parent-app-shell' : ''}`}>
       <button className={`theme-toggle-btn ${language === 'ar' ? 'left' : 'right'}`} type="button" onClick={toggleTheme}>
         <span>{theme === 'dark' ? 'LIGHT' : 'DARK'}</span>
       </button>

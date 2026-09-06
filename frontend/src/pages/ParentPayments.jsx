@@ -38,7 +38,7 @@ const ParentPaymentsPage = () => {
   const totalRemaining = payments.reduce((sum, payment) => sum + Number(payment.remainingAmount || 0), 0);
 
   return (
-    <div className="dashboard-layout">
+    <div className="dashboard-layout parent-app-layout">
       <Sidebar />
       <main className="page-content parent-portal-page">
         <section className="parent-hero is-compact">
