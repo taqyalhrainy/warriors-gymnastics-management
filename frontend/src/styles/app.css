@@ -6163,3 +6163,18 @@ body.rtl .payment-table-wrap {
     left: 74px;
   }
 }
+
+.student-modal-edit-grid > .student-modal-date-row,
+.student-info-grid > .student-info-date-row {
+  grid-column: 1 / -1 !important;
+  width: 100%;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+  gap: 12px;
+  flex-direction: row !important;
+}
+
+.student-modal-edit-grid > .student-modal-date-row > label,
+.student-info-grid > .student-info-date-row > div {
+  min-width: 0;
+}

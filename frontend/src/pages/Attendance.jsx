@@ -3305,9 +3305,19 @@ const AttendancePage = () => {
                 <form className="student-modal-edit-form" onSubmit={handleSaveSelectedPlayerEdit}>
                   <div className="student-modal-edit-grid">
                     <div className="student-modal-edit-grid-full player-form-photo-row">
-                      <div className="player-avatar is-large">
-                        {selectedPlayerForm.profileImage ? <img src={selectedPlayerForm.profileImage} alt="" /> : <span>{selectedPlayerForm.fullName?.charAt(0) || '?'}</span>}
-                      </div>
+                      {selectedPlayerForm.profileImage ? (
+                        <button
+                          type="button"
+                          className="profile-image-open-button"
+                          onClick={() => setPreviewProfileImage(selectedPlayerForm.profileImage)}
+                        >
+                          <span className="player-avatar is-large"><img src={selectedPlayerForm.profileImage} alt="" /></span>
+                        </button>
+                      ) : (
+                        <div className="player-avatar is-large">
+                          <span>{selectedPlayerForm.fullName?.charAt(0) || '?'}</span>
+                        </div>
+                      )}
                       <label>
                         <span>Profile picture</span>
                         <input type="file" accept="image/*" onChange={handleSelectedPlayerProfileImageChange} />
