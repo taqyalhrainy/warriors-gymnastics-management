@@ -25,6 +25,7 @@ const ParentDashboard = lazy(() => import('./pages/ParentDashboard.jsx'));
 const ParentAttendancePage = lazy(() => import('./pages/ParentAttendance.jsx'));
 const ParentPaymentsPage = lazy(() => import('./pages/ParentPayments.jsx'));
 const ParentNotificationsPage = lazy(() => import('./pages/ParentNotifications.jsx'));
+const ParentSettingsPage = lazy(() => import('./pages/ParentSettings.jsx'));
 const NotificationDetailPage = lazy(() => import('./pages/NotificationDetail.jsx'));
 const adminRoles = ['admin', 'coach', 'receptionist'];
 const parentRoles = ['parent'];
@@ -33,19 +34,12 @@ function App() {
   const { user } = useAuth();
   const { language, toggleLanguage } = useLanguage();
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
-  const [isParentSettingsOpen, setIsParentSettingsOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('theme', theme);
     document.body.classList.toggle('theme-light', theme === 'light');
     document.body.classList.toggle('theme-dark', theme === 'dark');
   }, [theme]);
-
-  useEffect(() => {
-    const openParentSettings = () => setIsParentSettingsOpen(true);
-    window.addEventListener('parent-settings:open', openParentSettings);
-    return () => window.removeEventListener('parent-settings:open', openParentSettings);
-  }, []);
 
   const toggleTheme = () => {
     setTheme((current) => (current === 'dark' ? 'light' : 'dark'));
@@ -54,31 +48,7 @@ function App() {
   return (
     <div className={`app-shell${user?.role === 'parent' ? ' parent-app-shell' : ''}`}>
       {user?.role === 'parent' ? (
-        <>
-          {isParentSettingsOpen && (
-            <div className="parent-settings-backdrop" role="presentation" onClick={() => setIsParentSettingsOpen(false)}>
-              <section className="parent-settings-panel" role="dialog" aria-modal="true" aria-label="Parent settings" onClick={(event) => event.stopPropagation()}>
-                <div className="parent-settings-heading">
-                  <div>
-                    <span>Parent app</span>
-                    <h2>Settings</h2>
-                  </div>
-                  <button type="button" className="btn-secondary" onClick={() => setIsParentSettingsOpen(false)}>Close</button>
-                </div>
-                <div className="parent-settings-options">
-                  <button type="button" className="parent-setting-row" onClick={toggleLanguage}>
-                    <span>Language</span>
-                    <strong>{language === 'en' ? 'English' : 'Arabic'}</strong>
-                  </button>
-                  <button type="button" className="parent-setting-row" onClick={toggleTheme}>
-                    <span>Mode</span>
-                    <strong>{theme === 'dark' ? 'Dark' : 'Light'}</strong>
-                  </button>
-                </div>
-              </section>
-            </div>
-          )}
-        </>
+        null
       ) : (
         <>
           <button className={`theme-toggle-btn ${language === 'ar' ? 'left' : 'right'}`} type="button" onClick={toggleTheme}>
@@ -121,6 +91,7 @@ function App() {
               <Route path="/parent/attendance" element={<ParentAttendancePage />} />
               <Route path="/parent/payments" element={<ParentPaymentsPage />} />
               <Route path="/parent/notifications" element={<ParentNotificationsPage />} />
+              <Route path="/parent/settings" element={<ParentSettingsPage theme={theme} toggleTheme={toggleTheme} />} />
               <Route path="/parent/notifications/:id" element={<NotificationDetailPage />} />
             </Route>
           </Route>
