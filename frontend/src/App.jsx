@@ -26,6 +26,8 @@ const ParentAttendancePage = lazy(() => import('./pages/ParentAttendance.jsx'));
 const ParentPaymentsPage = lazy(() => import('./pages/ParentPayments.jsx'));
 const ParentNotificationsPage = lazy(() => import('./pages/ParentNotifications.jsx'));
 const ParentSettingsPage = lazy(() => import('./pages/ParentSettings.jsx'));
+const ParentChildrenPage = lazy(() => import('./pages/ParentChildren.jsx'));
+const ParentSubscriptionSummaryPage = lazy(() => import('./pages/ParentSubscriptionSummary.jsx'));
 const NotificationDetailPage = lazy(() => import('./pages/NotificationDetail.jsx'));
 const adminRoles = ['admin', 'coach', 'receptionist'];
 const parentRoles = ['parent'];
@@ -92,6 +94,8 @@ function App() {
               <Route path="/parent/payments" element={<ParentPaymentsPage />} />
               <Route path="/parent/notifications" element={<ParentNotificationsPage />} />
               <Route path="/parent/settings" element={<ParentSettingsPage theme={theme} toggleTheme={toggleTheme} />} />
+              <Route path="/parent/children" element={<ParentChildrenPage />} />
+              <Route path="/parent/subscriptions" element={<ParentSubscriptionSummaryPage />} />
               <Route path="/parent/notifications/:id" element={<NotificationDetailPage />} />
             </Route>
           </Route>

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchParentDashboard, getCachedParentDashboard } from '../services/parents.js';
-import { formatCurrency } from '../utils/format.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import warriorsLogo from '../assets/warriors-logo.png';
@@ -83,29 +82,15 @@ const ParentDashboard = () => {
     };
   }, []);
 
-  const getChildGroups = (child) => {
-    const groups = child?.groupIds?.length ? child.groupIds : [child?.groupId].filter(Boolean);
-    return groups.map((group) => group?.name).filter(Boolean).join(', ');
-  };
-
-  const renderChildName = (child) => (
-    <span className="player-name-with-photo">
-      <span className="player-avatar">
-        {child.profileImage ? <img src={child.profileImage} alt="" /> : <span>{child.fullName?.charAt(0) || '?'}</span>}
-      </span>
-      <span>{child.fullName}</span>
-    </span>
-  );
-
   const children = getUniqueParentChildren(dashboard?.children || []);
   const notifications = dashboard?.notifications || [];
-  const totalRemaining = children.reduce((sum, child) => sum + Number(child.remainingAmount || 0), 0);
-  const activeChildren = children.filter((child) => child.status === 'active').length;
   const appTiles = [
     { path: '/parent/attendance', label: t('attendance'), icon: 'attendance' },
     { path: '/parent/payments', label: t('payments'), icon: 'payments' },
     { path: '/parent/notifications', label: t('notifications'), icon: 'notifications', badge: notifications.filter((note) => !note.isRead).length },
-    { path: '/parent/settings', label: 'Settings', icon: 'settings' }
+    { path: '/parent/settings', label: 'Settings', icon: 'settings' },
+    { path: '/parent/children', label: t('yourChildren'), icon: 'children', badge: children.length },
+    { path: '/parent/subscriptions', label: t('subscriptionSummary'), icon: 'subscription' }
   ];
 
   return (
@@ -138,42 +123,6 @@ const ParentDashboard = () => {
               {tile.badge > 0 && <em>{tile.badge}</em>}
             </Link>
           ))}
-        </section>
-
-        <section className="parent-home-summary" aria-label="Parent summary">
-          <div>
-            <span>{t('yourChildren')}</span>
-            <strong>{children.length}</strong>
-          </div>
-          <div>
-            <span>{t('status')}</span>
-            <strong>{activeChildren}</strong>
-          </div>
-          <div>
-            <span>{t('remaining')}</span>
-            <strong>{formatCurrency(totalRemaining)}</strong>
-          </div>
-        </section>
-
-        <section className="parent-home-list">
-          <div className="parent-home-list-head">
-            <span className="parent-kicker">{t('yourChildren')}</span>
-            <h2>{t('yourChildren')}</h2>
-          </div>
-          {children.length ? children.map((child) => (
-            <article className="parent-home-child-row" key={child._id}>
-              <div>
-                {renderChildName(child)}
-              </div>
-              <div className="parent-home-child-details">
-                <span>{getChildGroups(child) || t('notAssigned')}</span>
-                <span className={`parent-status-pill status-${child.status || 'active'}`}>{child.status || t('status')}</span>
-                <strong>{child.remainingAmount != null ? formatCurrency(child.remainingAmount) : '-'}</strong>
-              </div>
-            </article>
-          )) : (
-            <div className="parent-panel"><p className="empty-state">{t('noChildRecords')}</p></div>
-          )}
         </section>
         </>
         )}
