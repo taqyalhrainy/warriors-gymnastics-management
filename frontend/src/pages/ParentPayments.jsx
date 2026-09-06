@@ -7,10 +7,14 @@ const formatMoney = (value) => Number(value || 0).toLocaleString('en-US');
 
 const ParentPaymentsPage = () => {
   const [payments, setPayments] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const { t } = useLanguage();
 
   useEffect(() => {
-    fetchParentPayments().then(setPayments).catch(console.error);
+    fetchParentPayments()
+      .then(setPayments)
+      .catch(console.error)
+      .finally(() => setIsLoading(false));
   }, []);
 
   const renderChildName = (child) => (
@@ -40,6 +44,12 @@ const ParentPaymentsPage = () => {
             <div><span>Records</span><strong>{payments.length}</strong></div>
           </div>
         </section>
+        {isLoading ? (
+          <div className="parent-loading-panel">
+            <span className="parent-loading-spinner" />
+            <strong>Loading payments...</strong>
+          </div>
+        ) : (
         <div className="table-card parent-payment-card">
           <table className="data-table">
             <thead><tr><th>{t('child')}</th><th>{t('date')}</th><th>{t('paid')}</th><th>{t('remaining')}</th><th>{t('method')}</th></tr></thead>
@@ -60,6 +70,7 @@ const ParentPaymentsPage = () => {
             </tbody>
           </table>
         </div>
+        )}
       </main>
     </div>
   );

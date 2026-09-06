@@ -6,10 +6,14 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 
 const ParentNotificationsPage = () => {
   const [notifications, setNotifications] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const { t } = useLanguage();
 
   useEffect(() => {
-    fetchNotifications().then(setNotifications).catch(console.error);
+    fetchNotifications()
+      .then(setNotifications)
+      .catch(console.error)
+      .finally(() => setIsLoading(false));
   }, []);
 
   return (
@@ -26,6 +30,12 @@ const ParentNotificationsPage = () => {
             <div><span>{t('readStatus')}</span><strong>{notifications.filter((note) => note.isRead).length}</strong></div>
           </div>
         </section>
+        {isLoading ? (
+          <div className="parent-loading-panel">
+            <span className="parent-loading-spinner" />
+            <strong>Loading notifications...</strong>
+          </div>
+        ) : (
         <div className="table-card parent-panel parent-notifications-card">
           <table className="data-table">
             <thead><tr><th>{t('title')}</th><th>{t('receivedStatus')}</th><th>{t('status')}</th><th>{t('action')}</th></tr></thead>
@@ -41,6 +51,7 @@ const ParentNotificationsPage = () => {
             </tbody>
           </table>
         </div>
+        )}
       </main>
     </div>
   );

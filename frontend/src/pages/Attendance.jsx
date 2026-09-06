@@ -3359,16 +3359,6 @@ const AttendancePage = () => {
                       <span>{t('parentPhone')}</span>
                       <input name="parentPhone" value={selectedPlayerForm.parentPhone} onChange={handleSelectedPlayerFormChange} />
                     </label>
-                    <div className="student-modal-date-row">
-                      <label>
-                        <span>{t('startDate')}</span>
-                        <input name="startDate" type="date" value={selectedPlayerForm.startDate} onChange={handleSelectedPlayerFormChange} />
-                      </label>
-                      <label>
-                        <span>{t('endDate')}</span>
-                        <input name="endDate" type="date" value={selectedPlayerForm.endDate} onChange={handleSelectedPlayerFormChange} />
-                      </label>
-                    </div>
                     <label>
                       <span>{t('status')}</span>
                       <select name="status" value={selectedPlayerForm.status} onChange={handleSelectedPlayerFormChange}>
@@ -3380,6 +3370,16 @@ const AttendancePage = () => {
                         <option value="waiting-list">Waiting List</option>
                       </select>
                     </label>
+                    <div className="student-modal-date-row">
+                      <label>
+                        <span>{t('startDate')}</span>
+                        <input name="startDate" type="date" value={selectedPlayerForm.startDate} onChange={handleSelectedPlayerFormChange} />
+                      </label>
+                      <label>
+                        <span>{t('endDate')}</span>
+                        <input name="endDate" type="date" value={selectedPlayerForm.endDate} onChange={handleSelectedPlayerFormChange} />
+                      </label>
+                    </div>
                     <label>
                       <span>{t('package')}</span>
                       <select name="packageName" value={selectedPlayerForm.packageName} onChange={handleSelectedPlayerFormChange}>
@@ -3451,10 +3451,6 @@ const AttendancePage = () => {
                     <div><span>{t('dateOfBirth')}</span><strong>{selectedPlayer.dateOfBirth ? `${formatDate(selectedPlayer.dateOfBirth)} (${getPlayerAge(selectedPlayer.dateOfBirth)} years)` : t('notSet')}</strong></div>
                     <div><span>{t('parent')}</span><strong>{selectedPlayer.parentId?.name || selectedPlayer.parentName || t('notSet')}</strong></div>
                     <div><span>{t('parentPhone')}</span><strong>{selectedPlayer.parentPhone || t('notSet')}</strong></div>
-                    <div className="student-info-date-row">
-                      <div><span>{t('startDate')}</span><strong>{formatDate(selectedPlayer.startDate)}</strong></div>
-                      <div><span>{t('endDate')}</span><strong>{formatDate(selectedPlayer.endDate)}</strong></div>
-                    </div>
                     <div>
                       <span>{t('status')}</span>
                       <strong>{selectedPlayer.status || t('notSet')}</strong>
@@ -3463,6 +3459,10 @@ const AttendancePage = () => {
                           {showFreezeNoteDetails ? 'Hide freeze note' : 'Show freeze note'} ▾
                         </button>
                       )}
+                    </div>
+                    <div className="student-info-date-row">
+                      <div><span>{t('startDate')}</span><strong>{formatDate(selectedPlayer.startDate)}</strong></div>
+                      <div><span>{t('endDate')}</span><strong>{formatDate(selectedPlayer.endDate)}</strong></div>
                     </div>
                     {selectedPlayer.status === 'frozen' && selectedPlayer.freezeNote && showFreezeNoteDetails && (
                       <div className="student-info-grid-full freeze-note-panel">

@@ -24,6 +24,16 @@ const getChildPriority = (child) => {
 const getUniqueParentChildren = (children = []) => {
   const byName = new Map();
 
+  const mergeChildDetails = (selected, fallback) => ({
+    ...selected,
+    profileImage: selected?.profileImage || fallback?.profileImage || '',
+    dateOfBirth: selected?.dateOfBirth || fallback?.dateOfBirth || '',
+    programId: selected?.programId || fallback?.programId,
+    coachId: selected?.coachId || fallback?.coachId,
+    groupId: selected?.groupId || fallback?.groupId,
+    groupIds: selected?.groupIds?.length ? selected.groupIds : (fallback?.groupIds || [])
+  });
+
   children.forEach((child) => {
     const key = String(child?.fullName || child?._id || '').trim().toLowerCase().replace(/\s+/g, ' ');
     if (!key) return;
@@ -40,7 +50,9 @@ const getUniqueParentChildren = (children = []) => {
       nextPriority.statusScore > currentPriority.statusScore
       || (nextPriority.statusScore === currentPriority.statusScore && nextPriority.dateScore >= currentPriority.dateScore)
     ) {
-      byName.set(key, child);
+      byName.set(key, mergeChildDetails(child, current));
+    } else {
+      byName.set(key, mergeChildDetails(current, child));
     }
   });
 
@@ -49,10 +61,14 @@ const getUniqueParentChildren = (children = []) => {
 
 const ParentDashboard = () => {
   const [dashboard, setDashboard] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const { t } = useLanguage();
 
   useEffect(() => {
-    fetchParentDashboard().then(setDashboard).catch(console.error);
+    fetchParentDashboard()
+      .then(setDashboard)
+      .catch(console.error)
+      .finally(() => setIsLoading(false));
   }, []);
 
   const getChildGroups = (child) => {
@@ -92,6 +108,13 @@ const ParentDashboard = () => {
           </div>
         </section>
 
+        {isLoading ? (
+          <div className="parent-loading-panel">
+            <span className="parent-loading-spinner" />
+            <strong>Loading parent data...</strong>
+          </div>
+        ) : (
+        <>
         <section className="parent-child-grid">
           {children.length ? children.map((child) => (
             <article className="parent-child-card" key={child._id}>
@@ -196,6 +219,8 @@ const ParentDashboard = () => {
             </div>
           </div>
         </div>
+        </>
+        )}
       </main>
     </div>
   );

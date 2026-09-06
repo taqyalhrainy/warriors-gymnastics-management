@@ -31,6 +31,15 @@ const getChildPriority = (child) => {
 const getUniqueParentChildren = (children = []) => {
   const byName = new Map();
 
+  const mergeChildDetails = (selected, fallback) => ({
+    ...selected,
+    profileImage: selected?.profileImage || fallback?.profileImage || '',
+    dateOfBirth: selected?.dateOfBirth || fallback?.dateOfBirth || '',
+    groupId: selected?.groupId || fallback?.groupId,
+    groupIds: selected?.groupIds?.length ? selected.groupIds : (fallback?.groupIds || []),
+    subscriptionId: selected?.subscriptionId || fallback?.subscriptionId
+  });
+
   children.forEach((child) => {
     const key = String(child?.fullName || child?._id || '').trim().toLowerCase().replace(/\s+/g, ' ');
     if (!key) return;
@@ -47,7 +56,9 @@ const getUniqueParentChildren = (children = []) => {
       nextPriority.statusScore > currentPriority.statusScore
       || (nextPriority.statusScore === currentPriority.statusScore && nextPriority.dateScore >= currentPriority.dateScore)
     ) {
-      byName.set(key, child);
+      byName.set(key, mergeChildDetails(child, current));
+    } else {
+      byName.set(key, mergeChildDetails(current, child));
     }
   });
 
@@ -76,6 +87,7 @@ const ParentAttendancePage = () => {
   const [children, setChildren] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [openKey, setOpenKey] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
   const { t } = useLanguage();
 
   const renderChildName = (child) => (
@@ -97,7 +109,8 @@ const ParentAttendancePage = () => {
         setChildren(getUniqueParentChildren(data.children || []));
         setAttendance(data.attendance || []);
       })
-      .catch(console.error);
+      .catch(console.error)
+      .finally(() => setIsLoading(false));
   }, []);
 
   const packages = useMemo(() => children.flatMap((child) => {
@@ -149,6 +162,12 @@ const ParentAttendancePage = () => {
             <div><span>{t('classes')}</span><strong>{packages.reduce((sum, item) => sum + Number(item.used || 0), 0)}</strong></div>
           </div>
         </section>
+        {isLoading ? (
+          <div className="parent-loading-panel">
+            <span className="parent-loading-spinner" />
+            <strong>Loading attendance...</strong>
+          </div>
+        ) : (
         <div className="parent-package-list">
           {packages.length ? packages.map((item) => {
             const isOpen = openKey === item.key;
@@ -179,6 +198,7 @@ const ParentAttendancePage = () => {
             <div className="table-card"><p className="empty-state">{t('noAttendanceRecords')}</p></div>
           )}
         </div>
+        )}
       </main>
     </div>
   );
