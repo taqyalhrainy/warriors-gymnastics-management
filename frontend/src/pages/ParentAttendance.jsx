@@ -89,7 +89,8 @@ const ParentAttendancePage = () => {
   const cachedAttendance = getCachedParentAttendance();
   const [children, setChildren] = useState(() => getUniqueParentChildren(cachedAttendance?.children || []).filter((child) => child.status !== 'left'));
   const [attendance, setAttendance] = useState(() => cachedAttendance?.attendance || []);
-  const [openKey, setOpenKey] = useState('');
+  const [openChildId, setOpenChildId] = useState('');
+  const [openClassKey, setOpenClassKey] = useState('');
   const [isLoading, setIsLoading] = useState(() => !cachedAttendance);
   const navigate = useNavigate();
   const { t } = useLanguage();
@@ -124,7 +125,7 @@ const ParentAttendancePage = () => {
     };
   }, []);
 
-  const packages = useMemo(() => children.flatMap((child) => {
+  const packagesByChild = useMemo(() => new Map(children.map((child) => {
     const childRecords = attendance.filter((record) => String(record.playerId?._id || record.playerId) === String(child._id));
     const currentRecords = childRecords.filter((record) => isCurrentRecord(record, child));
     const oldRecords = childRecords.filter((record) => !isCurrentRecord(record, child));
@@ -156,8 +157,11 @@ const ParentAttendancePage = () => {
       });
     }
 
-    return rows;
-  }), [children, attendance]);
+    return [String(child._id), rows];
+  })), [children, attendance]);
+  const totalUsed = [...packagesByChild.values()]
+    .flat()
+    .reduce((sum, item) => sum + Number(item.used || 0), 0);
 
   return (
     <div className="dashboard-layout parent-app-layout">
@@ -173,7 +177,7 @@ const ParentAttendancePage = () => {
           </div>
           <div className="parent-hero-stats">
             <div><span>{t('yourChildren')}</span><strong>{children.length}</strong></div>
-            <div><span>{t('classes')}</span><strong>{packages.reduce((sum, item) => sum + Number(item.used || 0), 0)}</strong></div>
+            <div><span>{t('classes')}</span><strong>{totalUsed}</strong></div>
           </div>
         </section>
         {isLoading ? (
@@ -183,28 +187,52 @@ const ParentAttendancePage = () => {
             <strong>Loading attendance...</strong>
           </div>
         ) : (
-        <div className="parent-package-list">
-          {packages.length ? packages.map((item) => {
-            const isOpen = openKey === item.key;
+        <div className="parent-attendance-player-list">
+          {children.length ? children.map((child) => {
+            const childPackages = packagesByChild.get(String(child._id)) || [];
+            const childUsed = childPackages.reduce((sum, item) => sum + Number(item.used || 0), 0);
+            const childTotal = childPackages.reduce((sum, item) => sum + Number(item.total || 0), 0);
+            const isChildOpen = openChildId === String(child._id);
             return (
-              <section className="subscription-history-group parent-package-card" key={item.key}>
-                <button type="button" className={`subscription-history-summary${item.current ? ' is-current-subscription' : ''}`} onClick={() => setOpenKey(isOpen ? '' : item.key)}>
-                  <span>
-                    <strong>{renderChildName(item.child)}</strong>
-                    <small>{item.title}</small>
-                    <small>{formatDate(item.startDate)} - {formatDate(item.endDate)}</small>
-                  </span>
-                  <b>{item.used}/{item.total || 0}</b>
+              <section className="parent-attendance-player-card" key={child._id}>
+                <button
+                  type="button"
+                  className="parent-attendance-player-summary"
+                  onClick={() => {
+                    setOpenChildId(isChildOpen ? '' : String(child._id));
+                    setOpenClassKey('');
+                  }}
+                >
+                  {renderChildName(child)}
+                  <b>{childUsed}/{childTotal || 0}</b>
                 </button>
-                {isOpen && (
-                  <div className="subscription-history-records">
-                    {item.records.length ? item.records.map((record) => (
-                      <div className={`student-history-row attendance-history-${record.status}`} key={record._id}>
-                        <span>{formatDate(record.date)}</span>
-                        <strong>{record.status}</strong>
-                        <span>{formatTime(record.checkInTime)}</span>
-                      </div>
-                    )) : <p className="empty-state">{t('noAttendanceRecords')}</p>}
+                {isChildOpen && (
+                  <div className="parent-attendance-class-list">
+                    {childPackages.map((item) => {
+                      const isClassOpen = openClassKey === item.key;
+                      return (
+                        <section className="subscription-history-group parent-package-card" key={item.key}>
+                          <button type="button" className={`subscription-history-summary${item.current ? ' is-current-subscription' : ''}`} onClick={() => setOpenClassKey(isClassOpen ? '' : item.key)}>
+                            <span>
+                              <strong>{item.title}</strong>
+                              <small>{formatDate(item.startDate)} - {formatDate(item.endDate)}</small>
+                            </span>
+                            <b>{item.used}/{item.total || 0}</b>
+                          </button>
+                          {isClassOpen && (
+                            <div className="subscription-history-records">
+                              {item.records.length ? item.records.map((record) => (
+                                <div className={`student-history-row attendance-history-${record.status}`} key={record._id}>
+                                  <span>{formatDate(record.date)}</span>
+                                  <strong>{record.status}</strong>
+                                  <span>{formatTime(record.checkInTime)}</span>
+                                </div>
+                              )) : <p className="empty-state">{t('noAttendanceRecords')}</p>}
+                            </div>
+                          )}
+                        </section>
+                      );
+                    })}
                   </div>
                 )}
               </section>

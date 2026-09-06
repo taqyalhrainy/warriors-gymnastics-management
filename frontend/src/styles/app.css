@@ -5449,6 +5449,51 @@ body.rtl .new-subscription-summary-card[type='button'] {
   gap: 14px;
 }
 
+.parent-attendance-player-list {
+  display: grid;
+  gap: 12px;
+}
+
+.parent-attendance-player-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 86%, #14b8a6);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 14px 30px color-mix(in srgb, var(--shadow) 54%, transparent);
+}
+
+.parent-attendance-player-summary {
+  min-height: 74px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, #14b8a6 7%, var(--surface-alt));
+  color: var(--text);
+  text-align: start;
+  box-shadow: none;
+}
+
+.parent-attendance-player-summary b {
+  min-width: 62px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #16a34a 16%, var(--surface));
+  color: #0f9f55;
+  font-size: 1rem;
+  text-align: center;
+}
+
+.parent-attendance-class-list {
+  display: grid;
+  gap: 10px;
+}
+
 .parent-package-card {
   padding: 0;
   overflow: hidden;
@@ -6836,6 +6881,7 @@ body.theme-dark .parent-home-summary div,
 body.theme-dark .parent-home-list,
 body.theme-dark .parent-child-summary-card,
 body.theme-dark .parent-child-detail-card,
+body.theme-dark .parent-attendance-player-card,
 body.theme-dark .parent-settings-page-card,
 body.theme-dark .parent-setting-group,
 body.theme-dark .parent-child-card,
@@ -6855,6 +6901,7 @@ body.theme-dark .table-card {
 body.theme-dark .parent-setting-choice,
 body.theme-dark .parent-home-summary div,
 body.theme-dark .parent-child-detail-grid div,
+body.theme-dark .parent-attendance-player-summary,
 body.theme-dark .parent-hero-stats div,
 body.theme-dark .parent-child-meta div,
 body.theme-dark .parent-panel .data-table th,
@@ -6868,6 +6915,7 @@ body.theme-dark .parent-notifications-card .data-table th {
 }
 
 body.theme-dark .parent-app-tile,
+body.theme-dark .parent-attendance-player-summary,
 body.theme-dark .parent-home-summary strong,
 body.theme-dark .parent-home-child-details > strong,
 body.theme-dark .parent-child-summary-card div strong,
