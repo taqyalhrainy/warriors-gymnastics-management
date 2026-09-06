@@ -92,12 +92,31 @@ const ParentAttendancePage = () => {
   const [openChildId, setOpenChildId] = useState('');
   const [openClassKey, setOpenClassKey] = useState('');
   const [isLoading, setIsLoading] = useState(() => !cachedAttendance);
+  const [previewProfileImage, setPreviewProfileImage] = useState('');
   const navigate = useNavigate();
   const { t } = useLanguage();
 
+  const openProfileImage = (event, image) => {
+    if (!image) return;
+    event.stopPropagation();
+    setPreviewProfileImage(image);
+  };
+
+  const handleProfileImageKeyDown = (event, image) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    openProfileImage(event, image);
+  };
+
   const renderChildName = (child) => (
     <span className="player-name-with-photo">
-      <span className="player-avatar">
+      <span
+        className={`player-avatar${child.profileImage ? ' is-clickable' : ''}`}
+        role={child.profileImage ? 'button' : undefined}
+        tabIndex={child.profileImage ? 0 : undefined}
+        onClick={(event) => openProfileImage(event, child.profileImage)}
+        onKeyDown={(event) => handleProfileImageKeyDown(event, child.profileImage)}
+      >
         {child.profileImage ? <img src={child.profileImage} alt="" /> : <span>{child.fullName?.charAt(0) || '?'}</span>}
       </span>
       <span>{child.fullName}</span>
@@ -241,6 +260,14 @@ const ParentAttendancePage = () => {
             <div className="table-card"><p className="empty-state">{t('noAttendanceRecords')}</p></div>
           )}
         </div>
+        )}
+        {previewProfileImage && (
+          <div className="profile-image-preview-backdrop" role="presentation" onClick={() => setPreviewProfileImage('')}>
+            <section className="profile-image-preview-dialog" role="dialog" aria-modal="true" aria-label="Profile picture preview" onClick={(event) => event.stopPropagation()}>
+              <button type="button" className="btn-secondary" onClick={() => setPreviewProfileImage('')}>{t('close')}</button>
+              <img src={previewProfileImage} alt="" />
+            </section>
+          </div>
         )}
       </main>
     </div>
