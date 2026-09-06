@@ -6509,7 +6509,7 @@ body.rtl .payment-table-wrap {
 
 .parent-settings-page-card {
   display: grid;
-  gap: 16px;
+  gap: 12px;
   margin-top: 18px;
   padding: 18px;
   border: 1px solid var(--border);
@@ -6519,25 +6519,146 @@ body.rtl .payment-table-wrap {
   box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
 }
 
-.parent-setting-row {
+.parent-setting-group {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-alt);
+}
+
+.parent-setting-header,
+.parent-setting-choice {
   min-height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-alt);
+  border: 0;
+  background: transparent;
   color: var(--text);
   box-shadow: none;
+  font-family: inherit;
+  text-align: inherit;
+  cursor: pointer;
 }
 
-.parent-setting-row span {
+.parent-setting-header {
+  width: 100%;
+}
+
+.parent-setting-header i {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  border-right: 3px solid currentColor;
+  border-bottom: 3px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 160ms ease;
+}
+
+.parent-setting-header i.is-open {
+  transform: rotate(225deg);
+}
+
+.parent-setting-panel {
+  display: grid;
+  gap: 1px;
+  padding: 0 10px 10px;
+}
+
+.parent-setting-choice {
+  width: 100%;
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.parent-setting-choice.is-danger {
+  color: #d10f1c;
+}
+
+.parent-setting-header span,
+.parent-setting-choice span {
   color: var(--muted);
   font-weight: 850;
 }
 
-.parent-setting-row strong {
+.parent-setting-header strong,
+.parent-setting-choice strong {
   font-weight: 950;
+}
+
+body.theme-dark .parent-portal-page,
+body.theme-dark .parent-app-shell,
+body.theme-dark .dashboard-layout.parent-app-layout .page-content {
+  background: #0f1113;
+  color: #f8fafc;
+}
+
+body.theme-dark .parent-app-layout,
+body.theme-dark .dashboard-layout.parent-app-layout {
+  background: #0f1113;
+}
+
+body.theme-dark .parent-app-tile,
+body.theme-dark .parent-settings-page-card,
+body.theme-dark .parent-setting-group,
+body.theme-dark .parent-child-card,
+body.theme-dark .parent-panel,
+body.theme-dark .parent-payment-card,
+body.theme-dark .parent-notifications-card,
+body.theme-dark .parent-loading-panel,
+body.theme-dark .parent-package-card,
+body.theme-dark .parent-notification-card,
+body.theme-dark .parent-package-list,
+body.theme-dark .table-card {
+  background: #171a1d;
+  color: #f8fafc;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+body.theme-dark .parent-setting-choice,
+body.theme-dark .parent-hero-stats div,
+body.theme-dark .parent-child-meta div,
+body.theme-dark .parent-panel .data-table th,
+body.theme-dark .parent-panel .data-table td,
+body.theme-dark .parent-payment-card .data-table th,
+body.theme-dark .parent-payment-card .data-table td,
+body.theme-dark .parent-notifications-card .data-table th {
+  background: #202326;
+  color: #f8fafc;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+body.theme-dark .parent-app-tile,
+body.theme-dark .parent-child-card strong,
+body.theme-dark .parent-panel h2,
+body.theme-dark .parent-panel h3,
+body.theme-dark .parent-payment-card .data-table,
+body.theme-dark .parent-notifications-card .data-table {
+  color: #f8fafc;
+}
+
+body.theme-dark .parent-kicker,
+body.theme-dark .parent-child-card span,
+body.theme-dark .parent-panel .data-table td,
+body.theme-dark .parent-payment-card .data-table td,
+body.theme-dark .parent-notifications-card .data-table td {
+  color: #d1d5db;
+}
+
+body.theme-dark .dashboard-layout.parent-app-layout .parent-sidebar,
+body.theme-dark .parent-sidebar {
+  background: rgba(18, 20, 23, 0.95) !important;
+  border-top-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+body.theme-dark .parent-sidebar .sidebar-links a {
+  color: #9ca3af;
+}
+
+body.theme-dark .parent-sidebar .sidebar-links a.active,
+body.theme-dark .parent-sidebar .sidebar-links a:hover {
+  color: #ff4b55;
+  background: rgba(255, 75, 85, 0.12);
 }
