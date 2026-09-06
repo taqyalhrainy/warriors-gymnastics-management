@@ -1,5 +1,5 @@
 import { fetchPlayers } from './players.js';
-import { fetchParents } from './parents.js';
+import { fetchParentAttendance, fetchParentDashboard, fetchParentPayments, fetchParents } from './parents.js';
 import { fetchGroups } from './groups.js';
 import { fetchGroupPlayers } from './groups.js';
 import { fetchPayments } from './payments.js';
@@ -15,6 +15,8 @@ import { fetchDashboard } from './reports.js';
 let warmedForUserId = '';
 let warmupPromise = null;
 let backgroundWarmupForUserId = '';
+let warmedParentForUserId = '';
+let parentWarmupPromise = null;
 
 const startBackgroundWarmup = (userId, groups = []) => {
   if (!userId || backgroundWarmupForUserId === userId) {
@@ -77,8 +79,39 @@ export const warmAdminAppCache = async (user) => {
   }
 };
 
+export const warmParentAppCache = async (user) => {
+  const userId = user?.id || user?._id || '';
+  if (!userId || warmedParentForUserId === userId) {
+    return;
+  }
+
+  if (parentWarmupPromise) {
+    return parentWarmupPromise;
+  }
+
+  parentWarmupPromise = Promise.allSettled([
+    fetchParentDashboard(),
+    fetchParentAttendance(),
+    fetchParentPayments(),
+    fetchNotifications()
+  ]).then((results) => {
+    warmedParentForUserId = userId;
+    results
+      .filter((result) => result.status === 'rejected')
+      .forEach((result) => console.warn('Parent prefetch failed:', result.reason));
+  });
+
+  try {
+    await parentWarmupPromise;
+  } finally {
+    parentWarmupPromise = null;
+  }
+};
+
 export const resetPrefetchState = () => {
   warmedForUserId = '';
   warmupPromise = null;
   backgroundWarmupForUserId = '';
+  warmedParentForUserId = '';
+  parentWarmupPromise = null;
 };

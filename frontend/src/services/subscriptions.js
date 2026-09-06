@@ -2,7 +2,7 @@ import api from './api.js';
 import { fetchCached, invalidateCache } from './cache.js';
 
 const invalidateSubscriptionRelatedCache = () => {
-  invalidateCache(['subscriptions:', 'players:', 'payments:', 'attendance:', 'reports:']);
+  invalidateCache(['subscriptions:', 'players:', 'payments:', 'attendance:', 'reports:', 'parent:']);
 };
 
 export const fetchSubscriptions = async (params) => {

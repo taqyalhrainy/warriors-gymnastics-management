@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
-import { fetchParentAttendance } from '../services/parents.js';
+import { fetchParentAttendance, getCachedParentAttendance } from '../services/parents.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
 const formatDate = (date) => (date ? new Date(date).toLocaleDateString() : '-');
@@ -84,10 +84,11 @@ const isCurrentRecord = (record, child) => {
 };
 
 const ParentAttendancePage = () => {
-  const [children, setChildren] = useState([]);
-  const [attendance, setAttendance] = useState([]);
+  const cachedAttendance = getCachedParentAttendance();
+  const [children, setChildren] = useState(() => getUniqueParentChildren(cachedAttendance?.children || []));
+  const [attendance, setAttendance] = useState(() => cachedAttendance?.attendance || []);
   const [openKey, setOpenKey] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => !cachedAttendance);
   const { t } = useLanguage();
 
   const renderChildName = (child) => (
@@ -100,8 +101,10 @@ const ParentAttendancePage = () => {
   );
 
   useEffect(() => {
+    let isMounted = true;
     fetchParentAttendance()
       .then((data) => {
+        if (!isMounted) return;
         if (Array.isArray(data)) {
           setAttendance(data);
           return;
@@ -110,7 +113,12 @@ const ParentAttendancePage = () => {
         setAttendance(data.attendance || []);
       })
       .catch(console.error)
-      .finally(() => setIsLoading(false));
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const packages = useMemo(() => children.flatMap((child) => {

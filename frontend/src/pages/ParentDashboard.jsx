@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
-import { fetchParentDashboard } from '../services/parents.js';
+import { fetchParentDashboard, getCachedParentDashboard } from '../services/parents.js';
 import { formatCurrency } from '../utils/format.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
@@ -60,15 +60,23 @@ const getUniqueParentChildren = (children = []) => {
 };
 
 const ParentDashboard = () => {
-  const [dashboard, setDashboard] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [dashboard, setDashboard] = useState(() => getCachedParentDashboard() || null);
+  const [isLoading, setIsLoading] = useState(() => !getCachedParentDashboard());
   const { t } = useLanguage();
 
   useEffect(() => {
+    let isMounted = true;
     fetchParentDashboard()
-      .then(setDashboard)
+      .then((data) => {
+        if (isMounted) setDashboard(data);
+      })
       .catch(console.error)
-      .finally(() => setIsLoading(false));
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const getChildGroups = (child) => {

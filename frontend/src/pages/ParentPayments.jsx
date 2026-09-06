@@ -1,20 +1,28 @@
 import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
-import { fetchParentPayments } from '../services/parents.js';
+import { fetchParentPayments, getCachedParentPayments } from '../services/parents.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
 const formatMoney = (value) => Number(value || 0).toLocaleString('en-US');
 
 const ParentPaymentsPage = () => {
-  const [payments, setPayments] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [payments, setPayments] = useState(() => getCachedParentPayments() || []);
+  const [isLoading, setIsLoading] = useState(() => !getCachedParentPayments());
   const { t } = useLanguage();
 
   useEffect(() => {
+    let isMounted = true;
     fetchParentPayments()
-      .then(setPayments)
+      .then((data) => {
+        if (isMounted) setPayments(data);
+      })
       .catch(console.error)
-      .finally(() => setIsLoading(false));
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const renderChildName = (child) => (

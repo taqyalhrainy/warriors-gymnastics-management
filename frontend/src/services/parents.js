@@ -1,5 +1,11 @@
 import api from './api';
-import { fetchCached, invalidateCache } from './cache.js';
+import { fetchCached, getCachedValue, invalidateCache } from './cache.js';
+
+const PARENT_DASHBOARD_CACHE_KEY = 'parent:dashboard';
+const PARENT_ATTENDANCE_CACHE_KEY = 'parent:attendance';
+const PARENT_PAYMENTS_CACHE_KEY = 'parent:payments';
+const PARENT_CHILDREN_CACHE_KEY = 'parent:children';
+const PARENT_CACHE_TTL_MS = 5 * 60 * 1000;
 
 export const fetchParents = async () => {
   return fetchCached('parents:list', async () => {
@@ -10,7 +16,7 @@ export const fetchParents = async () => {
 
 export const createParent = async (data) => {
   const response = await api.post('/parents', data);
-  invalidateCache(['parents:', 'players:', 'reports:']);
+  invalidateCache(['parents:', 'players:', 'reports:', 'parent:']);
   return response.data;
 };
 
@@ -21,13 +27,13 @@ export const fetchParent = async (id) => {
 
 export const updateParent = async (id, data) => {
   const response = await api.put(`/parents/${id}`, data);
-  invalidateCache(['parents:', 'players:', 'reports:']);
+  invalidateCache(['parents:', 'players:', 'reports:', 'parent:']);
   return response.data;
 };
 
 export const deleteParent = async (id) => {
   const response = await api.delete(`/parents/${id}`);
-  invalidateCache(['parents:', 'players:', 'reports:']);
+  invalidateCache(['parents:', 'players:', 'reports:', 'parent:']);
   return response.data;
 };
 
@@ -37,21 +43,33 @@ export const fetchCurrentParent = async () => {
 };
 
 export const fetchParentChildren = async () => {
-  const response = await api.get('/parents/me/children');
-  return response.data;
+  return fetchCached(PARENT_CHILDREN_CACHE_KEY, async () => {
+    const response = await api.get('/parents/me/children');
+    return response.data;
+  }, { ttlMs: PARENT_CACHE_TTL_MS });
 };
 
 export const fetchParentAttendance = async () => {
-  const response = await api.get('/parents/me/attendance');
-  return response.data;
+  return fetchCached(PARENT_ATTENDANCE_CACHE_KEY, async () => {
+    const response = await api.get('/parents/me/attendance');
+    return response.data;
+  }, { ttlMs: PARENT_CACHE_TTL_MS });
 };
 
 export const fetchParentDashboard = async () => {
-  const response = await api.get('/parents/me/dashboard');
-  return response.data;
+  return fetchCached(PARENT_DASHBOARD_CACHE_KEY, async () => {
+    const response = await api.get('/parents/me/dashboard');
+    return response.data;
+  }, { ttlMs: PARENT_CACHE_TTL_MS });
 };
 
 export const fetchParentPayments = async () => {
-  const response = await api.get('/parents/me/payments');
-  return response.data;
+  return fetchCached(PARENT_PAYMENTS_CACHE_KEY, async () => {
+    const response = await api.get('/parents/me/payments');
+    return response.data;
+  }, { ttlMs: PARENT_CACHE_TTL_MS });
 };
+
+export const getCachedParentDashboard = () => getCachedValue(PARENT_DASHBOARD_CACHE_KEY, { ttlMs: PARENT_CACHE_TTL_MS });
+export const getCachedParentAttendance = () => getCachedValue(PARENT_ATTENDANCE_CACHE_KEY, { ttlMs: PARENT_CACHE_TTL_MS });
+export const getCachedParentPayments = () => getCachedValue(PARENT_PAYMENTS_CACHE_KEY, { ttlMs: PARENT_CACHE_TTL_MS });

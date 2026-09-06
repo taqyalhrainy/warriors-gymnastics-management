@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import api, { clearStoredAuth, getStoredToken, waitForApiHealth } from '../services/api.js';
 import { clearCache } from '../services/cache.js';
-import { warmAdminAppCache, resetPrefetchState } from '../services/prefetch.js';
+import { warmAdminAppCache, warmParentAppCache, resetPrefetchState } from '../services/prefetch.js';
 
 const AuthContext = createContext(null);
 let verifiedServerToken = '';
@@ -74,6 +74,9 @@ export const AuthProvider = ({ children }) => {
 
     if (verifiedServerToken === token) {
       if (!adminDataRoles.includes(user.role)) {
+        if (user.role === 'parent') {
+          warmParentAppCache(user).catch(console.error);
+        }
         setIsServerReady(true);
         setIsServerChecking(false);
         return;
@@ -106,6 +109,8 @@ export const AuthProvider = ({ children }) => {
 
           if (needsAdminData) {
             await warmAdminAppCache(user);
+          } else if (user.role === 'parent') {
+            warmParentAppCache(user).catch(console.error);
           }
 
           if (isMounted) {

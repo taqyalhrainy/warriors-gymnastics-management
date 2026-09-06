@@ -1,19 +1,27 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
-import { fetchNotifications } from '../services/notifications.js';
+import { fetchNotifications, getCachedNotifications } from '../services/notifications.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
 const ParentNotificationsPage = () => {
-  const [notifications, setNotifications] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [notifications, setNotifications] = useState(() => getCachedNotifications() || []);
+  const [isLoading, setIsLoading] = useState(() => !getCachedNotifications());
   const { t } = useLanguage();
 
   useEffect(() => {
+    let isMounted = true;
     fetchNotifications()
-      .then(setNotifications)
+      .then((data) => {
+        if (isMounted) setNotifications(data);
+      })
       .catch(console.error)
-      .finally(() => setIsLoading(false));
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   return (

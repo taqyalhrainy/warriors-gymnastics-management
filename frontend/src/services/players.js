@@ -28,7 +28,8 @@ const invalidatePlayerRelatedCache = (playerId) => {
     'groups:',
     'payments:',
     'attendance:',
-    'reports:'
+    'reports:',
+    'parent:'
   ]);
   if (playerId) {
     invalidateCache([`players:item:${playerId}`]);
@@ -79,7 +80,7 @@ const patchCreatedPlayerIntoCache = (player) => {
     updateCached(`groups:players:${groupId}`, (players) => upsertPlayer(players, player));
   });
 
-  invalidateCache(['reports:']);
+  invalidateCache(['reports:', 'parent:']);
   touchCacheVersion();
 };
 
@@ -102,7 +103,8 @@ export const updatePlayer = async (id, data) => {
     'groups:',
     'payments:',
     'attendance:',
-    'reports:'
+    'reports:',
+    'parent:'
   ]);
   setCached(`players:item:${id}`, response.data);
   window.dispatchEvent(new Event('players:changed'));

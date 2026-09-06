@@ -51,6 +51,12 @@ export const fetchCached = async (key, loader, options = {}) => {
   return request;
 };
 
+export const getCachedValue = (key, options = {}) => {
+  const ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
+  const cachedEntry = cacheStore.get(key);
+  return isFresh(cachedEntry, ttlMs) ? cachedEntry.value : undefined;
+};
+
 export const setCached = (key, value) => {
   cacheStore.set(key, {
     value,
