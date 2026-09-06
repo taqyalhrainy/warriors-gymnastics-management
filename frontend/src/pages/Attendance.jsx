@@ -3435,19 +3435,22 @@ const AttendancePage = () => {
               ) : (
                 <>
                   <div className="student-info-grid">
-                    <div><span>{t('name')}</span><strong>{selectedPlayer.fullName || t('notSet')}</strong></div>
-                    {selectedPlayer.profileImage && (
-                      <div className="student-info-grid-full">
-                        <span>Profile picture</span>
-                        <button
-                          type="button"
-                          className="profile-image-open-button"
-                          onClick={() => setPreviewProfileImage(selectedPlayer.profileImage)}
-                        >
-                          <span className="player-avatar is-large"><img src={selectedPlayer.profileImage} alt="" /></span>
-                        </button>
+                    <div className="student-info-name-card">
+                      <span>{t('name')}</span>
+                      <div>
+                        <strong>{selectedPlayer.fullName || t('notSet')}</strong>
+                        {selectedPlayer.profileImage && (
+                          <button
+                            type="button"
+                            className="profile-image-open-button is-compact"
+                            onClick={() => setPreviewProfileImage(selectedPlayer.profileImage)}
+                            aria-label="Open profile picture"
+                          >
+                            <span className="player-avatar"><img src={selectedPlayer.profileImage} alt="" /></span>
+                          </button>
+                        )}
                       </div>
-                    )}
+                    </div>
                     <div><span>{t('dateOfBirth')}</span><strong>{selectedPlayer.dateOfBirth ? `${formatDate(selectedPlayer.dateOfBirth)} (${getPlayerAge(selectedPlayer.dateOfBirth)} years)` : t('notSet')}</strong></div>
                     <div><span>{t('parent')}</span><strong>{selectedPlayer.parentId?.name || selectedPlayer.parentName || t('notSet')}</strong></div>
                     <div><span>{t('parentPhone')}</span><strong>{selectedPlayer.parentPhone || t('notSet')}</strong></div>

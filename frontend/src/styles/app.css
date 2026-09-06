@@ -3292,6 +3292,27 @@ body.attendance-touch-dragging {
   overflow-wrap: anywhere;
 }
 
+.student-info-name-card > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.profile-image-open-button.is-compact {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.profile-image-open-button.is-compact .player-avatar {
+  width: 46px;
+  height: 46px;
+}
+
 .freeze-note-toggle {
   width: fit-content;
   min-height: 30px;
