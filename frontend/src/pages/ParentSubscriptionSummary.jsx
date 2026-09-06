@@ -50,7 +50,7 @@ const ParentSubscriptionSummaryPage = () => {
   const [isLoading, setIsLoading] = useState(() => !cached);
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const children = getUniqueChildren(dashboard?.children || []);
+  const children = getUniqueChildren(dashboard?.children || []).filter((child) => child.status !== 'left');
 
   useEffect(() => {
     let isMounted = true;

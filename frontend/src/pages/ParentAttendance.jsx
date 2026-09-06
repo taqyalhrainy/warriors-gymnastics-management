@@ -87,7 +87,7 @@ const isCurrentRecord = (record, child) => {
 
 const ParentAttendancePage = () => {
   const cachedAttendance = getCachedParentAttendance();
-  const [children, setChildren] = useState(() => getUniqueParentChildren(cachedAttendance?.children || []));
+  const [children, setChildren] = useState(() => getUniqueParentChildren(cachedAttendance?.children || []).filter((child) => child.status !== 'left'));
   const [attendance, setAttendance] = useState(() => cachedAttendance?.attendance || []);
   const [openKey, setOpenKey] = useState('');
   const [isLoading, setIsLoading] = useState(() => !cachedAttendance);
@@ -112,7 +112,7 @@ const ParentAttendancePage = () => {
           setAttendance(data);
           return;
         }
-        setChildren(getUniqueParentChildren(data.children || []));
+        setChildren(getUniqueParentChildren(data.children || []).filter((child) => child.status !== 'left'));
         setAttendance(data.attendance || []);
       })
       .catch(console.error)

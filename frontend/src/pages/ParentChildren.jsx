@@ -53,10 +53,10 @@ const ParentChildrenPage = () => {
   const cached = getCachedParentDashboard();
   const [dashboard, setDashboard] = useState(() => cached || null);
   const [isLoading, setIsLoading] = useState(() => !cached);
-  const [selectedChild, setSelectedChild] = useState(null);
+  const [selectedChildId, setSelectedChildId] = useState('');
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const children = getUniqueChildren(dashboard?.children || []);
+  const children = getUniqueChildren(dashboard?.children || []).filter((child) => child.status !== 'left');
 
   useEffect(() => {
     let isMounted = true;
@@ -99,31 +99,32 @@ const ParentChildrenPage = () => {
           <div className="parent-loading-panel"><span className="parent-loading-spinner" /><strong>Loading children...</strong></div>
         ) : (
           <section className="parent-children-list">
-            {children.length ? children.map((child) => (
-              <button type="button" className="parent-child-summary-card" key={child._id} onClick={() => setSelectedChild(child)}>
-                {renderChildName(child)}
-                <span className={`parent-status-pill status-${child.status || 'active'}`}>{child.status || t('status')}</span>
-                <div><span>{t('paid')}</span><strong>{formatCurrency(child.paidTotal || 0)}</strong></div>
-                <div><span>{t('remaining')}</span><strong>{child.remainingAmount != null ? formatCurrency(child.remainingAmount) : '-'}</strong></div>
-              </button>
-            )) : <div className="parent-panel"><p className="empty-state">{t('noChildRecords')}</p></div>}
+            {children.length ? children.map((child) => {
+              const isSelected = selectedChildId === child._id;
+              return (
+                <div className="parent-child-summary-wrap" key={child._id}>
+                  <button type="button" className="parent-child-summary-card" onClick={() => setSelectedChildId(isSelected ? '' : child._id)}>
+                    {renderChildName(child)}
+                    <span className={`parent-status-pill status-${child.status || 'active'}`}>{child.status || t('status')}</span>
+                    <div><span>{t('paid')}</span><strong>{formatCurrency(child.paidTotal || 0)}</strong></div>
+                    <div><span>{t('remaining')}</span><strong>{child.remainingAmount != null ? formatCurrency(child.remainingAmount) : '-'}</strong></div>
+                  </button>
+                  {isSelected && (
+                    <div className="parent-child-detail-card">
+                      <div className="parent-child-detail-grid">
+                        <div><span>{t('program')}</span><strong>{child.programId?.name || t('notAssigned')}</strong></div>
+                        <div><span>{t('group')}</span><strong>{getChildGroups(child) || t('notAssigned')}</strong></div>
+                        <div><span>{t('coach')}</span><strong>{child.coachId?.name || t('unassigned')}</strong></div>
+                        <div><span>{t('status')}</span><strong>{child.status || '-'}</strong></div>
+                        <div><span>{t('paid')}</span><strong>{formatCurrency(child.paidTotal || 0)}</strong></div>
+                        <div><span>{t('remaining')}</span><strong>{child.remainingAmount != null ? formatCurrency(child.remainingAmount) : '-'}</strong></div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            }) : <div className="parent-panel"><p className="empty-state">{t('noChildRecords')}</p></div>}
           </section>
-        )}
-        {selectedChild && (
-          <div className="parent-child-detail-card">
-            <div className="parent-child-detail-head">
-              {renderChildName(selectedChild)}
-              <button type="button" className="btn-secondary" onClick={() => setSelectedChild(null)}>Close</button>
-            </div>
-            <div className="parent-child-detail-grid">
-              <div><span>{t('program')}</span><strong>{selectedChild.programId?.name || t('notAssigned')}</strong></div>
-              <div><span>{t('group')}</span><strong>{getChildGroups(selectedChild) || t('notAssigned')}</strong></div>
-              <div><span>{t('coach')}</span><strong>{selectedChild.coachId?.name || t('unassigned')}</strong></div>
-              <div><span>{t('status')}</span><strong>{selectedChild.status || '-'}</strong></div>
-              <div><span>{t('paid')}</span><strong>{formatCurrency(selectedChild.paidTotal || 0)}</strong></div>
-              <div><span>{t('remaining')}</span><strong>{selectedChild.remainingAmount != null ? formatCurrency(selectedChild.remainingAmount) : '-'}</strong></div>
-            </div>
-          </div>
         )}
       </main>
     </div>

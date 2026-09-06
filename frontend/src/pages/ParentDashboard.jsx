@@ -83,7 +83,7 @@ const ParentDashboard = () => {
     };
   }, []);
 
-  const children = getUniqueParentChildren(dashboard?.children || []);
+  const children = getUniqueParentChildren(dashboard?.children || []).filter((child) => child.status !== 'left');
   const notifications = dashboard?.notifications || [];
   const totalRemaining = children.reduce((sum, child) => sum + Number(child.remainingAmount || 0), 0);
   const activeChildren = children.filter((child) => child.status === 'active').length;

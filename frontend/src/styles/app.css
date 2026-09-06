@@ -5130,6 +5130,11 @@ body.rtl .new-subscription-summary-card[type='button'] {
   gap: 12px;
 }
 
+.parent-child-summary-wrap {
+  display: grid;
+  gap: 8px;
+}
+
 .parent-child-summary-card,
 .parent-child-detail-card {
   border: 1px solid rgba(15, 23, 42, 0.08);
