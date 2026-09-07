@@ -1,5 +1,5 @@
 import { fetchPlayers } from './players.js';
-import { fetchParentAttendance, fetchParentDashboard, fetchParentPayments, fetchParents } from './parents.js';
+import { fetchParentDashboard, fetchParents } from './parents.js';
 import { fetchGroups } from './groups.js';
 import { fetchGroupPlayers } from './groups.js';
 import { fetchPayments } from './payments.js';
@@ -91,8 +91,6 @@ export const warmParentAppCache = async (user) => {
 
   parentWarmupPromise = Promise.allSettled([
     fetchParentDashboard(),
-    fetchParentAttendance(),
-    fetchParentPayments(),
     fetchNotifications()
   ]).then((results) => {
     warmedParentForUserId = userId;
