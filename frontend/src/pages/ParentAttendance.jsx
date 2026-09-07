@@ -261,8 +261,6 @@ const ParentAttendancePage = () => {
         <div className="parent-attendance-player-list">
           {children.length ? children.map((child) => {
             const childPackages = packagesByChild.get(String(child._id)) || [];
-            const childUsed = childPackages.reduce((sum, item) => sum + Number(item.used || 0), 0);
-            const childTotal = childPackages.reduce((sum, item) => sum + Number(item.total || 0), 0);
             const isChildOpen = openChildId === String(child._id);
             return (
               <section className="parent-attendance-player-card" key={child._id}>
@@ -277,7 +275,7 @@ const ParentAttendancePage = () => {
                   }}
                 >
                   {renderChildName(child)}
-                  <b>{childUsed}/{childTotal || 0}</b>
+                  <b>Click here</b>
                 </button>
                 {isChildOpen && (
                   <div className="parent-attendance-class-list">
