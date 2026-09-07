@@ -9,6 +9,7 @@ const {
   getParentMe,
   getParentChildren,
   getParentAttendance,
+  getParentAttendanceHistory,
   getParentPayments,
   getParentDashboard
 } = require('../controllers/parentController');
@@ -19,6 +20,7 @@ router.get('/me', authorize('parent'), getParentMe);
 router.get('/me/dashboard', authorize('parent'), getParentDashboard);
 router.get('/me/children', authorize('parent'), getParentChildren);
 router.get('/me/attendance', authorize('parent'), getParentAttendance);
+router.get('/me/attendance/:playerId/history', authorize('parent'), getParentAttendanceHistory);
 router.get('/me/payments', authorize('parent'), getParentPayments);
 router.get('/', authorize('admin', 'coach', 'receptionist'), getParents);
 router.post('/', authorize('admin'), createParent);

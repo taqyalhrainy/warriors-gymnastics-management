@@ -494,8 +494,43 @@ const getParentAttendance = async (req, res, next) => {
       .sort({ date: -1, _id: -1 })
       .populate('playerId', 'fullName')
       .lean();
+    const countMap = getAttendancePresentCountMapFromRecords(children, attendance);
+    const childrenWithCounters = children.map((child) => {
+      const childObject = child.toObject({ virtuals: true });
+      const childKey = String(child._id);
+      return {
+        ...childObject,
+        attendancePresentCount: countMap.get(childKey) || 0
+      };
+    });
+    res.json({ children: childrenWithCounters, attendance });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getParentAttendanceHistory = async (req, res, next) => {
+  try {
+    const parent = await Parent.findOne({ userId: req.user._id });
+    if (!parent) {
+      return res.status(404).json({ message: 'Parent record not found.' });
+    }
+    const player = await Player.findOne({ _id: req.params.playerId, parentId: parent._id })
+      .select('_id fullName startDate endDate packageName packageClasses packageHours payment currentSubscriptionStartedAt createdAt')
+      .populate('subscriptionId', 'totalSessions usedSessions remainingSessions startDate endDate status price');
+    if (!player) {
+      return res.status(404).json({ message: 'Player not found.' });
+    }
+
+    const relatedPlayers = await Player.find({
+      parentId: parent._id,
+      fullName: new RegExp(`^${String(player.fullName || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+    })
+      .select('_id fullName startDate endDate packageName packageClasses packageHours payment currentSubscriptionStartedAt createdAt')
+      .populate('subscriptionId', 'totalSessions usedSessions remainingSessions startDate endDate status price');
+    const relatedPlayerIds = relatedPlayers.map((child) => child._id);
     const historyEntries = await HistoryEntry.aggregate([
-      { $match: { entityType: 'player', entityId: { $in: childIds } } },
+      { $match: { entityType: 'player', entityId: { $in: relatedPlayerIds } } },
       { $sort: { changedAt: 1, _id: 1 } },
       {
         $project: {
@@ -516,23 +551,14 @@ const getParentAttendance = async (req, res, next) => {
         }
       }
     ]);
-    const countMap = getAttendancePresentCountMapFromRecords(children, attendance);
-    const historyEntriesByPlayerId = historyEntries.reduce((map, entry) => {
+    const historyByPlayerId = historyEntries.reduce((map, entry) => {
       const playerId = String(entry.entityId);
       if (!map.has(playerId)) map.set(playerId, []);
       map.get(playerId).push(entry);
       return map;
     }, new Map());
-    const childrenWithCounters = children.map((child) => {
-      const childObject = child.toObject({ virtuals: true });
-      const childKey = String(child._id);
-      return {
-        ...childObject,
-        attendancePresentCount: countMap.get(childKey) || 0,
-        subscriptionHistory: buildSubscriptionHistory(historyEntriesByPlayerId.get(childKey) || [], child)
-      };
-    });
-    res.json({ children: childrenWithCounters, attendance });
+    const cycles = relatedPlayers.flatMap((child) => buildSubscriptionHistory(historyByPlayerId.get(String(child._id)) || [], child));
+    res.json({ subscriptionHistory: normalizeSubscriptionCycles(cycles).sort((first, second) => new Date(second.startDate) - new Date(first.startDate)) });
   } catch (error) {
     next(error);
   }
@@ -628,6 +654,7 @@ module.exports = {
   getParentMe,
   getParentChildren,
   getParentAttendance,
+  getParentAttendanceHistory,
   getParentPayments,
   getParentDashboard
 };

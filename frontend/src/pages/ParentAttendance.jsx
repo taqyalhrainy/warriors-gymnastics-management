@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
-import { fetchParentAttendance, getCachedParentAttendance } from '../services/parents.js';
+import { fetchParentAttendance, fetchParentAttendanceHistory, getCachedParentAttendance } from '../services/parents.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import warriorsLogo from '../assets/warriors-logo.png';
 
@@ -127,6 +127,8 @@ const ParentAttendancePage = () => {
   const [openClassKey, setOpenClassKey] = useState('');
   const [isLoading, setIsLoading] = useState(() => !cachedAttendance);
   const [previewProfileImage, setPreviewProfileImage] = useState('');
+  const [historyByChildId, setHistoryByChildId] = useState({});
+  const [loadingHistoryChildId, setLoadingHistoryChildId] = useState('');
   const navigate = useNavigate();
   const { t } = useLanguage();
 
@@ -157,6 +159,17 @@ const ParentAttendancePage = () => {
     </span>
   );
 
+  const loadChildHistory = (childId) => {
+    if (!childId || historyByChildId[childId] || loadingHistoryChildId === childId) return;
+    setLoadingHistoryChildId(childId);
+    fetchParentAttendanceHistory(childId)
+      .then((data) => {
+        setHistoryByChildId((current) => ({ ...current, [childId]: data.subscriptionHistory || [] }));
+      })
+      .catch(console.error)
+      .finally(() => setLoadingHistoryChildId(''));
+  };
+
   useEffect(() => {
     let isMounted = true;
     fetchParentAttendance()
@@ -182,7 +195,10 @@ const ParentAttendancePage = () => {
     const childIdSet = new Set((child.attendancePlayerIds?.length ? child.attendancePlayerIds : [child._id]).map(String));
     const childRecords = attendance.filter((record) => childIdSet.has(String(record.playerId?._id || record.playerId)));
     const currentCycleKey = getCurrentSubscriptionCycleKey(child);
-    const historyCycles = child.subscriptionHistory?.length
+    const loadedHistory = historyByChildId[String(child._id)] || [];
+    const historyCycles = loadedHistory.length
+      ? loadedHistory
+      : child.subscriptionHistory?.length
       ? child.subscriptionHistory
       : [{
         key: currentCycleKey || `${child._id}:current`,
@@ -213,7 +229,7 @@ const ParentAttendancePage = () => {
     });
 
     return [String(child._id), rows];
-  })), [children, attendance]);
+  })), [children, attendance, historyByChildId]);
   const totalUsed = [...packagesByChild.values()]
     .flat()
     .reduce((sum, item) => sum + Number(item.used || 0), 0);
@@ -254,8 +270,10 @@ const ParentAttendancePage = () => {
                   type="button"
                   className="parent-attendance-player-summary"
                   onClick={() => {
-                    setOpenChildId(isChildOpen ? '' : String(child._id));
+                    const childId = String(child._id);
+                    setOpenChildId(isChildOpen ? '' : childId);
                     setOpenClassKey('');
+                    if (!isChildOpen) loadChildHistory(childId);
                   }}
                 >
                   {renderChildName(child)}
@@ -263,6 +281,7 @@ const ParentAttendancePage = () => {
                 </button>
                 {isChildOpen && (
                   <div className="parent-attendance-class-list">
+                    {loadingHistoryChildId === String(child._id) && <p className="empty-state">Loading classes...</p>}
                     {childPackages.map((item) => {
                       const isClassOpen = openClassKey === item.key;
                       return (

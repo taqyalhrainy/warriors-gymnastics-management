@@ -56,6 +56,13 @@ export const fetchParentAttendance = async () => {
   }, { ttlMs: PARENT_CACHE_TTL_MS });
 };
 
+export const fetchParentAttendanceHistory = async (playerId) => {
+  return fetchCached(`${PARENT_ATTENDANCE_CACHE_KEY}:history:${playerId}`, async () => {
+    const response = await api.get(`/parents/me/attendance/${playerId}/history`);
+    return response.data;
+  }, { ttlMs: PARENT_CACHE_TTL_MS });
+};
+
 export const fetchParentDashboard = async () => {
   return fetchCached(PARENT_DASHBOARD_CACHE_KEY, async () => {
     const response = await api.get('/parents/me/dashboard');
