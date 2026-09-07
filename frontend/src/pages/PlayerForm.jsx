@@ -295,7 +295,7 @@ const PlayerFormPage = () => {
             <label>{t('note')}</label>
             <textarea name="note" value={player.note} onChange={handleChange} placeholder={t('discountNotePlaceholder')} />
 
-            <label>الحصص التعويضية</label>
+            <label>{t('makeupClasses')}</label>
             <textarea name="makeupClassesNote" value={player.makeupClassesNote} onChange={handleChange} />
 
             <button type="submit" className="btn-primary" disabled={isSaving}>

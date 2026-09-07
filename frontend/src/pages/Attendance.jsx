@@ -3376,7 +3376,7 @@ const AttendancePage = () => {
                       </select>
                     </label>
                     <label>
-                      <span>الحصص التعويضية</span>
+                      <span>{t('makeupClasses')}</span>
                       <input name="makeupClassesNote" value={selectedPlayerForm.makeupClassesNote} onChange={handleSelectedPlayerFormChange} />
                     </label>
                     <div className="student-modal-date-row">
@@ -3472,7 +3472,7 @@ const AttendancePage = () => {
                         </button>
                       )}
                     </div>
-                    <div><span>الحصص التعويضية</span><strong>{decodeDisplayText(selectedPlayer.makeupClassesNote) || t('notSet')}</strong></div>
+                    <div><span>{t('makeupClasses')}</span><strong>{decodeDisplayText(selectedPlayer.makeupClassesNote) || t('notSet')}</strong></div>
                     <div className="student-info-date-row">
                       <div><span>{t('startDate')}</span><strong>{formatDate(selectedPlayer.startDate)}</strong></div>
                       <div><span>{t('endDate')}</span><strong>{formatDate(selectedPlayer.endDate)}</strong></div>
