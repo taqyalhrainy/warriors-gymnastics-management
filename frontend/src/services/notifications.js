@@ -17,6 +17,7 @@ export const getCachedNotifications = () => getCachedValue(NOTIFICATIONS_CACHE_K
 
 export const fetchNotificationById = async (id) => {
   const response = await api.get(`/notifications/${id}`);
+  invalidateCache(['notifications:', 'parent:']);
   return response.data;
 };
 

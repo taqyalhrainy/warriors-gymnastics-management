@@ -39,8 +39,8 @@ const ParentNotificationsPage = () => {
             <h1>{t('notifications')}</h1>
           </div>
           <div className="parent-hero-stats">
-            <div><span>{t('unreadStatus')}</span><strong>{notifications.filter((note) => !note.isRead).length}</strong></div>
-            <div><span>{t('readStatus')}</span><strong>{notifications.filter((note) => note.isRead).length}</strong></div>
+            <div><span>{t('messages')}</span><strong>{notifications.length}</strong></div>
+            <div><span>New</span><strong>{notifications.filter((note) => !note.isRead).length}</strong></div>
           </div>
         </section>
         {isLoading ? (
@@ -52,14 +52,14 @@ const ParentNotificationsPage = () => {
         ) : (
         <div className="table-card parent-panel parent-notifications-card">
           <table className="data-table">
-            <thead><tr><th>{t('title')}</th><th>{t('receivedStatus')}</th><th>{t('status')}</th><th>{t('action')}</th></tr></thead>
+            <thead><tr><th></th><th>{t('title')}</th><th>{t('receivedStatus')}</th><th>{t('action')}</th></tr></thead>
             <tbody>
               {notifications.length ? notifications.map((note) => (
                 <tr key={note._id}>
+                  <td>{!note.isRead && <span className="parent-notification-alert" aria-label="New message">!</span>}</td>
                   <td>{note.title}</td>
                   <td>{new Date(note.createdAt).toLocaleString()}</td>
-                  <td>{note.isRead ? t('readStatus') : t('unreadStatus')}</td>
-                  <td><Link to={`/parent/notifications/${note._id}`}>{t('open')}</Link></td>
+                  <td><Link className="parent-open-link" to={`/parent/notifications/${note._id}`}>{t('open')}</Link></td>
                 </tr>
               )) : <tr><td colSpan="4">{t('noNotificationsFound')}</td></tr>}
             </tbody>
