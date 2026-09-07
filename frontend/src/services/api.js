@@ -11,7 +11,7 @@ const baseURL = normalizedApiUrl
 
 const api = axios.create({
   baseURL,
-  timeout: 30000,
+  timeout: 12000,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -122,14 +122,14 @@ api.interceptors.response.use(
     }
 
     config.__retryCount = config.__retryCount || 0;
-    const maxRetries = config.__maxRetries ?? 12;
+    const maxRetries = config.__maxRetries ?? 2;
 
     if (config.__retryCount >= maxRetries) {
       return Promise.reject(error);
     }
 
     config.__retryCount += 1;
-    const delay = Math.min(500 + (config.__retryCount - 1) * 500, 3000);
+    const delay = Math.min(400 + (config.__retryCount - 1) * 400, 1200);
     await sleep(delay);
 
     return api(config);
