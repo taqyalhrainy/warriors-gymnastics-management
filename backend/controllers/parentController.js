@@ -5,6 +5,7 @@ const Player = require('../models/Player');
 const Attendance = require('../models/Attendance');
 const Payment = require('../models/Payment');
 const Notification = require('../models/Notification');
+const HistoryEntry = require('../models/HistoryEntry');
 const { sanitizeObject, validateEmail, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { encrypt, decrypt } = require('../utils/encryption');
@@ -44,6 +45,132 @@ const getDateOnly = (value) => {
   const date = value ? new Date(value) : new Date(0);
   date.setHours(0, 0, 0, 0);
   return date;
+};
+
+const getDateInputValue = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0];
+};
+
+const getSubscriptionStartValue = (snapshot, allowInitialFallback = false) => (
+  snapshot?.startDate
+  || (allowInitialFallback ? (snapshot?.currentSubscriptionStartedAt || snapshot?.createdAt || '') : '')
+);
+
+const getSubscriptionHistoryKey = (snapshot, allowInitialFallback = false) => getDateInputValue(getSubscriptionStartValue(snapshot, allowInitialFallback));
+
+const cycleHasPackageDetails = (cycle) => (
+  Boolean(cycle.packageName)
+  || Number(cycle.packageClasses || 0) > 0
+  || Number(cycle.payment || 0) > 0
+);
+
+const getSubscriptionCycleIdentity = (cycle) => [
+  getDateInputValue(cycle.startDate),
+  getDateInputValue(cycle.endDate),
+  cycle.packageName || '',
+  Number(cycle.packageClasses || 0),
+  Number(cycle.packageHours || 0),
+  Number(cycle.payment || 0)
+].join('|');
+
+const normalizeSubscriptionCycles = (cycles) => {
+  const sortedAsc = [...cycles]
+    .filter((cycle) => cycle.startDate)
+    .sort((first, second) => new Date(first.startDate) - new Date(second.startDate));
+  const meaningfulCycles = [];
+  const seenCycleIdentities = new Set();
+
+  sortedAsc.forEach((cycle) => {
+    const identity = getSubscriptionCycleIdentity(cycle);
+    if (seenCycleIdentities.has(identity)) return;
+    seenCycleIdentities.add(identity);
+
+    const previous = meaningfulCycles[meaningfulCycles.length - 1];
+    const startsInsidePrevious = previous?.endDate
+      && getDateOnly(cycle.startDate).getTime() <= getDateOnly(previous.endDate).getTime();
+
+    if (startsInsidePrevious && !cycleHasPackageDetails(cycle)) return;
+    meaningfulCycles.push(cycle);
+  });
+
+  const mergedByStart = new Map();
+  meaningfulCycles.forEach((cycle) => {
+    const startKey = getDateInputValue(cycle.startDate);
+    const existing = mergedByStart.get(startKey);
+    const existingChangedAt = new Date(existing?.changedAt || 0).getTime();
+    const cycleChangedAt = new Date(cycle.changedAt || 0).getTime();
+    if (!existing || cycleChangedAt >= existingChangedAt || (!cycleHasPackageDetails(existing) && cycleHasPackageDetails(cycle))) {
+      mergedByStart.set(startKey, cycle);
+    }
+  });
+
+  return [...mergedByStart.values()]
+    .sort((first, second) => new Date(first.startDate) - new Date(second.startDate));
+};
+
+const buildSubscriptionHistory = (entries = [], player = null) => {
+  const playerObject = player?.toObject ? player.toObject({ virtuals: true }) : player;
+  const sortedEntries = [...entries].sort((first, second) => new Date(first.changedAt) - new Date(second.changedAt));
+  const initialEntry = sortedEntries.find((entry) => entry.after && entry.action === 'create');
+  const cycles = [];
+  const makeCycle = (snapshot, changedAt, allowInitialFallback = false) => {
+    const key = getSubscriptionHistoryKey(snapshot, allowInitialFallback);
+    if (!snapshot || !key) return null;
+    return {
+      key,
+      changedAt,
+      startDate: getSubscriptionStartValue(snapshot, allowInitialFallback),
+      endDate: snapshot.endDate,
+      packageName: snapshot.packageName || '',
+      packageClasses: Number(snapshot.packageClasses || 0),
+      packageHours: Number(snapshot.packageHours || 0),
+      payment: Number(snapshot.payment || 0)
+    };
+  };
+  const initialCycle = makeCycle(initialEntry?.after || playerObject, initialEntry?.changedAt || new Date().toISOString(), true);
+  if (initialCycle) cycles.push(initialCycle);
+
+  sortedEntries.forEach((entry) => {
+    if (entry.action === 'create') return;
+    const changedFields = entry.changedFields || [];
+    const subscriptionFields = ['startDate', 'endDate', 'packageName', 'packageClasses', 'packageHours', 'payment'];
+    const isSubscriptionSnapshot = entry.after?.startDate
+      && changedFields.some((field) => subscriptionFields.includes(field));
+    if (!isSubscriptionSnapshot) return;
+
+    const startsNewSubscription = changedFields.includes('currentSubscriptionStartedAt');
+    const nextCycle = makeCycle(entry.after, entry.changedAt);
+    if (!nextCycle) return;
+
+    if (startsNewSubscription) {
+      const existingIndex = cycles.findIndex((cycle) => cycle.key === nextCycle.key);
+      if (existingIndex >= 0) {
+        cycles[existingIndex] = nextCycle;
+      } else {
+        cycles.push(nextCycle);
+      }
+      return;
+    }
+
+    if (cycles.length) {
+      cycles[cycles.length - 1] = nextCycle;
+    }
+  });
+
+  const currentCycle = makeCycle(playerObject, new Date().toISOString(), cycles.length === 0);
+  if (currentCycle) {
+    const existingIndex = cycles.findIndex((cycle) => cycle.key === currentCycle.key);
+    if (existingIndex >= 0) {
+      cycles[existingIndex] = currentCycle;
+    } else if (!cycles.length) {
+      cycles.push(currentCycle);
+    }
+  }
+
+  return normalizeSubscriptionCycles(cycles)
+    .sort((first, second) => new Date(second.startDate) - new Date(first.startDate));
 };
 
 const getAttendancePresentCountMap = async (players) => {
@@ -324,10 +451,20 @@ const getParentAttendance = async (req, res, next) => {
       .populate('subscriptionId', 'totalSessions usedSessions remainingSessions startDate endDate status price');
     const childIds = children.map((child) => child._id);
     const attendance = await Attendance.find({ playerId: { $in: childIds } }).sort({ date: -1, _id: -1 }).populate('playerId', 'fullName profileImage');
-    const [countMap, paymentSummaryMap] = await Promise.all([
+    const [countMap, paymentSummaryMap, historyEntries] = await Promise.all([
       getAttendancePresentCountMap(children),
-      getCurrentPaymentSummaryMap(children)
+      getCurrentPaymentSummaryMap(children),
+      HistoryEntry.find({ entityType: 'player', entityId: { $in: childIds } })
+        .sort({ changedAt: 1, _id: 1 })
+        .select('entityId action after changedFields changedAt')
+        .lean()
     ]);
+    const historyEntriesByPlayerId = historyEntries.reduce((map, entry) => {
+      const playerId = String(entry.entityId);
+      if (!map.has(playerId)) map.set(playerId, []);
+      map.get(playerId).push(entry);
+      return map;
+    }, new Map());
     const childrenWithCounters = children.map((child) => {
       const childObject = child.toObject({ virtuals: true });
       const childKey = String(child._id);
@@ -338,7 +475,8 @@ const getParentAttendance = async (req, res, next) => {
         currentSubscriptionPaidAmount: paymentSummary?.paidAmount || 0,
         paymentRemainingAmount: child.attendanceDueManual
           ? Number(child.previousDueBalance || 0) - Number(child.dueAdjustment || 0)
-          : paymentSummary?.remainingAmount || 0
+          : paymentSummary?.remainingAmount || 0,
+        subscriptionHistory: buildSubscriptionHistory(historyEntriesByPlayerId.get(childKey) || [], child)
       };
     });
     res.json({ children: childrenWithCounters, attendance });

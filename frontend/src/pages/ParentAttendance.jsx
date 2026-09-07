@@ -7,6 +7,11 @@ import warriorsLogo from '../assets/warriors-logo.png';
 
 const formatDate = (date) => (date ? new Date(date).toLocaleDateString() : '-');
 const formatTime = (date) => (date ? new Date(date).toLocaleTimeString() : '-');
+const getDateInputValue = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0];
+};
 const dateOnly = (date) => {
   const value = new Date(date || 0);
   value.setHours(0, 0, 0, 0);
@@ -93,6 +98,27 @@ const isCurrentRecord = (record, child) => {
   return dateOnly(record.date).getTime() >= dateOnly(start).getTime();
 };
 
+const getCurrentSubscriptionCycleKey = (child) => getDateInputValue(child.currentSubscriptionStartedAt || child.startDate || child.subscriptionId?.startDate);
+
+const getAttendanceRecordsForSubscription = (records, child, cycle, cycles) => {
+  const sortedAsc = [...cycles].sort((first, second) => new Date(first.startDate) - new Date(second.startDate));
+  const cycleIndex = sortedAsc.findIndex((item) => item.key === cycle.key);
+  const nextCycle = sortedAsc[cycleIndex + 1];
+  const startTime = dateOnly(cycle.startDate).getTime();
+  const nextStartTime = nextCycle ? dateOnly(nextCycle.startDate).getTime() : null;
+  const currentCycleKey = getCurrentSubscriptionCycleKey(child);
+  const isCurrentCycle = cycle.key === currentCycleKey;
+  const explicitIds = new Set((child.currentSubscriptionAttendanceIds || []).map(String));
+
+  return records.filter((record) => {
+    if (explicitIds.has(String(record._id))) {
+      return isCurrentCycle;
+    }
+    const recordTime = dateOnly(record.date).getTime();
+    return recordTime >= startTime && (!nextStartTime || recordTime < nextStartTime);
+  });
+};
+
 const ParentAttendancePage = () => {
   const cachedAttendance = getCachedParentAttendance();
   const [children, setChildren] = useState(() => getUniqueParentChildren(cachedAttendance?.children || []).filter((child) => child.status !== 'left'));
@@ -155,35 +181,36 @@ const ParentAttendancePage = () => {
   const packagesByChild = useMemo(() => new Map(children.map((child) => {
     const childIdSet = new Set((child.attendancePlayerIds?.length ? child.attendancePlayerIds : [child._id]).map(String));
     const childRecords = attendance.filter((record) => childIdSet.has(String(record.playerId?._id || record.playerId)));
-    const currentRecords = childRecords.filter((record) => isCurrentRecord(record, child));
-    const oldRecords = childRecords.filter((record) => !isCurrentRecord(record, child));
-    const total = Number(child.packageClasses || child.subscriptionId?.totalSessions || 0);
-    const currentUsed = Number(child.attendancePresentCount ?? currentRecords.filter((record) => record.status === 'present').length);
-    const rows = [{
-      key: `${child._id}:current`,
-      child,
-      title: getPackageTitle(child),
-      startDate: child.currentSubscriptionStartedAt || child.startDate || child.subscriptionId?.startDate,
-      endDate: child.endDate || child.subscriptionId?.endDate,
-      used: currentUsed,
-      total,
-      records: currentRecords,
-      current: true
-    }];
+    const currentCycleKey = getCurrentSubscriptionCycleKey(child);
+    const historyCycles = child.subscriptionHistory?.length
+      ? child.subscriptionHistory
+      : [{
+        key: currentCycleKey || `${child._id}:current`,
+        startDate: child.currentSubscriptionStartedAt || child.startDate || child.subscriptionId?.startDate,
+        endDate: child.endDate || child.subscriptionId?.endDate,
+        packageName: getPackageTitle(child),
+        packageClasses: Number(child.packageClasses || child.subscriptionId?.totalSessions || 0),
+        packageHours: Number(child.packageHours || 0)
+      }];
 
-    if (oldRecords.length) {
-      rows.push({
-        key: `${child._id}:old`,
+    const rows = historyCycles.map((cycle) => {
+      const records = getAttendanceRecordsForSubscription(childRecords, child, cycle, historyCycles);
+      const current = cycle.key === currentCycleKey;
+      const used = current
+        ? Number(child.attendancePresentCount ?? records.filter((record) => record.status === 'present' && isCurrentRecord(record, child)).length)
+        : records.filter((record) => record.status === 'present').length;
+      return {
+        key: `${child._id}:${cycle.key}`,
         child,
-        title: 'Previous attendance',
-        startDate: oldRecords[oldRecords.length - 1]?.date,
-        endDate: oldRecords[0]?.date,
-        used: oldRecords.filter((record) => record.status === 'present').length,
-        total: oldRecords.length,
-        records: oldRecords,
-        current: false
-      });
-    }
+        title: cycle.packageName || 'Subscription',
+        startDate: cycle.startDate,
+        endDate: cycle.endDate,
+        used,
+        total: Number(cycle.packageClasses || 0),
+        records,
+        current
+      };
+    });
 
     return [String(child._id), rows];
   })), [children, attendance]);
