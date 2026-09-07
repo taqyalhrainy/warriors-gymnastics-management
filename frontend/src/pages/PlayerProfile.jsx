@@ -233,6 +233,7 @@ const PlayerProfilePage = () => {
             <div><strong>{t('payment')}:</strong> {formatCurrency(player.payment || 0)}</div>
             <div><strong>Total Paid:</strong> {formatCurrency(totalPaid)}</div>
             <div><strong>{t('note')}:</strong> {player.note || t('notSet')}</div>
+            <div><strong>الحصص التعويضية:</strong> {player.makeupClassesNote || t('notSet')}</div>
             <div className="profile-attendance-history">
               <h2>Attendance History</h2>
               <div className="student-history-list">

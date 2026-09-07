@@ -66,6 +66,7 @@ const snapshotPlayerDocument = (playerDocument) => {
     dueAdjustment: Number(player?.dueAdjustment || 0),
     attendanceDueManual: Boolean(player?.attendanceDueManual),
     note: player?.note || '',
+    makeupClassesNote: player?.makeupClassesNote || '',
     freezeNote: player?.freezeNote || '',
     status: player?.status || '',
     showInAttendanceWhenFrozen: player?.showInAttendanceWhenFrozen !== false,

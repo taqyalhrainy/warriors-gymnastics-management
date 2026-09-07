@@ -24,6 +24,7 @@ const playerSchema = new mongoose.Schema({
   dueAdjustment: { type: Number, default: 0, min: 0 },
   attendanceDueManual: { type: Boolean, default: false },
   note: { type: String, trim: true, default: '' },
+  makeupClassesNote: { type: String, trim: true, default: '' },
   freezeNote: { type: String, trim: true, default: '' },
   status: { type: String, enum: ['active', 'expired', 'frozen', 'left', 'tryout'], default: 'active' },
   showInAttendanceWhenFrozen: { type: Boolean, default: true },

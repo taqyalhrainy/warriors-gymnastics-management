@@ -32,6 +32,7 @@ const formatPlayerResponse = (player) => {
     obj.groupIds = [obj.groupId];
   }
   obj.note = decodeText(obj.note || '');
+  obj.makeupClassesNote = decodeText(obj.makeupClassesNote || '');
   obj.freezeNote = decodeText(obj.freezeNote || '');
   delete obj.parentPhoneEncrypted;
   return obj;
@@ -207,7 +208,7 @@ const createPlayer = async (req, res, next) => {
   try {
     const data = cleanPlayerPayload(sanitizeObject(req.body));
     const groupIds = normalizeGroupIds(data);
-    const { fullName, dateOfBirth, parentId, parentPhone, programId, coachId, level, startDate, endDate, packageName, packageClasses, packageHours, payment, previousDueBalance, dueAdjustment, attendanceDueManual, subscriptionNeedsAttention, note, profileImage, status = 'active' } = data;
+    const { fullName, dateOfBirth, parentId, parentPhone, programId, coachId, level, startDate, endDate, packageName, packageClasses, packageHours, payment, previousDueBalance, dueAdjustment, attendanceDueManual, subscriptionNeedsAttention, note, makeupClassesNote, profileImage, status = 'active' } = data;
     if (!fullName || !parentId) {
       return res.status(400).json({ message: 'Required player fields are missing.' });
     }
@@ -248,6 +249,7 @@ const createPlayer = async (req, res, next) => {
       attendanceDueManual: Boolean(attendanceDueManual),
       subscriptionNeedsAttention: Boolean(subscriptionNeedsAttention),
       note: note || '',
+      makeupClassesNote: makeupClassesNote || '',
       status,
       profileImage: profileImage || ''
     };

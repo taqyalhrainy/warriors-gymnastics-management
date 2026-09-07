@@ -62,6 +62,7 @@ const buildPlayerRestorePayload = (snapshot) => ({
   dueAdjustment: Number(snapshot.dueAdjustment || 0),
   attendanceDueManual: Boolean(snapshot.attendanceDueManual),
   note: snapshot.note || '',
+  makeupClassesNote: snapshot.makeupClassesNote || '',
   freezeNote: snapshot.freezeNote || '',
   status: snapshot.status || 'active',
   showInAttendanceWhenFrozen: snapshot.showInAttendanceWhenFrozen !== false,

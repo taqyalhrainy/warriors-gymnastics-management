@@ -230,6 +230,7 @@ const mergeStablePlayerFields = (incomingPlayer, fallbackPlayer = null) => ({
   packageClasses: firstMeaningfulValue(incomingPlayer?.packageClasses, fallbackPlayer?.packageClasses, 0),
   packageHours: firstMeaningfulValue(incomingPlayer?.packageHours, fallbackPlayer?.packageHours, 0),
   payment: firstMeaningfulValue(incomingPlayer?.payment, fallbackPlayer?.payment, 0),
+  makeupClassesNote: incomingPlayer?.makeupClassesNote ?? fallbackPlayer?.makeupClassesNote ?? '',
   paymentRemainingAmount: incomingPlayer?.paymentRemainingAmount ?? fallbackPlayer?.paymentRemainingAmount ?? 0,
   attendancePresentCount: incomingPlayer?.attendancePresentCount ?? fallbackPlayer?.attendancePresentCount ?? 0,
   attendanceGroupId: incomingPlayer?.attendanceGroupId ?? fallbackPlayer?.attendanceGroupId,
@@ -363,6 +364,7 @@ const mapSnapshotPlayerToAttendancePlayer = (player) => {
     previousDueBalance: Number(player.previousDueBalance || 0),
     dueAdjustment: Number(player.dueAdjustment || 0),
     note: decodeDisplayText(player.note),
+    makeupClassesNote: decodeDisplayText(player.makeupClassesNote),
     freezeNote: decodeDisplayText(player.freezeNote),
     status: player.status || '',
     profileImage: player.profileImage || '',
@@ -589,6 +591,7 @@ const AttendancePage = () => {
         parentId: currentPlayer.parentId || player.parentId,
         parentPhone: currentPlayer.parentPhone || player.parentPhone,
         note: currentPlayer.note ?? player.note,
+        makeupClassesNote: currentPlayer.makeupClassesNote ?? player.makeupClassesNote,
         freezeNote: currentPlayer.freezeNote ?? player.freezeNote,
         profileImage: currentPlayer.profileImage || player.profileImage,
         attendanceGroupId: groupId,
@@ -1766,6 +1769,7 @@ const AttendancePage = () => {
     payment: player?.payment ?? '',
     dueAdjustment: player?.dueAdjustment ?? 0,
     note: decodeDisplayText(player?.note),
+    makeupClassesNote: decodeDisplayText(player?.makeupClassesNote),
     freezeNote: decodeDisplayText(player?.freezeNote),
     status: player?.status || 'active',
     showInAttendanceWhenFrozen: player?.showInAttendanceWhenFrozen !== false
@@ -2744,6 +2748,7 @@ const AttendancePage = () => {
       groupId: selectedGroupRefs[0] || null,
       groupIds: selectedGroupRefs,
       note: selectedPlayerForm.note,
+      makeupClassesNote: selectedPlayerForm.makeupClassesNote,
       freezeNote: selectedPlayerForm.status === 'frozen' ? selectedPlayerForm.freezeNote : ''
     };
     let savedPlayer = null;
@@ -3370,6 +3375,10 @@ const AttendancePage = () => {
                         <option value="waiting-list">Waiting List</option>
                       </select>
                     </label>
+                    <label>
+                      <span>الحصص التعويضية</span>
+                      <input name="makeupClassesNote" value={selectedPlayerForm.makeupClassesNote} onChange={handleSelectedPlayerFormChange} />
+                    </label>
                     <div className="student-modal-date-row">
                       <label>
                         <span>{t('startDate')}</span>
@@ -3463,6 +3472,7 @@ const AttendancePage = () => {
                         </button>
                       )}
                     </div>
+                    <div><span>الحصص التعويضية</span><strong>{decodeDisplayText(selectedPlayer.makeupClassesNote) || t('notSet')}</strong></div>
                     <div className="student-info-date-row">
                       <div><span>{t('startDate')}</span><strong>{formatDate(selectedPlayer.startDate)}</strong></div>
                       <div><span>{t('endDate')}</span><strong>{formatDate(selectedPlayer.endDate)}</strong></div>

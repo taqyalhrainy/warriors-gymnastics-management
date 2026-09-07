@@ -27,6 +27,7 @@ const PlayerFormPage = () => {
     packageHours: '',
     payment: '',
     note: '',
+    makeupClassesNote: '',
     status: 'active'
   });
   const [parents, setParents] = useState([]);
@@ -83,6 +84,7 @@ const PlayerFormPage = () => {
           packageHours: data.packageHours || '',
           payment: data.payment ?? '',
           note: data.note || '',
+          makeupClassesNote: data.makeupClassesNote || '',
           status: data.status || 'active'
         });
       }).catch(console.error);
@@ -292,6 +294,9 @@ const PlayerFormPage = () => {
 
             <label>{t('note')}</label>
             <textarea name="note" value={player.note} onChange={handleChange} placeholder={t('discountNotePlaceholder')} />
+
+            <label>الحصص التعويضية</label>
+            <textarea name="makeupClassesNote" value={player.makeupClassesNote} onChange={handleChange} />
 
             <button type="submit" className="btn-primary" disabled={isSaving}>
               {isSaving ? 'Saving...' : t('savePlayer')}
