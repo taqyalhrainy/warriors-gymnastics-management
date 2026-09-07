@@ -218,6 +218,45 @@ const getAttendancePresentCountMap = async (players) => {
   }));
 };
 
+const getAttendancePresentCountMapFromRecords = (players, records) => {
+  const cycleStartByPlayerId = new Map(players.map((player) => [
+    String(player._id),
+    getCurrentSubscriptionStart(player) || new Date(0)
+  ]));
+  const explicitCurrentRecordIdsByPlayerId = new Map(players.map((player) => [
+    String(player._id),
+    new Set((player.currentSubscriptionAttendanceIds || []).map(String))
+  ]));
+  const excludedCurrentRecordIdsByPlayerId = new Map(players.map((player) => [
+    String(player._id),
+    new Set((player.currentSubscriptionExcludedAttendanceIds || []).map(String))
+  ]));
+  const presentDatesByPlayerId = new Map();
+
+  records.forEach((record) => {
+    if (record.status !== 'present') return;
+    const playerId = String(record.playerId?._id || record.playerId || '');
+    if (!playerId || excludedCurrentRecordIdsByPlayerId.get(playerId)?.has(String(record._id))) return;
+
+    const cycleStart = cycleStartByPlayerId.get(playerId);
+    const recordDate = getDateOnly(record.date);
+    const isExplicitlyCounted = explicitCurrentRecordIdsByPlayerId.get(playerId)?.has(String(record._id));
+    const isInCurrentCycle = !cycleStart || isExplicitlyCounted || recordDate >= getDateOnly(cycleStart);
+    if (!isInCurrentCycle) return;
+
+    if (!presentDatesByPlayerId.has(playerId)) {
+      presentDatesByPlayerId.set(playerId, new Set());
+    }
+    presentDatesByPlayerId.get(playerId).add(recordDate.toISOString().split('T')[0]);
+  });
+
+  return new Map(players.map((player) => {
+    const totalClasses = Number(player.packageClasses || player.subscriptionId?.totalSessions || 0) || Number.MAX_SAFE_INTEGER;
+    const presentCount = presentDatesByPlayerId.get(String(player._id))?.size || 0;
+    return [String(player._id), Math.min(totalClasses, presentCount)];
+  }));
+};
+
 const getCurrentPaymentSummaryMap = async (players) => {
   const playerIds = players.map((player) => player._id).filter(Boolean);
   if (!playerIds.length) return new Map();
@@ -451,14 +490,31 @@ const getParentAttendance = async (req, res, next) => {
       .populate('subscriptionId', 'totalSessions usedSessions remainingSessions startDate endDate status price');
     const childIds = children.map((child) => child._id);
     const attendance = await Attendance.find({ playerId: { $in: childIds } }).sort({ date: -1, _id: -1 }).populate('playerId', 'fullName profileImage');
-    const [countMap, paymentSummaryMap, historyEntries] = await Promise.all([
-      getAttendancePresentCountMap(children),
-      getCurrentPaymentSummaryMap(children),
-      HistoryEntry.find({ entityType: 'player', entityId: { $in: childIds } })
-        .sort({ changedAt: 1, _id: 1 })
-        .select('entityId action after changedFields changedAt')
-        .lean()
+    const [historyEntries] = await Promise.all([
+      HistoryEntry.aggregate([
+        { $match: { entityType: 'player', entityId: { $in: childIds } } },
+        { $sort: { changedAt: 1, _id: 1 } },
+        {
+          $project: {
+            entityId: 1,
+            action: 1,
+            changedFields: 1,
+            changedAt: 1,
+            after: {
+              startDate: '$after.startDate',
+              endDate: '$after.endDate',
+              currentSubscriptionStartedAt: '$after.currentSubscriptionStartedAt',
+              createdAt: '$after.createdAt',
+              packageName: '$after.packageName',
+              packageClasses: '$after.packageClasses',
+              packageHours: '$after.packageHours',
+              payment: '$after.payment'
+            }
+          }
+        }
+      ])
     ]);
+    const countMap = getAttendancePresentCountMapFromRecords(children, attendance);
     const historyEntriesByPlayerId = historyEntries.reduce((map, entry) => {
       const playerId = String(entry.entityId);
       if (!map.has(playerId)) map.set(playerId, []);
@@ -468,14 +524,9 @@ const getParentAttendance = async (req, res, next) => {
     const childrenWithCounters = children.map((child) => {
       const childObject = child.toObject({ virtuals: true });
       const childKey = String(child._id);
-      const paymentSummary = paymentSummaryMap.get(childKey);
       return {
         ...childObject,
         attendancePresentCount: countMap.get(childKey) || 0,
-        currentSubscriptionPaidAmount: paymentSummary?.paidAmount || 0,
-        paymentRemainingAmount: child.attendanceDueManual
-          ? Number(child.previousDueBalance || 0) - Number(child.dueAdjustment || 0)
-          : paymentSummary?.remainingAmount || 0,
         subscriptionHistory: buildSubscriptionHistory(historyEntriesByPlayerId.get(childKey) || [], child)
       };
     });
