@@ -108,7 +108,7 @@ export const AuthProvider = ({ children }) => {
           }
 
           if (needsAdminData) {
-            await warmAdminAppCache(user);
+            warmAdminAppCache(user).catch(console.error);
           } else if (user.role === 'parent') {
             warmParentAppCache(user).catch(console.error);
           }
