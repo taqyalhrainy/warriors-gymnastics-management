@@ -489,7 +489,11 @@ const getParentAttendance = async (req, res, next) => {
       .select('_id fullName dateOfBirth profileImage status startDate endDate packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual currentSubscriptionStartedAt currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId')
       .populate('subscriptionId', 'totalSessions usedSessions remainingSessions startDate endDate status price');
     const childIds = children.map((child) => child._id);
-    const attendance = await Attendance.find({ playerId: { $in: childIds } }).sort({ date: -1, _id: -1 }).populate('playerId', 'fullName profileImage');
+    const attendance = await Attendance.find({ playerId: { $in: childIds } })
+      .select('_id playerId groupId date checkInTime status')
+      .sort({ date: -1, _id: -1 })
+      .populate('playerId', 'fullName')
+      .lean();
     const [historyEntries] = await Promise.all([
       HistoryEntry.aggregate([
         { $match: { entityType: 'player', entityId: { $in: childIds } } },

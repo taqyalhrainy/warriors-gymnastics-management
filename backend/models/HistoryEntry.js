@@ -50,5 +50,6 @@ const historyEntrySchema = new mongoose.Schema({
 });
 
 historyEntrySchema.index({ entityType: 1, changedAt: -1, entityId: 1 });
+historyEntrySchema.index({ entityType: 1, entityId: 1, changedAt: 1 });
 
 module.exports = mongoose.model('HistoryEntry', historyEntrySchema);

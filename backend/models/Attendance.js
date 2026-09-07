@@ -10,5 +10,6 @@ const attendanceSchema = new mongoose.Schema({
 });
 
 attendanceSchema.index({ playerId: 1, groupId: 1, date: 1 }, { unique: true });
+attendanceSchema.index({ playerId: 1, date: -1, status: 1 });
 
 module.exports = mongoose.model('Attendance', attendanceSchema);
