@@ -5,6 +5,7 @@ const Player = require('../models/Player');
 const Attendance = require('../models/Attendance');
 const Payment = require('../models/Payment');
 const Notification = require('../models/Notification');
+const HistoryEntry = require('../models/HistoryEntry');
 const { sanitizeObject, validateEmail, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { encrypt, decrypt } = require('../utils/encryption');
@@ -493,13 +494,42 @@ const getParentAttendance = async (req, res, next) => {
       .sort({ date: -1, _id: -1 })
       .populate('playerId', 'fullName')
       .lean();
+    const historyEntries = await HistoryEntry.aggregate([
+      { $match: { entityType: 'player', entityId: { $in: childIds } } },
+      { $sort: { changedAt: 1, _id: 1 } },
+      {
+        $project: {
+          entityId: 1,
+          action: 1,
+          changedFields: 1,
+          changedAt: 1,
+          after: {
+            startDate: '$after.startDate',
+            endDate: '$after.endDate',
+            currentSubscriptionStartedAt: '$after.currentSubscriptionStartedAt',
+            createdAt: '$after.createdAt',
+            packageName: '$after.packageName',
+            packageClasses: '$after.packageClasses',
+            packageHours: '$after.packageHours',
+            payment: '$after.payment'
+          }
+        }
+      }
+    ]);
     const countMap = getAttendancePresentCountMapFromRecords(children, attendance);
+    const historyEntriesByPlayerId = historyEntries.reduce((map, entry) => {
+      const playerId = String(entry.entityId);
+      if (!map.has(playerId)) map.set(playerId, []);
+      map.get(playerId).push(entry);
+      return map;
+    }, new Map());
     const childrenWithCounters = children.map((child) => {
       const childObject = child.toObject({ virtuals: true });
       const childKey = String(child._id);
       return {
         ...childObject,
-        attendancePresentCount: countMap.get(childKey) || 0
+        attendancePresentCount: countMap.get(childKey) || 0,
+        subscriptionHistory: buildSubscriptionHistory(historyEntriesByPlayerId.get(childKey) || [], child)
       };
     });
     res.json({ children: childrenWithCounters, attendance });

@@ -5530,15 +5530,8 @@ body.rtl .new-subscription-summary-card[type='button'] {
   border-color: color-mix(in srgb, #14b8a6 34%, var(--border));
 }
 
-.parent-package-card .subscription-history-summary {
-  min-height: 92px;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, #14b8a6 14%, var(--surface)), var(--surface));
-}
-
 .parent-package-card .subscription-history-summary b {
   min-width: 80px;
-  color: #0f9f90;
   font-size: 1.55rem;
   text-align: end;
 }
