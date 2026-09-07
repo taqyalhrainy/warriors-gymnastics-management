@@ -43,6 +43,59 @@ function App() {
     document.body.classList.toggle('theme-dark', theme === 'dark');
   }, [theme]);
 
+  useEffect(() => {
+    const viewport = document.querySelector('meta[name="viewport"]');
+    const originalViewport = viewport?.getAttribute('content') || 'width=device-width, initial-scale=1.0';
+    const isParentApp = user?.role === 'parent';
+
+    if (viewport) {
+      viewport.setAttribute(
+        'content',
+        isParentApp
+          ? 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'
+          : originalViewport
+      );
+    }
+
+    if (!isParentApp) {
+      return undefined;
+    }
+
+    const preventZoomKeys = (event) => {
+      if ((event.ctrlKey || event.metaKey) && ['+', '-', '=', '0'].includes(event.key)) {
+        event.preventDefault();
+      }
+    };
+    const preventCtrlWheelZoom = (event) => {
+      if (event.ctrlKey || event.metaKey) {
+        event.preventDefault();
+      }
+    };
+    const preventPinchZoom = (event) => {
+      if (event.touches?.length > 1) {
+        event.preventDefault();
+      }
+    };
+    const preventGestureZoom = (event) => event.preventDefault();
+
+    window.addEventListener('keydown', preventZoomKeys);
+    window.addEventListener('wheel', preventCtrlWheelZoom, { passive: false });
+    document.addEventListener('touchmove', preventPinchZoom, { passive: false });
+    document.addEventListener('gesturestart', preventGestureZoom);
+    document.addEventListener('gesturechange', preventGestureZoom);
+
+    return () => {
+      if (viewport) {
+        viewport.setAttribute('content', originalViewport);
+      }
+      window.removeEventListener('keydown', preventZoomKeys);
+      window.removeEventListener('wheel', preventCtrlWheelZoom);
+      document.removeEventListener('touchmove', preventPinchZoom);
+      document.removeEventListener('gesturestart', preventGestureZoom);
+      document.removeEventListener('gesturechange', preventGestureZoom);
+    };
+  }, [user?.role]);
+
   const toggleTheme = () => {
     setTheme((current) => (current === 'dark' ? 'light' : 'dark'));
   };
