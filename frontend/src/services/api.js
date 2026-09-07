@@ -122,7 +122,7 @@ api.interceptors.response.use(
     }
 
     config.__retryCount = config.__retryCount || 0;
-    const maxRetries = config.__maxRetries ?? 2;
+    const maxRetries = config.__maxRetries ?? 5;
 
     if (config.__retryCount >= maxRetries) {
       return Promise.reject(error);

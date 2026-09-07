@@ -85,7 +85,7 @@ export const AuthProvider = ({ children }) => {
 
     let isMounted = true;
     const needsAdminData = adminDataRoles.includes(user.role);
-    setIsServerReady(!needsAdminData);
+    setIsServerReady(false);
     setIsServerChecking(true);
 
     const prepareApp = async () => {
@@ -107,11 +107,8 @@ export const AuthProvider = ({ children }) => {
             verifiedServerToken = token;
           }
 
-          if (needsAdminData) {
-            warmAdminAppCache(user).catch(console.error);
-          } else if (user.role === 'parent') {
-            warmParentAppCache(user).catch(console.error);
-          }
+          if (needsAdminData) warmAdminAppCache(user).catch(console.error);
+          if (user.role === 'parent') warmParentAppCache(user).catch(console.error);
 
           if (isMounted) {
             setIsServerReady(true);
