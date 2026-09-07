@@ -92,7 +92,7 @@ export const AuthProvider = ({ children }) => {
       while (isMounted) {
         try {
           if (verifiedServerToken !== token) {
-            await waitForApiHealth({ timeout: 4000, maxWaitMs: 180000, pollIntervalMs: 500 });
+            await waitForApiHealth({ timeout: 2500, maxWaitMs: 18000, pollIntervalMs: 500 });
             const response = await api.get('/auth/me', {
               __skipRetry: true
             });
