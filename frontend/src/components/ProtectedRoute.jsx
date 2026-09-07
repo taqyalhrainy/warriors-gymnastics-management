@@ -1,21 +1,10 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
-import warriorsLogo from '../assets/warriors-logo.png';
 
 const ProtectedRoute = ({ roles }) => {
-  const { user, isServerReady, isServerChecking } = useAuth();
+  const { user } = useAuth();
   if (!user) {
     return <Navigate to="/login" replace />;
-  }
-  if (!isServerReady) {
-    return (
-      <div className="route-loading server-wake-loading" role="status" aria-live="polite">
-        <img src={warriorsLogo} alt="" />
-        <span className="loading-spinner" />
-        <strong>{isServerChecking ? 'Connecting...' : 'Still connecting...'}</strong>
-        <p>Please wait a moment.</p>
-      </div>
-    );
   }
   if (roles && !roles.includes(user.role)) {
     return <Navigate to={user.role === 'parent' ? '/parent' : '/admin'} replace />;

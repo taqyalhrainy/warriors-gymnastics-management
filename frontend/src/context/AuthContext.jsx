@@ -1,12 +1,11 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import api, { clearStoredAuth, getStoredToken, waitForApiHealth } from '../services/api.js';
+import api, { clearStoredAuth, getStoredToken } from '../services/api.js';
 import { clearCache } from '../services/cache.js';
 import { warmAdminAppCache, warmParentAppCache, resetPrefetchState } from '../services/prefetch.js';
 
 const AuthContext = createContext(null);
 let verifiedServerToken = '';
 const adminDataRoles = ['admin', 'coach', 'receptionist'];
-const retryPreparationAfter = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const AUTH_TOKEN_KEY = 'warriors-token';
 const AUTH_USER_KEY = 'warriors-user';
 const AUTH_REMEMBER_KEY = 'warriors-remember-auth';
@@ -72,60 +71,31 @@ export const AuthProvider = ({ children }) => {
       return;
     }
 
+    setIsServerReady(true);
+    setIsServerChecking(false);
+
     if (verifiedServerToken === token) {
-      if (!adminDataRoles.includes(user.role)) {
-        if (user.role === 'parent') {
-          warmParentAppCache(user).catch(console.error);
-        }
-        setIsServerReady(true);
-        setIsServerChecking(false);
-        return;
-      }
+      return;
     }
 
     let isMounted = true;
     const needsAdminData = adminDataRoles.includes(user.role);
-    setIsServerReady(false);
-    setIsServerChecking(true);
 
-    const prepareApp = async () => {
-      while (isMounted) {
-        try {
-          if (verifiedServerToken !== token) {
-            await waitForApiHealth({ timeout: 2500, maxWaitMs: 18000, pollIntervalMs: 500 });
-            const response = await api.get('/auth/me', {
-              __skipRetry: true
-            });
-            const verifiedUser = normalizeUser(response.data?.user);
-            if (!verifiedUser) {
-              throw new Error('Unable to verify current session.');
-            }
-            if (isMounted) {
-              setUser(verifiedUser);
-              writeStoredAuth({ token, user: verifiedUser, remember: rememberSession });
-            }
-            verifiedServerToken = token;
-          }
-
-          if (needsAdminData) warmAdminAppCache(user).catch(console.error);
-          if (user.role === 'parent') warmParentAppCache(user).catch(console.error);
-
-          if (isMounted) {
-            setIsServerReady(true);
-            setIsServerChecking(false);
-          }
-          return;
-        } catch (error) {
-          console.error('System preparation failed; retrying.', error);
-          if (!isMounted) return;
-          setIsServerReady(false);
-          setIsServerChecking(true);
-          await retryPreparationAfter(1500);
+    api.get('/auth/me', { __maxRetries: 2 })
+      .then((response) => {
+        if (!isMounted) return;
+        const verifiedUser = normalizeUser(response.data?.user);
+        if (verifiedUser) {
+          setUser(verifiedUser);
+          writeStoredAuth({ token, user: verifiedUser, remember: rememberSession });
         }
-      }
-    };
-
-    prepareApp();
+        verifiedServerToken = token;
+        if (needsAdminData) warmAdminAppCache(verifiedUser || user).catch(console.error);
+        if ((verifiedUser || user).role === 'parent') warmParentAppCache(verifiedUser || user).catch(console.error);
+      })
+      .catch((error) => {
+        console.error('Session verification failed in background.', error);
+      });
 
     return () => {
       isMounted = false;
@@ -143,8 +113,8 @@ export const AuthProvider = ({ children }) => {
     setToken(data.token);
     setUser(nextUser);
     verifiedServerToken = '';
-    setIsServerReady(!adminDataRoles.includes(nextUser?.role));
-    setIsServerChecking(adminDataRoles.includes(nextUser?.role));
+    setIsServerReady(true);
+    setIsServerChecking(false);
   };
 
   const logout = () => {
