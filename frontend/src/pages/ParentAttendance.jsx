@@ -158,7 +158,7 @@ const ParentAttendancePage = () => {
     const currentRecords = childRecords.filter((record) => isCurrentRecord(record, child));
     const oldRecords = childRecords.filter((record) => !isCurrentRecord(record, child));
     const total = Number(child.packageClasses || child.subscriptionId?.totalSessions || 0);
-    const currentUsed = currentRecords.filter((record) => record.status === 'present').length;
+    const currentUsed = Number(child.attendancePresentCount ?? currentRecords.filter((record) => record.status === 'present').length);
     const rows = [{
       key: `${child._id}:current`,
       child,
