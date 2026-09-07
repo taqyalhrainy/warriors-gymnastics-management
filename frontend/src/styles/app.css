@@ -271,7 +271,7 @@ button:disabled {
   border-color: rgba(237, 28, 36, 0.55);
 }
 
-.btn-primary, .btn-secondary, .language-toggle-btn, .theme-toggle-btn {
+.btn-primary, .btn-secondary, .btn-danger, .language-toggle-btn, .theme-toggle-btn {
   border: none;
   border-radius: 8px;
   padding: 14px 22px;
@@ -289,6 +289,12 @@ button:disabled {
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text);
+}
+
+.btn-danger {
+  background: rgba(237, 28, 36, 0.09);
+  border: 1px solid rgba(237, 28, 36, 0.42);
+  color: var(--primary-strong);
 }
 
 .dashboard-alert-badge {
@@ -1742,6 +1748,45 @@ body.theme-light .new-subscription-warning {
 
 .table-toolbar h2 {
   margin: 0;
+}
+
+.saved-message-panel {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.saved-message-panel h3 {
+  margin: 0 0 12px;
+}
+
+.saved-message-form,
+.saved-message-list {
+  display: grid;
+  gap: 10px;
+}
+
+.saved-message-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-alt);
+}
+
+.saved-message-item p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.saved-message-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .table-filter-count {

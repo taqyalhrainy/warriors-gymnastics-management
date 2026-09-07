@@ -4,11 +4,13 @@ import { fetchCached, getCachedValue, invalidateCache } from './cache.js';
 const NOTIFICATIONS_CACHE_KEY = 'notifications:list';
 const NOTIFICATIONS_CACHE_TTL_MS = 2 * 60 * 1000;
 
-export const fetchNotifications = async () => {
-  return fetchCached(NOTIFICATIONS_CACHE_KEY, async () => {
-    const response = await api.get('/notifications');
+export const fetchNotifications = async (params = {}) => {
+  const query = params.date ? `?date=${encodeURIComponent(params.date)}` : '';
+  const cacheKey = params.date ? `${NOTIFICATIONS_CACHE_KEY}:${params.date}` : NOTIFICATIONS_CACHE_KEY;
+  return fetchCached(cacheKey, async () => {
+    const response = await api.get(`/notifications${query}`);
     return response.data;
-  }, { ttlMs: NOTIFICATIONS_CACHE_TTL_MS });
+  }, { ttlMs: NOTIFICATIONS_CACHE_TTL_MS, force: params.force });
 };
 
 export const getCachedNotifications = () => getCachedValue(NOTIFICATIONS_CACHE_KEY, { ttlMs: NOTIFICATIONS_CACHE_TTL_MS });

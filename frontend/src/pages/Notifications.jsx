@@ -6,10 +6,24 @@ import { fetchParents } from '../services/parents.js';
 import { fetchGroups } from '../services/groups.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
+const SAVED_MESSAGES_KEY = 'warriors-saved-notification-messages';
+const todayInputValue = () => new Date().toISOString().split('T')[0];
+
+const readSavedMessages = () => {
+  try {
+    return JSON.parse(localStorage.getItem(SAVED_MESSAGES_KEY) || '[]');
+  } catch (error) {
+    return [];
+  }
+};
+
 const NotificationsPage = () => {
   const [notifications, setNotifications] = useState([]);
   const [parents, setParents] = useState([]);
   const [groups, setGroups] = useState([]);
+  const [savedMessages, setSavedMessages] = useState(readSavedMessages);
+  const [savedForm, setSavedForm] = useState({ id: '', title: '', message: '' });
+  const [historyDate, setHistoryDate] = useState(todayInputValue);
   const [message, setMessage] = useState('');
   const [form, setForm] = useState({ recipientUserId: '', groupId: '', title: '', message: '', type: 'announcement' });
   const [search, setSearch] = useState('');
@@ -20,7 +34,10 @@ const NotificationsPage = () => {
   const prefillNotification = location.state?.prefillNotification || null;
 
   useEffect(() => {
-    fetchNotifications().then(setNotifications).catch(console.error);
+    fetchNotifications({ date: historyDate }).then(setNotifications).catch(console.error);
+  }, [historyDate]);
+
+  useEffect(() => {
     fetchParents().then(setParents).catch(console.error);
     fetchGroups().then(setGroups).catch(console.error);
   }, []);
@@ -57,10 +74,45 @@ const NotificationsPage = () => {
         setMessage('Notification sent successfully.');
       }
       setForm({ recipientUserId: '', groupId: '', title: '', message: '', type: 'announcement' });
-      setNotifications(await fetchNotifications());
+      setNotifications(await fetchNotifications({ date: historyDate, force: true }));
     } catch (error) {
       setMessage(error.response?.data?.message || 'Unable to send notification.');
     }
+  };
+
+  const persistSavedMessages = (nextMessages) => {
+    setSavedMessages(nextMessages);
+    localStorage.setItem(SAVED_MESSAGES_KEY, JSON.stringify(nextMessages));
+  };
+
+  const handleSaveMessage = (event) => {
+    event.preventDefault();
+    if (!savedForm.title.trim() || !savedForm.message.trim()) return;
+    const nextMessage = {
+      id: savedForm.id || `${Date.now()}`,
+      title: savedForm.title.trim(),
+      message: savedForm.message.trim()
+    };
+    const nextMessages = savedForm.id
+      ? savedMessages.map((item) => (item.id === savedForm.id ? nextMessage : item))
+      : [nextMessage, ...savedMessages];
+    persistSavedMessages(nextMessages);
+    setSavedForm({ id: '', title: '', message: '' });
+  };
+
+  const handleEditSavedMessage = (item) => {
+    setSavedForm({ id: item.id, title: item.title, message: item.message });
+  };
+
+  const handleDeleteSavedMessage = (id) => {
+    persistSavedMessages(savedMessages.filter((item) => item.id !== id));
+    if (savedForm.id === id) {
+      setSavedForm({ id: '', title: '', message: '' });
+    }
+  };
+
+  const applySavedMessage = (item) => {
+    setForm((current) => ({ ...current, title: item.title, message: item.message }));
   };
 
   const filteredParents = parents.filter((parent) => [
@@ -142,10 +194,40 @@ const NotificationsPage = () => {
               <textarea value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} required />
               <button className="btn-primary" type="submit">{t('send')}</button>
             </form>
+            <section className="saved-message-panel">
+              <h3>Saved messages</h3>
+              <form onSubmit={handleSaveMessage} className="saved-message-form">
+                <input value={savedForm.title} onChange={(event) => setSavedForm({ ...savedForm, title: event.target.value })} placeholder="Saved title" />
+                <textarea value={savedForm.message} onChange={(event) => setSavedForm({ ...savedForm, message: event.target.value })} placeholder="Saved message" />
+                <div className="saved-message-actions">
+                  <button className="btn-secondary" type="submit">{savedForm.id ? 'Update saved' : 'Add saved'}</button>
+                  {savedForm.id && <button className="btn-secondary" type="button" onClick={() => setSavedForm({ id: '', title: '', message: '' })}>Cancel</button>}
+                </div>
+              </form>
+              <div className="saved-message-list">
+                {savedMessages.length ? savedMessages.map((item) => (
+                  <article className="saved-message-item" key={item.id}>
+                    <div>
+                      <strong>{item.title}</strong>
+                      <p>{item.message}</p>
+                    </div>
+                    <div className="saved-message-actions">
+                      <button className="btn-primary" type="button" onClick={() => applySavedMessage(item)}>Use</button>
+                      <button className="btn-secondary" type="button" onClick={() => handleEditSavedMessage(item)}>Edit</button>
+                      <button className="btn-danger" type="button" onClick={() => handleDeleteSavedMessage(item.id)}>Delete</button>
+                    </div>
+                  </article>
+                )) : <p className="empty-state">No saved messages yet.</p>}
+              </div>
+            </section>
           </div>
           <div className="table-card">
             <div className="table-toolbar">
               <h2>{t('messages')}</h2>
+              <label className="table-search">
+                <span>Date</span>
+                <input type="date" value={historyDate} onChange={(event) => setHistoryDate(event.target.value || todayInputValue())} />
+              </label>
               <label className="table-search">
                 <span>Search</span>
                 <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search messages..." />

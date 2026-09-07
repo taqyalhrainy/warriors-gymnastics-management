@@ -12,6 +12,15 @@ const getNotifications = async (req, res, next) => {
     } else if (req.query.userId && validateObjectId(req.query.userId)) {
       filter.recipientUserId = req.query.userId;
     }
+    if (req.query.date) {
+      const start = new Date(req.query.date);
+      if (!Number.isNaN(start.getTime())) {
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start);
+        end.setDate(end.getDate() + 1);
+        filter.createdAt = { $gte: start, $lt: end };
+      }
+    }
     const notifications = await Notification.find(filter).sort({ createdAt: -1 }).populate('recipientUserId', 'name email');
     res.json(notifications);
   } catch (error) {
