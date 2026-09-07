@@ -35,6 +35,14 @@ const getUniqueParentChildren = (children = []) => {
 
   const mergeChildDetails = (selected, fallback) => ({
     ...selected,
+    attendancePlayerIds: [
+      ...new Set([
+        selected?._id,
+        ...(selected?.attendancePlayerIds || []),
+        fallback?._id,
+        ...(fallback?.attendancePlayerIds || [])
+      ].filter(Boolean).map(String))
+    ],
     profileImage: selected?.profileImage || fallback?.profileImage || '',
     dateOfBirth: selected?.dateOfBirth || fallback?.dateOfBirth || '',
     groupId: selected?.groupId || fallback?.groupId,
@@ -48,7 +56,7 @@ const getUniqueParentChildren = (children = []) => {
 
     const current = byName.get(key);
     if (!current) {
-      byName.set(key, child);
+      byName.set(key, { ...child, attendancePlayerIds: [String(child._id)] });
       return;
     }
 
@@ -145,7 +153,8 @@ const ParentAttendancePage = () => {
   }, []);
 
   const packagesByChild = useMemo(() => new Map(children.map((child) => {
-    const childRecords = attendance.filter((record) => String(record.playerId?._id || record.playerId) === String(child._id));
+    const childIdSet = new Set((child.attendancePlayerIds?.length ? child.attendancePlayerIds : [child._id]).map(String));
+    const childRecords = attendance.filter((record) => childIdSet.has(String(record.playerId?._id || record.playerId)));
     const currentRecords = childRecords.filter((record) => isCurrentRecord(record, child));
     const oldRecords = childRecords.filter((record) => !isCurrentRecord(record, child));
     const total = Number(child.packageClasses || child.subscriptionId?.totalSessions || 0);
