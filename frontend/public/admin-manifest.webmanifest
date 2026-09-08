@@ -3,7 +3,7 @@
   "short_name": "Admin",
   "id": "/admin-pwa",
   "description": "Warriors Gymnastics Academy admin portal.",
-  "start_url": "/admin-login?source=pwa",
+  "start_url": "/admin-login?source=admin-pwa",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",

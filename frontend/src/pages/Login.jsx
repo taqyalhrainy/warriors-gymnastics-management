@@ -94,8 +94,10 @@ const LoginPage = ({ initialRole = 'parent' }) => {
 
   useEffect(() => {
     if (!user) return;
+    if (loginRole === 'admin' && user.role === 'parent') return;
+    if (loginRole === 'parent' && user.role !== 'parent') return;
     navigate(user.role === 'parent' ? '/parent' : '/admin', { replace: true });
-  }, [user, navigate]);
+  }, [user, navigate, loginRole]);
 
   useEffect(() => {
     if (initialRole === 'admin' || searchParams.get('admin') === '1') {
@@ -111,6 +113,7 @@ const LoginPage = ({ initialRole = 'parent' }) => {
     if (loginRole === 'admin') {
       manifestLink.setAttribute('href', '/admin-manifest.webmanifest');
       document.title = 'Warriors Admin Login';
+      window.__warriorsInstallPrompt = null;
     }
 
     return () => {
@@ -178,7 +181,7 @@ const LoginPage = ({ initialRole = 'parent' }) => {
         </div>
         {loginRole === 'admin' && (
           <div className="admin-install-row">
-            <InstallAppButton label="Install Admin Application" installPath="/admin-login" />
+            <InstallAppButton label="Install Admin Application" installPath="/admin-login?source=admin-pwa" appName="Admin" />
           </div>
         )}
         <h2>{loginRole === 'admin' ? 'Admin Login' : 'Warriors Gym Login'}</h2>

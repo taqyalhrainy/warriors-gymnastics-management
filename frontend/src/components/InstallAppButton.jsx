@@ -19,7 +19,7 @@ const getPlatform = () => {
   };
 };
 
-const InstallAppButton = ({ className = '', label = 'Install App', installPath = '' }) => {
+const InstallAppButton = ({ className = '', label = 'Install App', installPath = '', appName = 'Warriors app' }) => {
   const [installPrompt, setInstallPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(() => typeof window !== 'undefined' && isStandalone());
   const [modalMode, setModalMode] = useState('');
@@ -81,11 +81,11 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
 
   const modal = modalMode ? createPortal(
     <div className={`install-modal-backdrop ${modalMode.startsWith('ios') ? 'is-bottom-sheet' : ''}`} role="presentation" onClick={() => setModalMode('')}>
-      <section className="install-modal" role="dialog" aria-modal="true" aria-label="Install Warriors app" onClick={(event) => event.stopPropagation()}>
+      <section className="install-modal" role="dialog" aria-modal="true" aria-label={`Install ${appName}`} onClick={(event) => event.stopPropagation()}>
         <button type="button" className="install-modal-close" onClick={() => setModalMode('')} aria-label="Close">x</button>
         {modalMode === 'ios' ? (
           <>
-            <span className="landing-kicker">Install on iPhone</span>
+            <span className="landing-kicker">Install {appName} on iPhone</span>
             <h2>Add to Home Screen</h2>
             <div className="ios-install-flow" aria-label="iOS install steps">
               <span>Share</span><b>→</b><span>Add to Home Screen</span><b>→</b><span>Add</span>
@@ -108,8 +108,8 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
         ) : (
           <>
             <span className="landing-kicker">Install on phone</span>
-            <h2>Scan to open the app</h2>
-            <img className="install-qr" src={qrUrl} alt="QR code for Warriors Gymnastics website" />
+            <h2>Scan to open {appName}</h2>
+            <img className="install-qr" src={qrUrl} alt={`QR code for ${appName}`} />
             <p>Open this link on your phone, then use your browser install option.</p>
           </>
         )}
