@@ -107,15 +107,15 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
         ) : modalMode === 'android-install' ? (
           <>
             <span className="landing-kicker">Install unavailable</span>
-            <h2>Install from Chrome</h2>
-            <p>Chrome has not exposed the install prompt yet. Wait a few seconds, then tap Install App again.</p>
+            <h2>Install is getting ready</h2>
+            <p>Wait a few seconds, then tap Install App again.</p>
           </>
         ) : (
           <>
             <span className="landing-kicker">Install on phone</span>
             <h2>Scan to open {appName}</h2>
             <img className="install-qr" src={qrUrl} alt={`QR code for ${appName}`} />
-            <p>{isAdminInstall ? 'Scan on Android to open Admin in Chrome, then tap Install Admin Application.' : 'Open this link on your phone, then use your browser install option.'}</p>
+            <p>{isAdminInstall ? 'Scan on Android, then tap Install Admin Application.' : 'Open this link on your phone, then use your browser install option.'}</p>
           </>
         )}
       </section>
