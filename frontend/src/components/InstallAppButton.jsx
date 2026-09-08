@@ -36,8 +36,7 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
   const [platform, setPlatform] = useState(() => typeof window === 'undefined' ? {} : getPlatform());
   const appUrl = useMemo(() => `${window.location.origin}${installPath}`, [installPath]);
   const androidChromeIntentUrl = useMemo(() => getAndroidChromeIntentUrl(appUrl), [appUrl]);
-  const qrTargetUrl = isAdminInstall ? androidChromeIntentUrl : appUrl;
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=16&data=${encodeURIComponent(qrTargetUrl)}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(appUrl)}`;
 
   useEffect(() => {
     setPlatform(getPlatform());
