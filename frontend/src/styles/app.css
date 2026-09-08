@@ -6390,29 +6390,6 @@ body.rtl .payment-table-wrap {
   object-fit: contain;
 }
 
-.hidden-admin-login-button {
-  position: absolute;
-  top: 8%;
-  left: 50%;
-  width: 130px;
-  height: 90px;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  box-shadow: none;
-  opacity: 0;
-  cursor: default;
-  transform: translateX(-50%);
-}
-
-.hidden-admin-login-button:hover,
-.hidden-admin-login-button:active {
-  background: transparent;
-  box-shadow: none;
-  transform: translateX(-50%);
-}
-
 .login-card h2 {
   margin-top: 0;
 }

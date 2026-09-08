@@ -68,8 +68,8 @@ const getAuthErrorMessage = (err) => {
   return message || 'Something went wrong. Please try again.';
 };
 
-const LoginPage = () => {
-  const [loginRole, setLoginRole] = useState('parent');
+const LoginPage = ({ initialRole = 'parent' }) => {
+  const [loginRole, setLoginRole] = useState(initialRole);
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [rememberLogin, setRememberLogin] = useState(() => localStorage.getItem(AUTH_REMEMBER_KEY) === 'true');
@@ -92,25 +92,14 @@ const LoginPage = () => {
   }, []);
 
   useEffect(() => {
-    if (searchParams.get('admin') === '1') {
+    if (initialRole === 'admin' || searchParams.get('admin') === '1') {
       setLoginRole('admin');
     }
-  }, [searchParams]);
+  }, [initialRole, searchParams]);
 
   const clearErrors = () => {
     setFieldErrors({});
     setGeneralError('');
-  };
-
-  const switchLoginRole = (role) => {
-    setLoginRole(role);
-    setIdentifier('');
-    setPassword('');
-    clearErrors();
-  };
-
-  const toggleHiddenAdminLogin = () => {
-    switchLoginRole(loginRole === 'admin' ? 'parent' : 'admin');
   };
 
   const handleSubmit = async (e) => {
@@ -164,14 +153,6 @@ const LoginPage = () => {
       <div className="login-card">
         <div className="login-logo-frame">
           <img className="login-logo" src={warriorsLogo} alt="Warriors Gymnastics Academy" />
-          <button
-            type="button"
-            className="hidden-admin-login-button"
-            onClick={toggleHiddenAdminLogin}
-            title=""
-            tabIndex={-1}
-            aria-hidden="true"
-          />
         </div>
         <h2>{loginRole === 'admin' ? 'Admin Login' : 'Warriors Gym Login'}</h2>
         {loginRole === 'admin' && <p className="admin-login-mode-label">ADMIN</p>}
