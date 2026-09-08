@@ -70,7 +70,8 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
     const platform = getPlatform();
     if (platform.isStandalone) {
       if (isAdminInstall) {
-        window.location.href = androidChromeIntentUrl;
+        window.open(androidChromeIntentUrl, '_blank', 'noopener,noreferrer');
+        setTimeout(() => setModalMode('android-browser'), 700);
         return;
       }
       setIsInstalled(true);
@@ -120,7 +121,16 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
             <h2>Open in Chrome</h2>
             <p>This browser did not expose the native install prompt. Open this site in Chrome, then tap Install App.</p>
             {isAdminInstall && (
-              <a className="install-app-button" href={androidChromeIntentUrl}>Open Admin in Chrome</a>
+              <>
+                <a className="install-app-button" href={androidChromeIntentUrl} target="_blank" rel="noreferrer">Open Admin in Chrome</a>
+                <button
+                  type="button"
+                  className="install-app-button is-secondary"
+                  onClick={() => navigator.clipboard?.writeText(appUrl)}
+                >
+                  Copy Admin Link
+                </button>
+              </>
             )}
           </>
         ) : (
