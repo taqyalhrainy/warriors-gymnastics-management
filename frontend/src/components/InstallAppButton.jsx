@@ -19,13 +19,25 @@ const getPlatform = () => {
   };
 };
 
+const getAndroidChromeIntentUrl = (url) => {
+  try {
+    const parsed = new URL(url);
+    return `intent://${parsed.host}${parsed.pathname}${parsed.search}#Intent;scheme=${parsed.protocol.replace(':', '')};package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(url)};end`;
+  } catch {
+    return url;
+  }
+};
+
 const InstallAppButton = ({ className = '', label = 'Install App', installPath = '', appName = 'Warriors app' }) => {
+  const isAdminInstall = installPath.startsWith('/admin-login');
   const [installPrompt, setInstallPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(() => typeof window !== 'undefined' && isStandalone());
   const [modalMode, setModalMode] = useState('');
   const [platform, setPlatform] = useState(() => typeof window === 'undefined' ? {} : getPlatform());
   const appUrl = useMemo(() => `${window.location.origin}${installPath}`, [installPath]);
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(appUrl)}`;
+  const androidChromeIntentUrl = useMemo(() => getAndroidChromeIntentUrl(appUrl), [appUrl]);
+  const qrTargetUrl = isAdminInstall ? androidChromeIntentUrl : appUrl;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrTargetUrl)}`;
 
   useEffect(() => {
     setPlatform(getPlatform());
@@ -53,11 +65,15 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
     };
   }, []);
 
-  if (isInstalled) return null;
+  if (isInstalled && !isAdminInstall) return null;
 
   const handleInstall = async () => {
     const platform = getPlatform();
     if (platform.isStandalone) {
+      if (isAdminInstall && platform.isAndroid) {
+        window.location.href = androidChromeIntentUrl;
+        return;
+      }
       setIsInstalled(true);
       return;
     }
@@ -104,13 +120,16 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
             <span className="landing-kicker">Install unavailable</span>
             <h2>Open in Chrome</h2>
             <p>This browser did not expose the native install prompt. Open this site in Chrome, then tap Install App.</p>
+            {isAdminInstall && (
+              <a className="install-app-button" href={androidChromeIntentUrl}>Open Admin in Chrome</a>
+            )}
           </>
         ) : (
           <>
             <span className="landing-kicker">Install on phone</span>
             <h2>Scan to open {appName}</h2>
             <img className="install-qr" src={qrUrl} alt={`QR code for ${appName}`} />
-            <p>Open this link on your phone, then use your browser install option.</p>
+            <p>{isAdminInstall ? 'Scan on Android to open Admin in Chrome, then tap Install Admin Application.' : 'Open this link on your phone, then use your browser install option.'}</p>
           </>
         )}
       </section>
