@@ -1,10 +1,10 @@
 const Attendance = require('../models/Attendance');
 const Player = require('../models/Player');
 require('../models/Parent');
-const Notification = require('../models/Notification');
 const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { synchronizeSubscriptionAttendanceUsage } = require('../utils/subscriptionAttendance');
+const { createNotification } = require('../utils/notificationDelivery');
 
 const toDateKey = (date = new Date()) => new Date(date).toISOString().split('T')[0];
 
@@ -65,7 +65,7 @@ const markPresent = async (req, res, next) => {
     const attendanceTime = today.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
     await Promise.all([
       safelyRunAttendanceSideEffect('subscription synchronization', () => synchronizeSubscriptionAttendanceUsage(player, today)),
-      player.parentId?.userId ? safelyRunAttendanceSideEffect('notification', () => Notification.create({
+      player.parentId?.userId ? safelyRunAttendanceSideEffect('notification', () => createNotification({
         recipientUserId: player.parentId.userId._id,
         playerId: player._id,
         title: 'Attendance Registered',
@@ -154,7 +154,7 @@ const updateTodayAttendance = async (req, res, next) => {
     const attendanceTime = today.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
     await Promise.all([
       safelyRunAttendanceSideEffect('subscription synchronization', () => synchronizeSubscriptionAttendanceUsage(player, today)),
-      shouldNotify ? safelyRunAttendanceSideEffect('notification', () => Notification.create({
+      shouldNotify ? safelyRunAttendanceSideEffect('notification', () => createNotification({
         recipientUserId: player.parentId.userId._id,
         playerId: player._id,
         title: 'Attendance Registered',

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
+import PushNotificationSettings from '../components/PushNotificationSettings.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
@@ -73,6 +74,15 @@ const ParentSettingsPage = ({ theme, toggleTheme }) => {
                 </button>
               </div>
             )}
+          </div>
+
+          <div className="parent-setting-group">
+            <button type="button" className="parent-setting-header" onClick={() => togglePanel('notifications')}>
+              <span>Notifications</span>
+              <strong>Phone alerts</strong>
+              <i className={openPanel === 'notifications' ? 'is-open' : ''} aria-hidden="true" />
+            </button>
+            {openPanel === 'notifications' && <PushNotificationSettings />}
           </div>
 
           <div className="parent-setting-group">

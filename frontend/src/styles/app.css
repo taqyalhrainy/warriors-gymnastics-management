@@ -7446,6 +7446,12 @@ body.theme-dark .parent-setting-choice.is-selected {
   font-weight: 950;
 }
 
+.parent-setting-note {
+  margin: 8px 14px 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 body.theme-dark .parent-portal-page,
 body.theme-dark .parent-app-shell,
 body.theme-dark .dashboard-layout.parent-app-layout .page-content {

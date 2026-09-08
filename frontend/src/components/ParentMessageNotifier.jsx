@@ -84,17 +84,8 @@ const ParentMessageNotifier = () => {
   useEffect(() => {
     if (user?.role !== 'parent') return undefined;
 
-    const requestOnFirstTap = () => {
-      ensurePushSubscription().catch(console.error);
-      window.removeEventListener('pointerdown', requestOnFirstTap);
-      window.removeEventListener('keydown', requestOnFirstTap);
-    };
-
     if (canNotify() && Notification.permission === 'granted') {
       ensurePushSubscription().catch(console.error);
-    } else if (canNotify() && Notification.permission === 'default') {
-      window.addEventListener('pointerdown', requestOnFirstTap, { once: true });
-      window.addEventListener('keydown', requestOnFirstTap, { once: true });
     }
 
     const checkMessages = async () => {
@@ -129,8 +120,6 @@ const ParentMessageNotifier = () => {
 
     return () => {
       window.clearInterval(timer);
-      window.removeEventListener('pointerdown', requestOnFirstTap);
-      window.removeEventListener('keydown', requestOnFirstTap);
     };
   }, [user?.role]);
 

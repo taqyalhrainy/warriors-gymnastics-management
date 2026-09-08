@@ -5,19 +5,13 @@ const Player = require('../models/Player');
 const PushSubscription = require('../models/PushSubscription');
 const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
-const { getVapidPublicKey, sendPushToUser } = require('../utils/pushNotifications');
+const { getVapidPublicKey, isPushConfigured } = require('../utils/pushNotifications');
+const { createNotification: createAndPushNotification, createNotifications } = require('../utils/notificationDelivery');
 
 const adminNotificationRoles = ['admin', 'coach', 'receptionist'];
 
-const pushNotification = (notification) => sendPushToUser(notification.recipientUserId, {
-  title: notification.title,
-  body: notification.message,
-  url: `/parent/notifications/${notification._id}`,
-  notificationId: notification._id
-}).catch((error) => console.error('Push side effect failed:', error.message));
-
 const getPushPublicKey = (req, res) => {
-  res.json({ publicKey: getVapidPublicKey() });
+  res.json({ publicKey: getVapidPublicKey(), configured: isPushConfigured() });
 };
 
 const savePushSubscription = async (req, res, next) => {
@@ -40,6 +34,32 @@ const savePushSubscription = async (req, res, next) => {
     );
 
     res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deletePushSubscription = async (req, res, next) => {
+  try {
+    const subscription = sanitizeObject(req.body);
+    if (!subscription?.endpoint) {
+      return res.status(400).json({ message: 'Subscription endpoint is required.' });
+    }
+
+    await PushSubscription.deleteOne({ userId: req.user._id, endpoint: subscription.endpoint });
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getPushStatus = async (req, res, next) => {
+  try {
+    const endpoint = String(req.query.endpoint || '');
+    const filter = { userId: req.user._id };
+    if (endpoint) filter.endpoint = endpoint;
+    const count = await PushSubscription.countDocuments(filter);
+    res.json({ configured: isPushConfigured(), subscribed: count > 0 });
   } catch (error) {
     next(error);
   }
@@ -190,14 +210,13 @@ const createNotification = async (req, res, next) => {
     if (!recipientUserId || !title || !message) {
       return res.status(400).json({ message: 'Recipient, title, and message are required.' });
     }
-    const notification = await Notification.create({
+    const notification = await createAndPushNotification({
       recipientUserId,
       playerId,
       title,
       message,
       type
     });
-    pushNotification(notification);
     await createAuditLog({ userId: req.user._id, action: 'create notification', entity: 'Notification', entityId: notification._id, req });
     res.status(201).json(notification);
   } catch (error) {
@@ -221,10 +240,9 @@ const announceAllParents = async (req, res, next) => {
         message,
         type: type || 'announcement',
         isRead: false
-      }));
+    }));
     if (notifications.length > 0) {
-      const createdNotifications = await Notification.insertMany(notifications);
-      createdNotifications.forEach(pushNotification);
+      await createNotifications(notifications);
     }
     await createAuditLog({ userId: req.user._id, action: 'announce all parents', entity: 'Notification', entityId: null, req });
     res.json({ count: notifications.length });
@@ -268,8 +286,7 @@ const announceGroupParents = async (req, res, next) => {
     }));
 
     if (notifications.length > 0) {
-      const createdNotifications = await Notification.insertMany(notifications);
-      createdNotifications.forEach(pushNotification);
+      await createNotifications(notifications);
     }
     await createAuditLog({ userId: req.user._id, action: 'announce group parents', entity: 'Notification', entityId: null, req });
     res.json({ count: notifications.length });
@@ -284,6 +301,8 @@ module.exports = {
   getUnreadNotificationCount,
   getPushPublicKey,
   savePushSubscription,
+  deletePushSubscription,
+  getPushStatus,
   getSavedMessages,
   createSavedMessage,
   updateSavedMessage,

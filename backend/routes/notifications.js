@@ -5,6 +5,8 @@ const {
   getUnreadNotificationCount,
   getPushPublicKey,
   savePushSubscription,
+  deletePushSubscription,
+  getPushStatus,
   getSavedMessages,
   createSavedMessage,
   updateSavedMessage,
@@ -21,7 +23,9 @@ router.use(protect);
 router.get('/', authorize('admin', 'coach', 'receptionist', 'parent'), getNotifications);
 router.get('/count', authorize('admin', 'coach', 'receptionist', 'parent'), getUnreadNotificationCount);
 router.get('/push/public-key', authorize('parent'), getPushPublicKey);
+router.get('/push/status', authorize('parent'), getPushStatus);
 router.post('/push/subscribe', authorize('parent'), savePushSubscription);
+router.delete('/push/unsubscribe', authorize('parent'), deletePushSubscription);
 router.get('/saved', authorize('admin', 'coach', 'receptionist'), getSavedMessages);
 router.post('/saved', authorize('admin', 'coach', 'receptionist'), createSavedMessage);
 router.put('/saved/:id', authorize('admin', 'coach', 'receptionist'), updateSavedMessage);

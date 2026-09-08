@@ -1,6 +1,5 @@
 const Payment = require('../models/Payment');
 const Parent = require('../models/Parent');
-const Notification = require('../models/Notification');
 const Player = require('../models/Player');
 const Attendance = require('../models/Attendance');
 const { sanitizeObject, validateObjectId } = require('../middleware/validate');
@@ -8,6 +7,7 @@ const { createAuditLog } = require('../utils/audit');
 const { encrypt, decrypt } = require('../utils/encryption');
 const { parseLocalizedNumber } = require('../utils/numberInput');
 const { snapshotPaymentDocument, createHistoryEntry } = require('../utils/history');
+const { createNotification } = require('../utils/notificationDelivery');
 
 const populatePaymentQuery = (query) => query
   .populate({
@@ -360,7 +360,7 @@ const createPayment = async (req, res, next) => {
       createdBy: req.user._id
     });
     if (parentRecord?.userId) {
-      await Notification.create({
+      await createNotification({
         recipientUserId: parentRecord.userId._id,
         title: 'Payment received',
         message: `Payment recorded for ${player.fullName}.`,

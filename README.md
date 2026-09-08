@@ -68,7 +68,7 @@ Media storage notes:
 - Backend request body limit: 5 MB.
 - Do not store Cloudinary, S3, Firebase, or other storage secrets in frontend JavaScript. If external storage is added later, keep credentials in backend environment variables.
 
-No new required environment variables were added. Optional production media storage variables depend on the provider you choose later, for example:
+Optional production media storage variables depend on the provider you choose later, for example:
 
 ```env
 MEDIA_STORAGE_PROVIDER=cloudinary
@@ -76,6 +76,46 @@ MEDIA_STORAGE_CLOUD_NAME=
 MEDIA_STORAGE_API_KEY=
 MEDIA_STORAGE_API_SECRET=
 ```
+
+## Web Push Notifications
+
+The existing in-app notification system is extended with standards-based Web Push. Notifications are still saved in MongoDB exactly as before, and push delivery is attempted afterward. If push fails, the in-app notification remains saved.
+
+Architecture:
+
+- Frontend: React + Vite PWA with `frontend/public/sw.js`.
+- Backend: Node.js + Express + MongoDB/Mongoose.
+- Auth: JWT protected APIs.
+- Push library: `web-push`.
+- Subscription storage: `PushSubscription` documents tied to the authenticated user.
+
+Required backend environment variables:
+
+```env
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=mailto:admin@example.com
+```
+
+Generate keys with:
+
+```bash
+cd backend
+npm run generate:vapid
+```
+
+Do not commit the generated private key. Add the values to production environment variables.
+
+Endpoints:
+
+- `GET /api/push/public-key`
+- `GET /api/push/status`
+- `POST /api/push/subscribe`
+- `DELETE /api/push/unsubscribe`
+
+Users enable phone notifications from the parent app Settings page. The app asks permission only after the parent taps Enable. Android supports push in Chrome/PWA. On iPhone, push requires the installed Home Screen PWA on supported iOS versions.
+
+The service worker handles `push` and `notificationclick`. Clicking a push opens the related parent page, such as attendance, payments, or the notification detail page. Invalid push subscriptions returning permanent `404` or `410` errors are deleted automatically.
 
 ## Project Structure
 

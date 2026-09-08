@@ -27,12 +27,22 @@ export const fetchUnreadCount = async () => {
 };
 
 export const fetchPushPublicKey = async () => {
-  const response = await api.get('/notifications/push/public-key');
+  const response = await api.get('/push/public-key');
   return response.data.publicKey;
 };
 
 export const savePushSubscription = async (subscription) => {
-  await api.post('/notifications/push/subscribe', subscription);
+  await api.post('/push/subscribe', subscription);
+};
+
+export const deletePushSubscription = async (subscription) => {
+  await api.delete('/push/unsubscribe', { data: subscription });
+};
+
+export const fetchPushStatus = async (endpoint = '') => {
+  const query = endpoint ? `?endpoint=${encodeURIComponent(endpoint)}` : '';
+  const response = await api.get(`/push/status${query}`);
+  return response.data;
 };
 
 export const fetchSavedNotificationMessages = async (params = {}) => {
