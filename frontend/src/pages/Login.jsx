@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { login } from '../services/auth.js';
 import api from '../services/api.js';
@@ -79,6 +79,7 @@ const LoginPage = () => {
   const [isWaitingForServer, setIsWaitingForServer] = useState(false);
   const { login: authLogin } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     if (hasRequestedServerWake) return;
@@ -89,6 +90,12 @@ const LoginPage = () => {
       hasRequestedServerWake = false;
     });
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get('admin') === '1') {
+      setLoginRole('admin');
+    }
+  }, [searchParams]);
 
   const clearErrors = () => {
     setFieldErrors({});
@@ -161,6 +168,7 @@ const LoginPage = () => {
             type="button"
             className="hidden-admin-login-button"
             onClick={toggleHiddenAdminLogin}
+            title=""
             tabIndex={-1}
             aria-hidden="true"
           />
