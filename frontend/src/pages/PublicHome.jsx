@@ -18,7 +18,7 @@ const PublicHomePage = () => {
 
   useEffect(() => {
     if (!isStandaloneApp()) return;
-    navigate(user ? (user.role === 'parent' ? '/parent' : '/admin') : '/login?source=pwa', { replace: true });
+    navigate(user ? (user.role === 'parent' ? '/parent' : '/admin') : '/parent/login?source=parent-pwa', { replace: true });
   }, [navigate, user]);
 
   useEffect(() => {
@@ -38,7 +38,7 @@ const PublicHomePage = () => {
         </Link>
         <nav>
           {user ? <Link className="public-login-link" to={dashboardPath}>Dashboard</Link> : <Link className="public-login-link" to="/login">Login</Link>}
-          <InstallAppButton />
+          <InstallAppButton installPath="/parent/login?source=parent-pwa" appName="Warriors app" />
         </nav>
       </header>
 
@@ -56,7 +56,7 @@ const PublicHomePage = () => {
           <p>Professional gymnastics training, organized attendance, parent updates, and club media in one polished app.</p>
           <div className="public-hero-actions">
             {user ? <Link className="btn-primary" to={dashboardPath}>Open Dashboard</Link> : <Link className="btn-primary" to="/login">Login</Link>}
-            <InstallAppButton className="is-secondary" />
+            <InstallAppButton className="is-secondary" installPath="/parent/login?source=parent-pwa" appName="Warriors app" />
           </div>
         </div>
       </section>

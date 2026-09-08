@@ -119,6 +119,7 @@ function App() {
       <Suspense fallback={<div className="route-loading"><img src={warriorsLogo} alt="" /><span className="loading-spinner" />Loading...</div>}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/parent/login" element={<LoginPage />} />
           <Route path="/admin-login" element={<LoginPage initialRole="admin" />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<ProtectedRoute roles={adminRoles} />}>
