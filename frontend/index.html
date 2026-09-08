@@ -15,6 +15,7 @@
         manifest.rel = 'manifest';
         manifest.href = isAdminLogin ? '/admin-manifest.webmanifest' : '/manifest.webmanifest';
         document.head.appendChild(manifest);
+        document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute('content', isAdminLogin ? 'Admin' : 'Warriors');
       }());
     </script>
     <link rel="apple-touch-icon" href="/warriors-logo.png" />

@@ -1,6 +1,6 @@
 {
-  "name": "Warriors Admin Application",
-  "short_name": "Warriors Admin",
+  "name": "Admin",
+  "short_name": "Admin",
   "id": "/admin-pwa",
   "description": "Warriors Gymnastics Academy admin portal.",
   "start_url": "/admin-login?source=pwa",
