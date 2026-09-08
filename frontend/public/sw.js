@@ -1,4 +1,4 @@
-const CACHE_NAME = 'warriors-shell-v3';
+const CACHE_NAME = 'warriors-shell-v4';
 const SHELL_ASSETS = ['/', '/login?source=pwa', '/admin-login?source=pwa', '/manifest.webmanifest', '/admin-manifest.webmanifest', '/warriors-logo.png'];
 
 self.addEventListener('install', (event) => {

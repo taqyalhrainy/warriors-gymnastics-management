@@ -19,12 +19,12 @@ const getPlatform = () => {
   };
 };
 
-const InstallAppButton = ({ className = '', label = 'Install App' }) => {
+const InstallAppButton = ({ className = '', label = 'Install App', installPath = '' }) => {
   const [installPrompt, setInstallPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(() => typeof window !== 'undefined' && isStandalone());
   const [modalMode, setModalMode] = useState('');
   const [platform, setPlatform] = useState(() => typeof window === 'undefined' ? {} : getPlatform());
-  const appUrl = useMemo(() => window.location.origin, []);
+  const appUrl = useMemo(() => `${window.location.origin}${installPath}`, [installPath]);
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(appUrl)}`;
 
   useEffect(() => {

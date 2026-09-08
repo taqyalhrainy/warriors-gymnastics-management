@@ -1,6 +1,7 @@
 {
   "name": "Warriors Gymnastics Academy",
   "short_name": "Warriors",
+  "id": "/parent-pwa",
   "description": "Warriors Gymnastics Academy portal for parents and staff.",
   "start_url": "/login?source=pwa",
   "scope": "/",
