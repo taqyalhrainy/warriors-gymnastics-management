@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchNotifications, sendNotification, announceAllParents, announceGroupParents } from '../services/notifications.js';
@@ -33,9 +33,27 @@ const NotificationsPage = () => {
   const location = useLocation();
   const prefillNotification = location.state?.prefillNotification || null;
 
-  useEffect(() => {
-    fetchNotifications({ date: historyDate }).then(setNotifications).catch(console.error);
+  const loadNotifications = useCallback((options = {}) => {
+    fetchNotifications({ date: historyDate, ...options }).then(setNotifications).catch(console.error);
   }, [historyDate]);
+
+  useEffect(() => {
+    loadNotifications();
+    const intervalId = window.setInterval(() => {
+      loadNotifications({ force: true });
+    }, 10000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadNotifications({ force: true });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [loadNotifications]);
 
   useEffect(() => {
     fetchParents().then(setParents).catch(console.error);
@@ -74,7 +92,7 @@ const NotificationsPage = () => {
         setMessage('Notification sent successfully.');
       }
       setForm({ recipientUserId: '', groupId: '', title: '', message: '', type: 'announcement' });
-      setNotifications(await fetchNotifications({ date: historyDate, force: true }));
+      loadNotifications({ force: true });
     } catch (error) {
       setMessage(error.response?.data?.message || 'Unable to send notification.');
     }

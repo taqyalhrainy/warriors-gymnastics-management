@@ -4,6 +4,8 @@ const Player = require('../models/Player');
 const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 
+const adminNotificationRoles = ['admin', 'coach', 'receptionist'];
+
 const getNotifications = async (req, res, next) => {
   try {
     const filter = {};
@@ -38,7 +40,7 @@ const getNotificationById = async (req, res, next) => {
     if (!notification) {
       return res.status(404).json({ message: 'Notification not found.' });
     }
-    if (String(notification.recipientUserId?._id) !== String(req.user._id) && req.user.role !== 'admin') {
+    if (String(notification.recipientUserId?._id) !== String(req.user._id) && !adminNotificationRoles.includes(req.user.role)) {
       return res.status(403).json({ message: 'Forbidden.' });
     }
     if (req.user.role === 'parent' && !notification.isRead) {
