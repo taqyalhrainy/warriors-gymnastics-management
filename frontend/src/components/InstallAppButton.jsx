@@ -22,7 +22,7 @@ const getPlatform = () => {
 const getAndroidChromeIntentUrl = (url) => {
   try {
     const parsed = new URL(url);
-    return `intent://${parsed.host}${parsed.pathname}${parsed.search}#Intent;scheme=${parsed.protocol.replace(':', '')};package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(url)};end`;
+    return `intent://${parsed.host}${parsed.pathname}${parsed.search}#Intent;scheme=${parsed.protocol.replace(':', '')};package=com.android.chrome;end`;
   } catch {
     return url;
   }
@@ -37,7 +37,7 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
   const appUrl = useMemo(() => `${window.location.origin}${installPath}`, [installPath]);
   const androidChromeIntentUrl = useMemo(() => getAndroidChromeIntentUrl(appUrl), [appUrl]);
   const qrTargetUrl = isAdminInstall ? androidChromeIntentUrl : appUrl;
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrTargetUrl)}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=16&data=${encodeURIComponent(qrTargetUrl)}`;
 
   useEffect(() => {
     setPlatform(getPlatform());
