@@ -63,18 +63,18 @@ export const fetchParentAttendanceHistory = async (playerId) => {
   }, { ttlMs: PARENT_CACHE_TTL_MS });
 };
 
-export const fetchParentDashboard = async () => {
+export const fetchParentDashboard = async (params = {}) => {
   return fetchCached(PARENT_DASHBOARD_CACHE_KEY, async () => {
     const response = await api.get('/parents/me/dashboard');
     return response.data;
-  }, { ttlMs: PARENT_CACHE_TTL_MS });
+  }, { ttlMs: PARENT_CACHE_TTL_MS, force: params.force });
 };
 
-export const fetchParentPayments = async () => {
+export const fetchParentPayments = async (params = {}) => {
   return fetchCached(PARENT_PAYMENTS_CACHE_KEY, async () => {
     const response = await api.get('/parents/me/payments');
     return response.data;
-  }, { ttlMs: PARENT_CACHE_TTL_MS });
+  }, { ttlMs: PARENT_CACHE_TTL_MS, force: params.force });
 };
 
 export const getCachedParentDashboard = () => getCachedValue(PARENT_DASHBOARD_CACHE_KEY, { ttlMs: PARENT_CACHE_TTL_MS });

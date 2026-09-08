@@ -6,6 +6,7 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 import warriorsLogo from '../assets/warriors-logo.png';
 
 const formatMoney = (value) => Number(value || 0).toLocaleString('en-US');
+const getVisibleRemaining = (payment) => payment?.playerId?.attendanceDueManual ? Number(payment.remainingAmount || 0) : 0;
 
 const ParentPaymentsPage = () => {
   const [payments, setPayments] = useState(() => getCachedParentPayments() || []);
@@ -16,7 +17,7 @@ const ParentPaymentsPage = () => {
 
   useEffect(() => {
     let isMounted = true;
-    fetchParentPayments()
+    fetchParentPayments({ force: true })
       .then((data) => {
         if (isMounted) setPayments(data);
       })
@@ -57,7 +58,7 @@ const ParentPaymentsPage = () => {
   );
 
   const totalPaid = payments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
-  const totalRemaining = payments.reduce((sum, payment) => sum + Number(payment.remainingAmount || 0), 0);
+  const totalRemaining = payments.reduce((sum, payment) => sum + getVisibleRemaining(payment), 0);
 
   return (
     <div className="dashboard-layout parent-app-layout">
@@ -94,8 +95,8 @@ const ParentPaymentsPage = () => {
                   <td>{new Date(payment.paymentDate).toLocaleDateString()}</td>
                   <td><strong className="parent-paid-amount">{formatMoney(payment.paidAmount)}</strong></td>
                   <td>
-                    <span className={`parent-remaining-pill ${Number(payment.remainingAmount || 0) > 0 ? 'is-due' : 'is-paid'}`}>
-                      {Number(payment.remainingAmount || 0) > 0 ? `${formatMoney(payment.remainingAmount)} remaining` : 'Paid in full'}
+                    <span className={`parent-remaining-pill ${getVisibleRemaining(payment) > 0 ? 'is-due' : 'is-paid'}`}>
+                      {getVisibleRemaining(payment) > 0 ? `${formatMoney(getVisibleRemaining(payment))} remaining` : 'Paid in full'}
                     </span>
                   </td>
                   <td>{payment.paymentMethod}</td>

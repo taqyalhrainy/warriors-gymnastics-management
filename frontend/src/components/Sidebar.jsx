@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLanguage } from '../context/LanguageContext.jsx';
@@ -37,6 +37,7 @@ const Sidebar = () => {
   const { user, logout } = useAuth();
   const { t } = useLanguage();
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const [unreadCount, setUnreadCount] = useState(0);
   const [expiredAlertCount, setExpiredAlertCount] = useState(0);
 
@@ -89,6 +90,7 @@ const Sidebar = () => {
   const handleLogout = () => {
     if (window.confirm('Are you sure you want to log out?')) {
       logout();
+      navigate(isParentArea ? '/parent/login' : '/admin/login', { replace: true });
     }
   };
 

@@ -62,6 +62,8 @@ const getUniqueParentChildren = (children = []) => {
   return [...byName.values()];
 };
 
+const getVisibleRemaining = (child) => child?.attendanceDueManual ? Number(child.remainingAmount || 0) : 0;
+
 const ParentDashboard = () => {
   const [dashboard, setDashboard] = useState(() => getCachedParentDashboard() || null);
   const [isLoading, setIsLoading] = useState(() => !getCachedParentDashboard());
@@ -71,7 +73,7 @@ const ParentDashboard = () => {
 
   useEffect(() => {
     let isMounted = true;
-    fetchParentDashboard()
+    fetchParentDashboard({ force: true })
       .then((data) => {
         if (isMounted) setDashboard(data);
       })
@@ -86,7 +88,7 @@ const ParentDashboard = () => {
 
   const children = getUniqueParentChildren(dashboard?.children || []).filter((child) => child.status !== 'left');
   const notifications = dashboard?.notifications || [];
-  const totalRemaining = children.reduce((sum, child) => sum + Number(child.remainingAmount || 0), 0);
+  const totalRemaining = children.reduce((sum, child) => sum + getVisibleRemaining(child), 0);
   const activeChildren = children.filter((child) => child.status === 'active').length;
   const getChildGroups = (child) => {
     const groups = child?.groupIds?.length ? child.groupIds : [child?.groupId].filter(Boolean);
@@ -178,7 +180,7 @@ const ParentDashboard = () => {
               <div className="parent-child-meta">
                 <div><span>{t('group')}</span><strong>{getChildGroups(child) || t('notAssigned')}</strong></div>
                 <div><span>{t('paid')}</span><strong>{formatCurrency(child.paidTotal || 0)}</strong></div>
-                <div><span>{t('remaining')}</span><strong>{child.remainingAmount != null ? formatCurrency(child.remainingAmount) : '-'}</strong></div>
+                <div><span>{t('remaining')}</span><strong>{formatCurrency(getVisibleRemaining(child))}</strong></div>
                 <div><span>{t('status')}</span><strong>{child.subscriptionId?.status || child.status || '-'}</strong></div>
               </div>
             </Link>
