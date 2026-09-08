@@ -8,23 +8,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Warriors" />
-    <script>
-      (function () {
-        var adminPaths = [
-          '/admin', '/admin-login', '/players', '/groups', '/attendance',
-          '/coaches', '/payments', '/notifications', '/parents', '/reports',
-          '/history', '/security', '/audit-logs', '/owner-summary', '/media-gallery'
-        ];
-        var isAdminApp = adminPaths.some(function (path) {
-          return window.location.pathname === path || window.location.pathname.indexOf(path + '/') === 0;
-        });
-        var manifest = document.createElement('link');
-        manifest.rel = 'manifest';
-        manifest.href = isAdminApp ? '/admin-manifest.webmanifest' : '/manifest.webmanifest';
-        document.head.appendChild(manifest);
-        document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute('content', isAdminApp ? 'Admin' : 'Warriors');
-      }());
-    </script>
+    <script type="module" src="/src/pwa-bootstrap.js"></script>
     <link rel="apple-touch-icon" href="/warriors-logo.png" />
     <link rel="dns-prefetch" href="https://warriors-gymnastics-management.onrender.com" />
     <link rel="preconnect" href="https://warriors-gymnastics-management.onrender.com" crossorigin />

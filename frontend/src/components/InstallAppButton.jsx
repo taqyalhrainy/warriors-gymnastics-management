@@ -21,7 +21,7 @@ const getPlatform = () => {
 
 const InstallAppButton = ({ className = '', label = 'Install App', installPath = '', appName = 'Warriors app' }) => {
   const isAdminInstall = installPath.startsWith('/admin/login') || installPath.startsWith('/admin-login');
-  const [installPrompt, setInstallPrompt] = useState(null);
+  const [installPrompt, setInstallPrompt] = useState(() => window.__warriorsInstallPrompt || null);
   const [isInstalled, setIsInstalled] = useState(() => typeof window !== 'undefined' && isStandalone());
   const [modalMode, setModalMode] = useState('');
   const [platform, setPlatform] = useState(() => typeof window === 'undefined' ? {} : getPlatform());
@@ -90,20 +90,23 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
     const promptEvent = installPrompt || window.__warriorsInstallPrompt;
     if (promptEvent) {
       setModalMode('');
-      promptEvent.prompt();
-      const choice = await promptEvent.userChoice;
-      if (choice?.outcome === 'accepted') {
-        setIsInstalled(true);
+      try {
+        await promptEvent.prompt();
+        const choice = await promptEvent.userChoice;
+        if (choice?.outcome === 'accepted') setIsInstalled(true);
+      } catch {
+        setModalMode('manual');
+      } finally {
+        setInstallPrompt(null);
+        window.__warriorsInstallPrompt = null;
       }
-      setInstallPrompt(null);
-      window.__warriorsInstallPrompt = null;
       return;
     }
     if (platform.isIOS) {
       setModalMode(platform.isSafari ? 'ios' : 'ios-browser');
       return;
     }
-    if (!platform.isAndroid) setModalMode('qr');
+    setModalMode(platform.isAndroid ? 'manual' : 'qr');
   };
 
   const modal = modalMode ? createPortal(
@@ -125,6 +128,11 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
             <div className="ios-install-flow" aria-label="iOS install steps">
               <span>Safari</span><b>→</b><span>Share</span><b>→</b><span>Add</span>
             </div>
+          </>
+        ) : modalMode === 'manual' ? (
+          <>
+            <h2>Install {appName}</h2>
+            <p>Browser menu (&#8942;) &#8594; Add to Home screen &#8594; Install</p>
           </>
         ) : (
           <>
