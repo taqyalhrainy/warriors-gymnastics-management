@@ -214,7 +214,11 @@ app.get('*', async (req, res, next) => {
     const response = await fetchFrontend(req.originalUrl);
     res.status(response.status);
     const contentType = response.headers.get('content-type');
-    if (contentType) res.type(contentType);
+    if (req.path.endsWith('.webmanifest')) {
+      res.type('application/manifest+json');
+    } else if (contentType) {
+      res.type(contentType);
+    }
     const cacheControl = response.headers.get('cache-control');
     res.set('Cache-Control', cacheControl || (req.path.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache'));
     res.send(Buffer.from(await response.arrayBuffer()));
