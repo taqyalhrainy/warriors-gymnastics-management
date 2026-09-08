@@ -2004,9 +2004,9 @@ body.theme-light .new-subscription-warning {
 .install-modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 200;
+  z-index: 9999;
   display: grid;
-  place-items: start center;
+  place-items: center;
   padding: 18px;
   background: rgba(0, 0, 0, 0.66);
   overflow-y: auto;
@@ -2058,7 +2058,8 @@ body.theme-light .new-subscription-warning {
 .install-modal {
   position: relative;
   width: min(520px, calc(100vw - 32px));
-  margin: max(24px, 8vh) auto 24px;
+  max-height: calc(100vh - 36px);
+  margin: 0;
   text-align: center;
 }
 
