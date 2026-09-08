@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import { fetchNotificationById } from '../services/notifications.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
+import warriorsLogo from '../assets/warriors-logo.png';
 
 const NotificationDetailPage = () => {
   const { id } = useParams();
@@ -33,7 +34,7 @@ const NotificationDetailPage = () => {
   return (
     <div className={`dashboard-layout${isParentArea ? ' parent-app-layout' : ''}`}>
       <Sidebar />
-      <main className="page-content">
+      <main className={`page-content${isParentArea ? ' parent-portal-page' : ''}`}>
         <div className="page-header">
           <h1>{t('notification')}</h1>
           <button className={isParentArea ? 'parent-back-button' : 'btn-secondary'} type="button" onClick={() => navigate(backPath)} aria-label={t('back')}>
@@ -52,7 +53,13 @@ const NotificationDetailPage = () => {
             </div>
           </div>
         ) : !error ? (
-          <p>{t('loadingNotification')}</p>
+          isParentArea ? (
+            <div className="parent-loading-panel">
+              <img src={warriorsLogo} alt="" />
+              <span className="parent-loading-spinner" />
+              <strong>{t('loadingNotification')}</strong>
+            </div>
+          ) : <p>{t('loadingNotification')}</p>
         ) : null}
       </main>
     </div>
