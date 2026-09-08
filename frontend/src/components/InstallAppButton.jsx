@@ -19,29 +19,6 @@ const getPlatform = () => {
   };
 };
 
-const waitForInstallPrompt = (timeoutMs = 10000) => new Promise((resolve) => {
-  if (window.__warriorsInstallPrompt) {
-    resolve(window.__warriorsInstallPrompt);
-    return;
-  }
-
-  let settled = false;
-  const finish = (event = null) => {
-    if (settled) return;
-    settled = true;
-    window.removeEventListener('beforeinstallprompt', handlePrompt);
-    window.clearTimeout(timer);
-    resolve(event);
-  };
-  const handlePrompt = (event) => {
-    event.preventDefault();
-    window.__warriorsInstallPrompt = event;
-    finish(event);
-  };
-  const timer = window.setTimeout(() => finish(null), timeoutMs);
-  window.addEventListener('beforeinstallprompt', handlePrompt);
-});
-
 const InstallAppButton = ({ className = '', label = 'Install App', installPath = '', appName = 'Warriors app' }) => {
   const isAdminInstall = installPath.startsWith('/admin/login') || installPath.startsWith('/admin-login');
   const [installPrompt, setInstallPrompt] = useState(null);
@@ -110,10 +87,7 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
       setIsInstalled(true);
       return;
     }
-    let promptEvent = installPrompt || window.__warriorsInstallPrompt;
-    if (!promptEvent && platform.isAndroid) {
-      promptEvent = await waitForInstallPrompt(12000);
-    }
+    const promptEvent = installPrompt || window.__warriorsInstallPrompt;
     if (promptEvent) {
       setModalMode('');
       promptEvent.prompt();
@@ -129,9 +103,7 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
       setModalMode(platform.isSafari ? 'ios' : 'ios-browser');
       return;
     }
-    if (!platform.isAndroid) {
-      setModalMode('qr');
-    }
+    if (!platform.isAndroid) setModalMode('qr');
   };
 
   const modal = modalMode ? createPortal(
