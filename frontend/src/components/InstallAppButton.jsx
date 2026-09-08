@@ -69,7 +69,7 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
   const handleInstall = async () => {
     const platform = getPlatform();
     if (platform.isStandalone) {
-      if (isAdminInstall && platform.isAndroid) {
+      if (isAdminInstall) {
         window.location.href = androidChromeIntentUrl;
         return;
       }
@@ -139,7 +139,7 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
   return (
     <>
       <button type="button" className={`install-app-button ${className}`} onClick={handleInstall}>
-        {label}
+        {isAdminInstall && isInstalled ? 'Open Admin Install' : label}
       </button>
       {modal}
     </>
