@@ -92,6 +92,20 @@ const Sidebar = () => {
     }
   };
 
+  const adminLinks = [
+    { path: '/admin', key: 'dashboard' },
+    { path: '/players', key: 'players' },
+    { path: '/parents', key: 'parents' },
+    { path: '/groups', key: 'groups' },
+    { path: '/attendance', key: 'attendance' },
+    { path: '/coaches', key: 'coaches' },
+    { path: '/payments', key: 'payments' },
+    { path: '/notifications', key: 'notifications' },
+    ...(user?.role === 'admin' ? [{ path: '/media-gallery', key: 'mediaGallery', label: 'Media Gallery' }] : []),
+    { path: '/history', key: 'history' },
+    { path: '/security', key: 'security' }
+  ];
+
   const links = isParentArea
     ? [
       { path: '/parent', key: 'home', label: 'Home' },
@@ -99,18 +113,7 @@ const Sidebar = () => {
       { path: '/parent/payments', key: 'payments' },
       { path: '/parent/notifications', key: 'notifications' }
     ]
-    : [
-      { path: '/admin', key: 'dashboard' },
-      { path: '/players', key: 'players' },
-      { path: '/parents', key: 'parents' },
-      { path: '/groups', key: 'groups' },
-      { path: '/attendance', key: 'attendance' },
-      { path: '/coaches', key: 'coaches' },
-      { path: '/payments', key: 'payments' },
-      { path: '/notifications', key: 'notifications' },
-      { path: '/history', key: 'history' },
-      { path: '/security', key: 'security' }
-    ];
+    : adminLinks;
 
   return (
     <aside className={`sidebar${isParentArea ? ' parent-sidebar' : ''}`}>

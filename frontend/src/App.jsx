@@ -21,6 +21,8 @@ const ReportsPage = lazy(() => import('./pages/Reports.jsx'));
 const HistoryPage = lazy(() => import('./pages/History.jsx'));
 const AuditLogsPage = lazy(() => import('./pages/AuditLogs.jsx'));
 const ParentsPage = lazy(() => import('./pages/Parents.jsx'));
+const PublicHomePage = lazy(() => import('./pages/PublicHome.jsx'));
+const ClubMediaPage = lazy(() => import('./pages/ClubMedia.jsx'));
 const ParentDashboard = lazy(() => import('./pages/ParentDashboard.jsx'));
 const ParentAttendancePage = lazy(() => import('./pages/ParentAttendance.jsx'));
 const ParentPaymentsPage = lazy(() => import('./pages/ParentPayments.jsx'));
@@ -139,6 +141,7 @@ function App() {
             </Route>
             <Route element={<ProtectedRoute roles={['admin']} />}>
               <Route path="/owner-summary" element={<OwnerDashboardPage />} />
+              <Route path="/media-gallery" element={<ClubMediaPage />} />
             </Route>
             <Route element={<ProtectedRoute roles={parentRoles} />}>
               <Route path="/parent" element={<ParentDashboard />} />
@@ -151,7 +154,8 @@ function App() {
               <Route path="/parent/notifications/:id" element={<NotificationDetailPage />} />
             </Route>
           </Route>
-          <Route path="/" element={user ? <Navigate to={user.role === 'parent' ? '/parent' : '/admin'} /> : <Navigate to="/login" />} />
+          <Route path="/" element={<PublicHomePage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
     </div>

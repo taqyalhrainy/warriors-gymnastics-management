@@ -89,6 +89,7 @@ app.use('/api/groups', lazyRouter(() => require('./routes/groups')));
 app.use('/api/parents', lazyRouter(() => require('./routes/parents')));
 app.use('/api/programs', lazyRouter(() => require('./routes/programs')));
 app.use('/api/coaches', lazyRouter(() => require('./routes/coaches')));
+app.use('/api/club-media', lazyRouter(() => require('./routes/clubMedia')));
 app.use('/api/package-options', lazyRouter(() => require('./routes/packageOptions')));
 app.use('/api/waiting-list', lazyRouter(() => require('./routes/waitingList')));
 app.use('/api/attendance', lazyRouter(() => require('./routes/attendance')));
