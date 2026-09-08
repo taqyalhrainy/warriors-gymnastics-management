@@ -80,6 +80,27 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
     };
   }, []);
 
+  useEffect(() => {
+    const currentPlatform = getPlatform();
+    if (
+      !isAdminInstall
+      || !currentPlatform.isAndroid
+      || currentPlatform.isStandalone
+      || !('serviceWorker' in navigator)
+      || navigator.serviceWorker.controller
+      || sessionStorage.getItem('warriors-admin-pwa-controlled') === 'true'
+    ) {
+      return;
+    }
+
+    navigator.serviceWorker.ready.then(() => {
+      if (!navigator.serviceWorker.controller) {
+        sessionStorage.setItem('warriors-admin-pwa-controlled', 'true');
+        window.location.reload();
+      }
+    }).catch(() => undefined);
+  }, [isAdminInstall]);
+
   if (isInstalled && !isAdminInstall) return null;
   if (isInstalled && isAdminInstall) return null;
 
