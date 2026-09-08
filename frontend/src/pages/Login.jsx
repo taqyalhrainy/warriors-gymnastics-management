@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import InstallAppButton from '../components/InstallAppButton.jsx';
 import { login } from '../services/auth.js';
 import api from '../services/api.js';
 import warriorsLogo from '../assets/warriors-logo.png';
@@ -102,6 +103,22 @@ const LoginPage = ({ initialRole = 'parent' }) => {
     }
   }, [initialRole, searchParams]);
 
+  useLayoutEffect(() => {
+    const manifestLink = document.querySelector('link[rel="manifest"]');
+    if (!manifestLink) return undefined;
+
+    const originalHref = manifestLink.getAttribute('href') || '/manifest.webmanifest';
+    if (loginRole === 'admin') {
+      manifestLink.setAttribute('href', '/admin-manifest.webmanifest');
+      document.title = 'Warriors Admin Login';
+    }
+
+    return () => {
+      manifestLink.setAttribute('href', originalHref);
+      document.title = 'Warriors Gymnastics Management';
+    };
+  }, [loginRole]);
+
   const clearErrors = () => {
     setFieldErrors({});
     setGeneralError('');
@@ -159,6 +176,11 @@ const LoginPage = ({ initialRole = 'parent' }) => {
         <div className="login-logo-frame">
           <img className="login-logo" src={warriorsLogo} alt="Warriors Gymnastics Academy" />
         </div>
+        {loginRole === 'admin' && (
+          <div className="admin-install-row">
+            <InstallAppButton label="Install Admin Application" />
+          </div>
+        )}
         <h2>{loginRole === 'admin' ? 'Admin Login' : 'Warriors Gym Login'}</h2>
         {loginRole === 'admin' && <p className="admin-login-mode-label">ADMIN</p>}
         {generalError && <p className="alert-error">{generalError}</p>}

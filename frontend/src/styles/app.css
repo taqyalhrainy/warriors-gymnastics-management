@@ -6373,6 +6373,17 @@ body.rtl .payment-table-wrap {
   font-weight: 950;
 }
 
+.admin-install-row {
+  display: flex;
+  justify-content: center;
+  margin: -8px 0 18px;
+}
+
+.admin-install-row .install-app-button {
+  width: 100%;
+  justify-content: center;
+}
+
 .login-logo-frame {
   position: relative;
   width: min(260px, 100%);

@@ -1,0 +1,25 @@
+{
+  "name": "Warriors Admin Application",
+  "short_name": "Warriors Admin",
+  "description": "Warriors Gymnastics Academy admin portal.",
+  "start_url": "/admin-login?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#d70b19",
+  "background_color": "#f4fbfb",
+  "icons": [
+    {
+      "src": "/warriors-logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/warriors-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

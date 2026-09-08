@@ -19,7 +19,7 @@ const getPlatform = () => {
   };
 };
 
-const InstallAppButton = ({ className = '' }) => {
+const InstallAppButton = ({ className = '', label = 'Install App' }) => {
   const [installPrompt, setInstallPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(() => typeof window !== 'undefined' && isStandalone());
   const [modalMode, setModalMode] = useState('');
@@ -121,7 +121,7 @@ const InstallAppButton = ({ className = '' }) => {
   return (
     <>
       <button type="button" className={`install-app-button ${className}`} onClick={handleInstall}>
-        Install App
+        {label}
       </button>
       {modal}
     </>
