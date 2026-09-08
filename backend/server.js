@@ -69,9 +69,46 @@ app.get('/open-admin', (req, res) => {
     process.env.ADMIN_FRONTEND_URL
     || 'https://warriors-gymnastics-frontend.onrender.com'
   ).replace(/\/+$/, '');
+  const adminUrl = `${frontendOrigin}/admin/login?source=admin-pwa&from=qr`;
+  const adminIntent = `intent://${new URL(adminUrl).host}${new URL(adminUrl).pathname}${new URL(adminUrl).search}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(adminUrl)};end`;
 
   res.set('Cache-Control', 'no-store');
-  res.redirect(302, `${frontendOrigin}/admin/login?source=admin-pwa&from=qr`);
+  res.type('html').send(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Open Admin</title>
+  <style>
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #fafafa; font-family: Arial, sans-serif; color: #111827; }
+    main { width: min(88vw, 360px); padding: 28px; border-top: 4px solid #ed1c24; border-radius: 8px; background: #fff; box-shadow: 0 24px 70px rgba(0,0,0,.18); text-align: center; }
+    img { width: 140px; max-width: 70%; margin-bottom: 16px; }
+    h1 { margin: 0 0 10px; font-size: 26px; }
+    p { margin: 0 0 18px; line-height: 1.45; color: #4b5563; }
+    a { display: block; padding: 15px 18px; border-radius: 8px; background: #d70b19; color: #fff; text-decoration: none; font-weight: 800; }
+    small { display: block; margin-top: 14px; color: #6b7280; }
+  </style>
+</head>
+<body>
+  <main>
+    <img src="${frontendOrigin}/warriors-logo.png" alt="Warriors">
+    <h1>Admin App</h1>
+    <p>Open this page in full Chrome, then tap Install Admin Application.</p>
+    <a id="openChrome" href="${adminIntent}">Open Admin in Chrome</a>
+    <small>If Chrome is already open, continue from there.</small>
+  </main>
+  <script>
+    const target = ${JSON.stringify(adminIntent)};
+    document.getElementById('openChrome').addEventListener('click', function (event) {
+      event.preventDefault();
+      window.location.href = target;
+    });
+    setTimeout(function () {
+      window.location.href = target;
+    }, 350);
+  </script>
+</body>
+</html>`);
 });
 
 app.use((req, res, next) => {

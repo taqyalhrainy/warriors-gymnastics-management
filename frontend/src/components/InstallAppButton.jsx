@@ -22,7 +22,7 @@ const getPlatform = () => {
 const getAndroidChromeIntentUrl = (url) => {
   try {
     const parsed = new URL(url);
-    return `intent://${parsed.host}${parsed.pathname}${parsed.search}#Intent;scheme=${parsed.protocol.replace(':', '')};package=com.android.chrome;end`;
+    return `intent://${parsed.host}${parsed.pathname}${parsed.search}#Intent;scheme=${parsed.protocol.replace(':', '')};package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(url)};end`;
   } catch {
     return url;
   }
@@ -67,11 +67,16 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
     };
   }, []);
 
+  const openInChrome = (event) => {
+    event?.preventDefault();
+    window.location.href = androidChromeIntentUrl;
+  };
+
   if (isInstalled && !isAdminInstall) return null;
 
   if (isInstalled && isAdminInstall) {
     return (
-      <a className={`install-app-button ${className}`} href={androidChromeIntentUrl} target="_blank" rel="noreferrer">
+      <a className={`install-app-button ${className}`} href={androidChromeIntentUrl} onClick={openInChrome}>
         Open Admin in Chrome
       </a>
     );
@@ -128,7 +133,7 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
             <p>This browser did not expose the native install prompt. Open this site in Chrome, then tap Install App.</p>
             {isAdminInstall && (
               <>
-                <a className="install-app-button" href={androidChromeIntentUrl} target="_blank" rel="noreferrer">Open Admin in Chrome</a>
+                <a className="install-app-button" href={androidChromeIntentUrl} onClick={openInChrome}>Open Admin in Chrome</a>
                 <button
                   type="button"
                   className="install-app-button is-secondary"
