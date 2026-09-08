@@ -120,7 +120,8 @@ function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/parent/login" element={<LoginPage />} />
-          <Route path="/admin-login" element={<LoginPage initialRole="admin" />} />
+          <Route path="/admin/login" element={<LoginPage initialRole="admin" />} />
+          <Route path="/admin-login" element={<Navigate to="/admin/login" replace />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<ProtectedRoute roles={adminRoles} />}>
               <Route path="/admin" element={<AdminDashboard />} />

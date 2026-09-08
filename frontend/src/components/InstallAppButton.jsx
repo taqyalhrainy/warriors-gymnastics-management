@@ -29,14 +29,17 @@ const getAndroidChromeIntentUrl = (url) => {
 };
 
 const InstallAppButton = ({ className = '', label = 'Install App', installPath = '', appName = 'Warriors app' }) => {
-  const isAdminInstall = installPath.startsWith('/admin-login');
+  const isAdminInstall = installPath.startsWith('/admin/login') || installPath.startsWith('/admin-login');
   const [installPrompt, setInstallPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(() => typeof window !== 'undefined' && isStandalone());
   const [modalMode, setModalMode] = useState('');
   const [platform, setPlatform] = useState(() => typeof window === 'undefined' ? {} : getPlatform());
   const appUrl = useMemo(() => `${window.location.origin}${installPath}`, [installPath]);
   const androidChromeIntentUrl = useMemo(() => getAndroidChromeIntentUrl(appUrl), [appUrl]);
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(appUrl)}`;
+  const qrTargetUrl = isAdminInstall && !/^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname)
+    ? 'https://warriors-gymnastics-management.onrender.com/open-admin'
+    : appUrl;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrTargetUrl)}`;
 
   useEffect(() => {
     setPlatform(getPlatform());

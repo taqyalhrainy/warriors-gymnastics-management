@@ -181,7 +181,7 @@ const LoginPage = ({ initialRole = 'parent' }) => {
         </div>
         {loginRole === 'admin' && (
           <div className="admin-install-row">
-            <InstallAppButton label="Install Admin Application" installPath="/admin-login?source=admin-pwa" appName="Admin" />
+            <InstallAppButton label="Install Admin Application" installPath="/admin/login?source=admin-pwa" appName="Admin" />
           </div>
         )}
         <h2>{loginRole === 'admin' ? 'Admin Login' : 'Warriors Gym Login'}</h2>

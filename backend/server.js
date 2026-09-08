@@ -64,6 +64,16 @@ app.use(
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: false, limit: '5mb' }));
 
+app.get('/open-admin', (req, res) => {
+  const frontendOrigin = String(
+    process.env.ADMIN_FRONTEND_URL
+    || 'https://warriors-gymnastics-frontend.onrender.com'
+  ).replace(/\/+$/, '');
+
+  res.set('Cache-Control', 'no-store');
+  res.redirect(302, `${frontendOrigin}/admin/login?source=admin-pwa&from=qr`);
+});
+
 app.use((req, res, next) => {
   if (req.path === '/api/health') {
     return next();

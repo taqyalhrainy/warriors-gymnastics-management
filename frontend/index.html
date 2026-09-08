@@ -10,7 +10,8 @@
     <meta name="apple-mobile-web-app-title" content="Warriors" />
     <script>
       (function () {
-        var isAdminLogin = window.location.pathname.indexOf('/admin-login') === 0;
+        var isAdminLogin = window.location.pathname.indexOf('/admin/login') === 0
+          || window.location.pathname.indexOf('/admin-login') === 0;
         var manifest = document.createElement('link');
         manifest.rel = 'manifest';
         manifest.href = isAdminLogin ? '/admin-manifest.webmanifest' : '/manifest.webmanifest';
