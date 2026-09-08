@@ -574,7 +574,7 @@ const getParentPayments = async (req, res, next) => {
     }
     const children = await Player.find({ parentId: parent._id })
       .sort({ createdAt: -1, _id: -1 })
-      .select('_id fullName profileImage startDate endDate packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual currentSubscriptionStartedAt currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId')
+      .select('_id fullName profileImage startDate endDate packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual currentSubscriptionStartedAt currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId createdAt updatedAt')
       .populate('subscriptionId', 'totalSessions usedSessions remainingSessions startDate endDate status price');
     const childIds = children.map((child) => child._id);
     const payments = await Payment.find({ playerId: { $in: childIds } })
@@ -591,7 +591,7 @@ const getParentPayments = async (req, res, next) => {
       getCurrentPaymentSummaryMap(children)
     ]);
 
-    res.json(payments.map((payment) => {
+    const paymentRows = payments.map((payment) => {
       const playerId = String(payment.playerId?._id || payment.playerId || '');
       const paymentSummary = paymentSummaryMap.get(playerId);
       if (payment.playerId && typeof payment.playerId === 'object') {
@@ -602,10 +602,36 @@ const getParentPayments = async (req, res, next) => {
         ? {
           ...payment,
           totalAmount: paymentSummary?.totalAmount ?? payment.totalAmount,
+          visiblePaidAmount: Number(payment.playerId?.payment || 0),
+          visibleRemainingAmount: paymentSummary?.remainingAmount ?? payment.remainingAmount,
           remainingAmount: paymentSummary?.remainingAmount ?? payment.remainingAmount
         }
-        : { ...payment, remainingAmount: 0 };
-    }));
+        : { ...payment, visiblePaidAmount: Number(payment.playerId?.payment || 0), visibleRemainingAmount: 0, remainingAmount: 0 };
+    });
+
+    const playersWithPaymentRows = new Set(paymentRows.map((payment) => String(payment.playerId?._id || payment.playerId || '')).filter(Boolean));
+    children.forEach((child) => {
+      const childId = String(child._id);
+      const visibleRemainingAmount = getParentVisibleRemaining(child);
+      if (!visibleRemainingAmount || playersWithPaymentRows.has(childId)) return;
+      const childObject = child.toObject({ virtuals: true });
+      childObject.currentSubscriptionPaidAmount = 0;
+      childObject.attendancePresentCount = countMap.get(childId) || 0;
+      paymentRows.push({
+        _id: `due-${childId}`,
+        playerId: childObject,
+        paymentDate: child.updatedAt || child.createdAt || new Date(),
+        paidAmount: 0,
+        visiblePaidAmount: Number(child.payment || 0),
+        totalAmount: visibleRemainingAmount,
+        remainingAmount: visibleRemainingAmount,
+        visibleRemainingAmount,
+        transactionType: 'Due',
+        paymentMethod: '-'
+      });
+    });
+
+    res.json(paymentRows);
   } catch (error) {
     next(error);
   }

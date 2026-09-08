@@ -6,7 +6,8 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 import warriorsLogo from '../assets/warriors-logo.png';
 
 const formatMoney = (value) => Number(value || 0).toLocaleString('en-US');
-const getVisibleRemaining = (payment) => payment?.playerId?.attendanceDueManual ? Number(payment.remainingAmount || 0) : 0;
+const getVisiblePaid = (payment) => Number(payment?.visiblePaidAmount ?? payment?.playerId?.payment ?? payment?.paidAmount ?? 0);
+const getVisibleRemaining = (payment) => Number(payment?.visibleRemainingAmount ?? (payment?.playerId?.attendanceDueManual ? payment.remainingAmount : 0) ?? 0);
 
 const ParentPaymentsPage = () => {
   const [payments, setPayments] = useState(() => getCachedParentPayments() || []);
@@ -57,7 +58,12 @@ const ParentPaymentsPage = () => {
     </span>
   );
 
-  const totalPaid = payments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
+  const totalPaidByPlayer = new Map();
+  payments.forEach((payment) => {
+    const playerId = String(payment.playerId?._id || payment.playerId || payment._id);
+    if (!totalPaidByPlayer.has(playerId)) totalPaidByPlayer.set(playerId, getVisiblePaid(payment));
+  });
+  const totalPaid = [...totalPaidByPlayer.values()].reduce((sum, value) => sum + value, 0);
   const totalRemaining = payments.reduce((sum, payment) => sum + getVisibleRemaining(payment), 0);
 
   return (
@@ -93,7 +99,7 @@ const ParentPaymentsPage = () => {
                 <tr key={payment._id}>
                   <td>{renderChildName(payment.playerId)}</td>
                   <td>{new Date(payment.paymentDate).toLocaleDateString()}</td>
-                  <td><strong className="parent-paid-amount">{formatMoney(payment.paidAmount)}</strong></td>
+                  <td><strong className="parent-paid-amount">{formatMoney(getVisiblePaid(payment))}</strong></td>
                   <td>
                     <span className={`parent-remaining-pill ${getVisibleRemaining(payment) > 0 ? 'is-due' : 'is-paid'}`}>
                       {getVisibleRemaining(payment) > 0 ? `${formatMoney(getVisibleRemaining(payment))} remaining` : 'Paid in full'}
