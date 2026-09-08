@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
 import { useLanguage } from './context/LanguageContext.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
+import ParentMessageNotifier from './components/ParentMessageNotifier.jsx';
 import warriorsLogo from './assets/warriors-logo.png';
 
 const LoginPage = lazy(() => import('./pages/Login.jsx'));
@@ -104,6 +105,7 @@ function App() {
 
   return (
     <div className={`app-shell${user?.role === 'parent' ? ' parent-app-shell' : ''}`}>
+      <ParentMessageNotifier />
       {user?.role === 'parent' ? (
         null
       ) : (

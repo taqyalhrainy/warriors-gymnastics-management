@@ -1,4 +1,4 @@
-const CACHE_NAME = 'warriors-shell-v7';
+const CACHE_NAME = 'warriors-shell-v8';
 const SHELL_ASSETS = ['/', '/login?source=pwa', '/parent/login?source=parent-pwa', '/admin/login?source=admin-pwa', '/manifest.webmanifest', '/admin-manifest.webmanifest', '/warriors-logo.png'];
 
 self.addEventListener('install', (event) => {
@@ -49,5 +49,22 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
     ))
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || '/parent/notifications';
+  const url = new URL(targetUrl, self.location.origin).href;
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      const matchingClient = clientList.find((client) => client.url.startsWith(self.location.origin));
+      if (matchingClient) {
+        matchingClient.navigate(url);
+        return matchingClient.focus();
+      }
+      return clients.openWindow(url);
+    })
   );
 });
