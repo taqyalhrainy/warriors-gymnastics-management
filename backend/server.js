@@ -203,7 +203,13 @@ const fetchFrontend = async (path) => {
   return response;
 };
 
-app.get(frontendStaticPaths, async (req, res, next) => {
+const matchesAny = (patterns, path) => patterns.some((pattern) => pattern.test(path));
+
+app.get('*', async (req, res, next) => {
+  if (!matchesAny(frontendStaticPaths, req.path)) {
+    return next();
+  }
+
   try {
     const response = await fetchFrontend(req.originalUrl);
     res.status(response.status);
@@ -217,7 +223,11 @@ app.get(frontendStaticPaths, async (req, res, next) => {
   }
 });
 
-app.get(adminSpaPaths, async (req, res, next) => {
+app.get('*', async (req, res, next) => {
+  if (!matchesAny(adminSpaPaths, req.path)) {
+    return next();
+  }
+
   try {
     const response = await fetchFrontend('/admin/login?source=admin-pwa');
     let html = await response.text();
