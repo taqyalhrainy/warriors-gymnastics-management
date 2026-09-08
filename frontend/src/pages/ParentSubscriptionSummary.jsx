@@ -44,7 +44,8 @@ const getUniqueChildren = (children = []) => {
   return [...byName.values()];
 };
 
-const getVisibleRemaining = (child) => child?.attendanceDueManual ? Number(child.remainingAmount || 0) : 0;
+const getVisibleRemaining = (child) => Number(child?.visibleRemainingAmount ?? (child?.attendanceDueManual ? child.remainingAmount : 0) ?? 0);
+const getVisiblePaid = (child) => Number(child?.paidTotal ?? child?.payment ?? 0);
 
 const ParentSubscriptionSummaryPage = () => {
   const cached = getCachedParentDashboard();
@@ -121,7 +122,7 @@ const ParentSubscriptionSummaryPage = () => {
                   <tr key={child._id}>
                     <td>{renderChildName(child)}</td>
                     <td>{child.subscriptionId?.status || t('notAvailable')}</td>
-                    <td>{child.paidTotal != null ? formatCurrency(child.paidTotal) : formatCurrency(0)}</td>
+                    <td>{formatCurrency(getVisiblePaid(child))}</td>
                     <td>{formatCurrency(getVisibleRemaining(child))}</td>
                     <td>{child.daysRemaining != null ? child.daysRemaining : '-'}</td>
                   </tr>

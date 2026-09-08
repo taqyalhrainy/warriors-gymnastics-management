@@ -49,7 +49,8 @@ const getChildGroups = (child) => {
   return groups.map((group) => group?.name).filter(Boolean).join(', ');
 };
 
-const getVisibleRemaining = (child) => child?.attendanceDueManual ? Number(child.remainingAmount || 0) : 0;
+const getVisibleRemaining = (child) => Number(child?.visibleRemainingAmount ?? (child?.attendanceDueManual ? child.remainingAmount : 0) ?? 0);
+const getVisiblePaid = (child) => Number(child?.paidTotal ?? child?.payment ?? 0);
 
 const ParentChildrenPage = () => {
   const cached = getCachedParentDashboard();
@@ -127,7 +128,7 @@ const ParentChildrenPage = () => {
                   <button type="button" className="parent-child-summary-card" onClick={() => setSelectedChildId(isSelected ? '' : child._id)}>
                     {renderChildName(child)}
                     <span className={`parent-status-pill status-${child.status || 'active'}`}>{child.status || t('status')}</span>
-                    <div><span>{t('paid')}</span><strong>{formatCurrency(child.paidTotal || 0)}</strong></div>
+                    <div><span>{t('paid')}</span><strong>{formatCurrency(getVisiblePaid(child))}</strong></div>
                     <div><span>{t('remaining')}</span><strong>{formatCurrency(getVisibleRemaining(child))}</strong></div>
                   </button>
                   {isSelected && (
@@ -137,7 +138,7 @@ const ParentChildrenPage = () => {
                         <div><span>{t('group')}</span><strong>{getChildGroups(child) || t('notAssigned')}</strong></div>
                         <div><span>{t('coach')}</span><strong>{child.coachId?.name || t('unassigned')}</strong></div>
                         <div><span>{t('status')}</span><strong>{child.status || '-'}</strong></div>
-                        <div><span>{t('paid')}</span><strong>{formatCurrency(child.paidTotal || 0)}</strong></div>
+                        <div><span>{t('paid')}</span><strong>{formatCurrency(getVisiblePaid(child))}</strong></div>
                         <div><span>{t('remaining')}</span><strong>{formatCurrency(getVisibleRemaining(child))}</strong></div>
                       </div>
                     </div>

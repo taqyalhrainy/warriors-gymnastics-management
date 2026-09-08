@@ -62,7 +62,8 @@ const getUniqueParentChildren = (children = []) => {
   return [...byName.values()];
 };
 
-const getVisibleRemaining = (child) => child?.attendanceDueManual ? Number(child.remainingAmount || 0) : 0;
+const getVisibleRemaining = (child) => Number(child?.visibleRemainingAmount ?? (child?.attendanceDueManual ? child.remainingAmount : 0) ?? 0);
+const getVisiblePaid = (child) => Number(child?.paidTotal ?? child?.payment ?? 0);
 
 const ParentDashboard = () => {
   const [dashboard, setDashboard] = useState(() => getCachedParentDashboard() || null);
@@ -179,7 +180,7 @@ const ParentDashboard = () => {
               </div>
               <div className="parent-child-meta">
                 <div><span>{t('group')}</span><strong>{getChildGroups(child) || t('notAssigned')}</strong></div>
-                <div><span>{t('paid')}</span><strong>{formatCurrency(child.paidTotal || 0)}</strong></div>
+                <div><span>{t('paid')}</span><strong>{formatCurrency(getVisiblePaid(child))}</strong></div>
                 <div><span>{t('remaining')}</span><strong>{formatCurrency(getVisibleRemaining(child))}</strong></div>
                 <div><span>{t('status')}</span><strong>{child.subscriptionId?.status || child.status || '-'}</strong></div>
               </div>

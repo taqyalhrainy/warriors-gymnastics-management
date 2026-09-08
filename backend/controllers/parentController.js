@@ -629,14 +629,19 @@ const getParentDashboard = async (req, res, next) => {
     const childSummaries = children.map((child) => {
       const subscription = child.subscriptionId || {};
       const paymentSummary = paymentSummaryMap.get(String(child._id));
-      const paidTotal = paymentSummary?.paidAmount || 0;
+      const childObject = child.toObject({ virtuals: true });
+      const visibleRemainingAmount = getParentVisibleRemaining(child);
+      const paidTotal = Number(child.payment || 0);
       const daysRemaining = subscription.type === 'time' && subscription.endDate
         ? Math.max(0, Math.ceil((subscription.endDate - new Date()) / (1000 * 60 * 60 * 24)))
         : null;
       return {
-        ...child.toObject({ virtuals: true }),
+        ...childObject,
+        attendanceDueManual: Boolean(child.attendanceDueManual),
         paidTotal,
-        remainingAmount: paymentSummary?.remainingAmount ?? null,
+        currentSubscriptionPaidAmount: paymentSummary?.paidAmount || 0,
+        visibleRemainingAmount,
+        remainingAmount: visibleRemainingAmount,
         daysRemaining
       };
     });
