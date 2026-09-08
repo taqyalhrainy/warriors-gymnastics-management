@@ -72,12 +72,12 @@ const LoginPage = ({ initialRole = 'parent' }) => {
   const [loginRole, setLoginRole] = useState(initialRole);
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberLogin, setRememberLogin] = useState(() => localStorage.getItem(AUTH_REMEMBER_KEY) === 'true');
+  const [rememberLogin, setRememberLogin] = useState(() => localStorage.getItem(AUTH_REMEMBER_KEY) !== 'false');
   const [fieldErrors, setFieldErrors] = useState({});
   const [generalError, setGeneralError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isWaitingForServer, setIsWaitingForServer] = useState(false);
-  const { login: authLogin } = useAuth();
+  const { user, login: authLogin } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -90,6 +90,11 @@ const LoginPage = ({ initialRole = 'parent' }) => {
       hasRequestedServerWake = false;
     });
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    navigate(user.role === 'parent' ? '/parent' : '/admin', { replace: true });
+  }, [user, navigate]);
 
   useEffect(() => {
     if (initialRole === 'admin' || searchParams.get('admin') === '1') {
