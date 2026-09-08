@@ -10,13 +10,19 @@
     <meta name="apple-mobile-web-app-title" content="Warriors" />
     <script>
       (function () {
-        var isAdminLogin = window.location.pathname.indexOf('/admin/login') === 0
-          || window.location.pathname.indexOf('/admin-login') === 0;
+        var adminPaths = [
+          '/admin', '/admin-login', '/players', '/groups', '/attendance',
+          '/coaches', '/payments', '/notifications', '/parents', '/reports',
+          '/history', '/security', '/audit-logs', '/owner-summary', '/media-gallery'
+        ];
+        var isAdminApp = adminPaths.some(function (path) {
+          return window.location.pathname === path || window.location.pathname.indexOf(path + '/') === 0;
+        });
         var manifest = document.createElement('link');
         manifest.rel = 'manifest';
-        manifest.href = isAdminLogin ? '/admin-manifest.webmanifest' : '/manifest.webmanifest';
+        manifest.href = isAdminApp ? '/admin-manifest.webmanifest' : '/manifest.webmanifest';
         document.head.appendChild(manifest);
-        document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute('content', isAdminLogin ? 'Admin' : 'Warriors');
+        document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute('content', isAdminApp ? 'Admin' : 'Warriors');
       }());
     </script>
     <link rel="apple-touch-icon" href="/warriors-logo.png" />

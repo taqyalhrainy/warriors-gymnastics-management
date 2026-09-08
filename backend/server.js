@@ -17,6 +17,25 @@ const normalizeGroupName = (value) => String(value || '')
 
 const app = express();
 let isDatabaseReady = false;
+const defaultFrontendOrigin = 'https://warriors-gymnastics-frontend.onrender.com';
+
+const getFrontendOrigin = () => String(
+  process.env.ADMIN_FRONTEND_URL
+  || process.env.FRONTEND_URL
+  || process.env.CLIENT_URL
+  || defaultFrontendOrigin
+).replace(/\/+$/, '');
+
+const getBackendOrigin = (req) => {
+  const host = req.get('host');
+  const isLocal = /^localhost(?::\d+)?$|^127\.0\.0\.1(?::\d+)?$/i.test(host || '');
+  return `${isLocal ? req.protocol : 'https'}://${host}`;
+};
+
+const getChromeIntentUrl = (url) => {
+  const parsed = new URL(url);
+  return `intent://${parsed.host}${parsed.pathname}${parsed.search}#Intent;scheme=${parsed.protocol.replace(':', '')};package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(url)};end`;
+};
 
 const lazyRouter = (loader) => {
   let router = null;
@@ -65,14 +84,12 @@ app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: false, limit: '5mb' }));
 
 app.get('/open-admin', (req, res) => {
-  const frontendOrigin = String(
-    process.env.ADMIN_FRONTEND_URL
-    || 'https://warriors-gymnastics-frontend.onrender.com'
-  ).replace(/\/+$/, '');
-  const adminUrl = `${frontendOrigin}/admin/login?source=admin-pwa&from=qr`;
-  const adminIntent = `intent://${new URL(adminUrl).host}${new URL(adminUrl).pathname}${new URL(adminUrl).search}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(adminUrl)};end`;
+  const frontendOrigin = getFrontendOrigin();
+  const adminUrl = `${getBackendOrigin(req)}/admin/login?source=admin-pwa&from=qr`;
+  const adminIntent = getChromeIntentUrl(adminUrl);
 
   res.set('Cache-Control', 'no-store');
+  res.set('Content-Security-Policy', "default-src 'self' https: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' https: data:");
   res.type('html').send(`<!doctype html>
 <html lang="en">
 <head>
@@ -147,6 +164,69 @@ app.get('/api/health', (req, res) => {
     database: isDatabaseReady ? 'connected' : 'connecting',
     time: new Date().toISOString()
   });
+});
+
+const frontendStaticPaths = [
+  /^\/assets\//,
+  /^\/warriors-logo\.png$/,
+  /^\/manifest\.webmanifest$/,
+  /^\/admin-manifest\.webmanifest$/,
+  /^\/sw\.js$/,
+  /^\/favicon\.ico$/
+];
+
+const adminSpaPaths = [
+  /^\/admin(?:\/.*)?$/,
+  /^\/admin-login$/,
+  /^\/players(?:\/.*)?$/,
+  /^\/groups(?:\/.*)?$/,
+  /^\/attendance(?:\/.*)?$/,
+  /^\/coaches(?:\/.*)?$/,
+  /^\/payments(?:\/.*)?$/,
+  /^\/notifications(?:\/.*)?$/,
+  /^\/parents(?:\/.*)?$/,
+  /^\/reports(?:\/.*)?$/,
+  /^\/history(?:\/.*)?$/,
+  /^\/security(?:\/.*)?$/,
+  /^\/audit-logs(?:\/.*)?$/,
+  /^\/owner-summary(?:\/.*)?$/,
+  /^\/media-gallery(?:\/.*)?$/
+];
+
+const fetchFrontend = async (path) => {
+  const response = await fetch(`${getFrontendOrigin()}${path}`);
+  if (!response.ok) {
+    const error = new Error(`Frontend returned ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
+  return response;
+};
+
+app.get(frontendStaticPaths, async (req, res, next) => {
+  try {
+    const response = await fetchFrontend(req.originalUrl);
+    res.status(response.status);
+    const contentType = response.headers.get('content-type');
+    if (contentType) res.type(contentType);
+    const cacheControl = response.headers.get('cache-control');
+    res.set('Cache-Control', cacheControl || (req.path.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache'));
+    res.send(Buffer.from(await response.arrayBuffer()));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get(adminSpaPaths, async (req, res, next) => {
+  try {
+    const response = await fetchFrontend('/admin/login?source=admin-pwa');
+    let html = await response.text();
+    html = html.replace(/<title>.*?<\/title>/, '<title>Warriors Admin Login</title>');
+    res.set('Cache-Control', 'no-cache');
+    res.type('html').send(html);
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.use((req, res, next) => {
