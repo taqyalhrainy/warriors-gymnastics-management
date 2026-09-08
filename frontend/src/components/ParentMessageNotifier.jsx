@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { fetchNotifications } from '../services/notifications.js';
+import { fetchNotifications, fetchPushPublicKey, savePushSubscription } from '../services/notifications.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const SEEN_KEY = 'warriors-parent-notification-seen-ids';
@@ -25,6 +25,29 @@ const ensurePermission = async () => {
   if (Notification.permission === 'granted') return true;
   const permission = await Notification.requestPermission();
   return permission === 'granted';
+};
+
+const urlBase64ToUint8Array = (base64String) => {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = `${base64String}${padding}`.replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+};
+
+const ensurePushSubscription = async () => {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  if (!(await ensurePermission())) return;
+
+  const registration = await navigator.serviceWorker.ready;
+  let subscription = await registration.pushManager.getSubscription();
+  if (!subscription) {
+    const publicKey = await fetchPushPublicKey();
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey)
+    });
+  }
+  await savePushSubscription(subscription.toJSON());
 };
 
 const showParentNotification = async (note) => {
@@ -62,12 +85,14 @@ const ParentMessageNotifier = () => {
     if (user?.role !== 'parent') return undefined;
 
     const requestOnFirstTap = () => {
-      ensurePermission().catch(console.error);
+      ensurePushSubscription().catch(console.error);
       window.removeEventListener('pointerdown', requestOnFirstTap);
       window.removeEventListener('keydown', requestOnFirstTap);
     };
 
-    if (canNotify() && Notification.permission === 'default') {
+    if (canNotify() && Notification.permission === 'granted') {
+      ensurePushSubscription().catch(console.error);
+    } else if (canNotify() && Notification.permission === 'default') {
       window.addEventListener('pointerdown', requestOnFirstTap, { once: true });
       window.addEventListener('keydown', requestOnFirstTap, { once: true });
     }

@@ -3,6 +3,8 @@ const {
   getNotifications,
   getNotificationById,
   getUnreadNotificationCount,
+  getPushPublicKey,
+  savePushSubscription,
   getSavedMessages,
   createSavedMessage,
   updateSavedMessage,
@@ -18,6 +20,8 @@ const router = express.Router();
 router.use(protect);
 router.get('/', authorize('admin', 'coach', 'receptionist', 'parent'), getNotifications);
 router.get('/count', authorize('admin', 'coach', 'receptionist', 'parent'), getUnreadNotificationCount);
+router.get('/push/public-key', authorize('parent'), getPushPublicKey);
+router.post('/push/subscribe', authorize('parent'), savePushSubscription);
 router.get('/saved', authorize('admin', 'coach', 'receptionist'), getSavedMessages);
 router.post('/saved', authorize('admin', 'coach', 'receptionist'), createSavedMessage);
 router.put('/saved/:id', authorize('admin', 'coach', 'receptionist'), updateSavedMessage);

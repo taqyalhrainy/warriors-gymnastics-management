@@ -26,6 +26,15 @@ export const fetchUnreadCount = async () => {
   return response.data;
 };
 
+export const fetchPushPublicKey = async () => {
+  const response = await api.get('/notifications/push/public-key');
+  return response.data.publicKey;
+};
+
+export const savePushSubscription = async (subscription) => {
+  await api.post('/notifications/push/subscribe', subscription);
+};
+
 export const fetchSavedNotificationMessages = async (params = {}) => {
   return fetchCached('notifications:saved', async () => {
     const response = await api.get('/notifications/saved');

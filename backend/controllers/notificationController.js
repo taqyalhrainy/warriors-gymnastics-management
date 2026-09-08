@@ -2,10 +2,48 @@ const Notification = require('../models/Notification');
 const SavedNotificationMessage = require('../models/SavedNotificationMessage');
 const Parent = require('../models/Parent');
 const Player = require('../models/Player');
+const PushSubscription = require('../models/PushSubscription');
 const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
+const { getVapidPublicKey, sendPushToUser } = require('../utils/pushNotifications');
 
 const adminNotificationRoles = ['admin', 'coach', 'receptionist'];
+
+const pushNotification = (notification) => sendPushToUser(notification.recipientUserId, {
+  title: notification.title,
+  body: notification.message,
+  url: `/parent/notifications/${notification._id}`,
+  notificationId: notification._id
+}).catch((error) => console.error('Push side effect failed:', error.message));
+
+const getPushPublicKey = (req, res) => {
+  res.json({ publicKey: getVapidPublicKey() });
+};
+
+const savePushSubscription = async (req, res, next) => {
+  try {
+    const subscription = sanitizeObject(req.body);
+    if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
+      return res.status(400).json({ message: 'Invalid push subscription.' });
+    }
+
+    await PushSubscription.findOneAndUpdate(
+      { endpoint: subscription.endpoint },
+      {
+        userId: req.user._id,
+        endpoint: subscription.endpoint,
+        keys: subscription.keys,
+        userAgent: req.get('user-agent') || '',
+        updatedAt: new Date()
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
 
 const getSavedMessages = async (req, res, next) => {
   try {
@@ -159,6 +197,7 @@ const createNotification = async (req, res, next) => {
       message,
       type
     });
+    pushNotification(notification);
     await createAuditLog({ userId: req.user._id, action: 'create notification', entity: 'Notification', entityId: notification._id, req });
     res.status(201).json(notification);
   } catch (error) {
@@ -184,7 +223,8 @@ const announceAllParents = async (req, res, next) => {
         isRead: false
       }));
     if (notifications.length > 0) {
-      await Notification.insertMany(notifications);
+      const createdNotifications = await Notification.insertMany(notifications);
+      createdNotifications.forEach(pushNotification);
     }
     await createAuditLog({ userId: req.user._id, action: 'announce all parents', entity: 'Notification', entityId: null, req });
     res.json({ count: notifications.length });
@@ -228,7 +268,8 @@ const announceGroupParents = async (req, res, next) => {
     }));
 
     if (notifications.length > 0) {
-      await Notification.insertMany(notifications);
+      const createdNotifications = await Notification.insertMany(notifications);
+      createdNotifications.forEach(pushNotification);
     }
     await createAuditLog({ userId: req.user._id, action: 'announce group parents', entity: 'Notification', entityId: null, req });
     res.json({ count: notifications.length });
@@ -241,6 +282,8 @@ module.exports = {
   getNotifications,
   getNotificationById,
   getUnreadNotificationCount,
+  getPushPublicKey,
+  savePushSubscription,
   getSavedMessages,
   createSavedMessage,
   updateSavedMessage,
@@ -249,3 +292,4 @@ module.exports = {
   announceAllParents,
   announceGroupParents
 };
+
