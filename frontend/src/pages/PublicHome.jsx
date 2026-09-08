@@ -1,16 +1,28 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import InstallAppButton from '../components/InstallAppButton.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { fetchPublicClubMedia } from '../services/clubMedia.js';
 import warriorsLogo from '../assets/warriors-logo.png';
 
+const isStandaloneApp = () => (
+  window.matchMedia?.('(display-mode: standalone)').matches
+  || window.navigator.standalone === true
+);
+
 const PublicHomePage = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [media, setMedia] = useState([]);
   const [activeMedia, setActiveMedia] = useState(null);
 
   useEffect(() => {
+    if (!isStandaloneApp()) return;
+    navigate(user ? (user.role === 'parent' ? '/parent' : '/admin') : '/login?source=pwa', { replace: true });
+  }, [navigate, user]);
+
+  useEffect(() => {
+    if (isStandaloneApp()) return;
     fetchPublicClubMedia().then(setMedia).catch(console.error);
   }, []);
 
