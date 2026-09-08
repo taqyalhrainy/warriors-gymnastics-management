@@ -6351,11 +6351,44 @@ body.rtl .payment-table-wrap {
   border-top: 4px solid var(--primary);
 }
 
+.login-logo-frame {
+  position: relative;
+  width: min(260px, 100%);
+  height: 180px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 22px;
+  overflow: hidden;
+}
+
 .login-logo {
   display: block;
-  width: min(260px, 100%);
-  height: auto;
-  margin: 0 auto 22px;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.hidden-admin-login-button {
+  position: absolute;
+  top: 22%;
+  left: 47%;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  opacity: 0;
+  cursor: default;
+  transform: none;
+}
+
+.hidden-admin-login-button:hover,
+.hidden-admin-login-button:active {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
 }
 
 .login-card h2 {
@@ -6693,7 +6726,7 @@ body.rtl .payment-table-wrap {
   }
 
   .login-logo {
-    width: min(210px, 100%);
+    width: 100%;
   }
 
   .data-table {
@@ -7007,7 +7040,13 @@ body.rtl .payment-table-wrap {
   }
 
   .login-logo {
+    width: 100%;
+    margin-bottom: 0;
+  }
+
+  .login-logo-frame {
     width: min(190px, 76%);
+    height: 136px;
     margin-bottom: 18px;
   }
 

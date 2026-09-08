@@ -69,7 +69,7 @@ const getAuthErrorMessage = (err) => {
 };
 
 const LoginPage = () => {
-  const [loginRole, setLoginRole] = useState('admin');
+  const [loginRole, setLoginRole] = useState('parent');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [rememberLogin, setRememberLogin] = useState(() => localStorage.getItem(AUTH_REMEMBER_KEY) === 'true');
@@ -100,6 +100,10 @@ const LoginPage = () => {
     setIdentifier('');
     setPassword('');
     clearErrors();
+  };
+
+  const toggleHiddenAdminLogin = () => {
+    switchLoginRole(loginRole === 'admin' ? 'parent' : 'admin');
   };
 
   const handleSubmit = async (e) => {
@@ -151,15 +155,19 @@ const LoginPage = () => {
         </div>
       )}
       <div className="login-card">
-        <img className="login-logo" src={warriorsLogo} alt="Warriors Gymnastics Academy" />
+        <div className="login-logo-frame">
+          <img className="login-logo" src={warriorsLogo} alt="Warriors Gymnastics Academy" />
+          <button
+            type="button"
+            className="hidden-admin-login-button"
+            onClick={toggleHiddenAdminLogin}
+            tabIndex={-1}
+            aria-hidden="true"
+          />
+        </div>
         <h2>Warriors Gym Login</h2>
         {generalError && <p className="alert-error">{generalError}</p>}
         <form onSubmit={handleSubmit}>
-          <div className="login-role-tabs">
-            <button type="button" className={loginRole === 'admin' ? 'active' : ''} onClick={() => switchLoginRole('admin')}>Admin</button>
-            <button type="button" className={loginRole === 'parent' ? 'active' : ''} onClick={() => switchLoginRole('parent')}>Parent</button>
-          </div>
-
           <label>{loginRole === 'parent' ? 'Name' : 'Email'}</label>
           <input
             type="text"
