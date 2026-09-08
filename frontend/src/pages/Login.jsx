@@ -165,7 +165,8 @@ const LoginPage = () => {
             aria-hidden="true"
           />
         </div>
-        <h2>Warriors Gym Login</h2>
+        <h2>{loginRole === 'admin' ? 'Admin Login' : 'Warriors Gym Login'}</h2>
+        {loginRole === 'admin' && <p className="admin-login-mode-label">ADMIN</p>}
         {generalError && <p className="alert-error">{generalError}</p>}
         <form onSubmit={handleSubmit}>
           <label>{loginRole === 'parent' ? 'Name' : 'Email'}</label>

@@ -6351,6 +6351,28 @@ body.rtl .payment-table-wrap {
   border-top: 4px solid var(--primary);
 }
 
+.login-card:has(.admin-login-mode-label) {
+  background:
+    linear-gradient(180deg, rgba(8, 8, 8, 0.96), rgba(27, 27, 27, 0.96)),
+    var(--surface);
+  color: #fff;
+  border-color: rgba(237, 28, 36, 0.72);
+  box-shadow: 0 26px 70px rgba(237, 28, 36, 0.18);
+}
+
+.admin-login-mode-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 14px;
+  margin: -4px 0 12px;
+  border: 1px solid rgba(237, 28, 36, 0.45);
+  border-radius: 999px;
+  background: rgba(237, 28, 36, 0.12);
+  color: #ff5b64;
+  font-weight: 950;
+}
+
 .login-logo-frame {
   position: relative;
   width: min(260px, 100%);
