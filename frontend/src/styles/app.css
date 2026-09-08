@@ -2155,15 +2155,36 @@ body.theme-light .new-subscription-warning {
 
   .public-hero {
     grid-template-columns: 1fr;
+    min-height: auto;
+    gap: 18px;
+    padding-top: 24px;
   }
 
   .public-hero-media {
-    min-height: 320px;
+    min-height: 240px;
+    max-height: 320px;
     order: -1;
   }
 
+  .public-hero-copy {
+    padding: 18px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.08);
+  }
+
   .public-hero h1 {
-    font-size: clamp(2.35rem, 13vw, 4.4rem);
+    font-size: clamp(2.1rem, 11vw, 3.45rem);
+    line-height: 1;
+    color: #0f172a;
+    overflow-wrap: anywhere;
+  }
+
+  .public-hero p {
+    color: #243145;
+    font-size: 1rem;
+    line-height: 1.55;
   }
 
   .media-manager-item {
