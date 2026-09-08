@@ -112,7 +112,6 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
     }
     let promptEvent = installPrompt || window.__warriorsInstallPrompt;
     if (!promptEvent && platform.isAndroid) {
-      setModalMode('android-install');
       promptEvent = await waitForInstallPrompt(12000);
     }
     if (promptEvent) {
@@ -130,7 +129,9 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
       setModalMode(platform.isSafari ? 'ios' : 'ios-browser');
       return;
     }
-    setModalMode(platform.isAndroid ? 'android-install' : 'qr');
+    if (!platform.isAndroid) {
+      setModalMode('qr');
+    }
   };
 
   const modal = modalMode ? createPortal(
@@ -152,12 +153,6 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
             <div className="ios-install-flow" aria-label="iOS install steps">
               <span>Safari</span><b>→</b><span>Share</span><b>→</b><span>Add</span>
             </div>
-          </>
-        ) : modalMode === 'android-install' ? (
-          <>
-            <span className="landing-kicker">Install unavailable</span>
-            <h2>Install is getting ready</h2>
-            <p>Wait a few seconds, then tap Install App again.</p>
           </>
         ) : (
           <>
