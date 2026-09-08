@@ -66,14 +66,17 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
 
   if (isInstalled && !isAdminInstall) return null;
 
+  if (isInstalled && isAdminInstall) {
+    return (
+      <a className={`install-app-button ${className}`} href={androidChromeIntentUrl} target="_blank" rel="noreferrer">
+        Open Admin in Chrome
+      </a>
+    );
+  }
+
   const handleInstall = async () => {
     const platform = getPlatform();
     if (platform.isStandalone) {
-      if (isAdminInstall) {
-        window.open(androidChromeIntentUrl, '_blank', 'noopener,noreferrer');
-        setTimeout(() => setModalMode('android-browser'), 700);
-        return;
-      }
       setIsInstalled(true);
       return;
     }
