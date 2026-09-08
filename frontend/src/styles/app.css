@@ -2012,6 +2012,11 @@ body.theme-light .new-subscription-warning {
   overflow-y: auto;
 }
 
+.install-modal-backdrop.is-bottom-sheet {
+  place-items: end center;
+  padding: 12px;
+}
+
 .public-media-viewer section,
 .install-modal {
   width: min(920px, 100%);
@@ -2063,6 +2068,23 @@ body.theme-light .new-subscription-warning {
   text-align: center;
 }
 
+.install-modal-backdrop.is-bottom-sheet .install-modal {
+  width: min(430px, 100%);
+  max-height: calc(100vh - 24px);
+  padding: 18px 18px 22px;
+  border-radius: 18px 18px 8px 8px;
+}
+
+.install-modal h2 {
+  margin: 8px 42px 14px;
+  color: #111827;
+}
+
+.install-modal p {
+  color: #374151;
+  line-height: 1.45;
+}
+
 .ios-install-steps {
   display: grid;
   gap: 12px;
@@ -2090,6 +2112,30 @@ body.theme-light .new-subscription-warning {
   border-radius: 999px;
   background: #a3131d;
   color: #fff;
+}
+
+.ios-install-flow {
+  display: grid;
+  grid-template-columns: 1fr auto 1.45fr auto 0.8fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.ios-install-flow span {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border: 1px solid rgba(163, 19, 29, 0.18);
+  border-radius: 8px;
+  background: #fff5f6;
+  color: #8b1018;
+  font-weight: 900;
+}
+
+.ios-install-flow b {
+  color: #a3131d;
 }
 
 .install-qr {
