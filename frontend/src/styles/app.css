@@ -2006,9 +2006,10 @@ body.theme-light .new-subscription-warning {
   inset: 0;
   z-index: 200;
   display: grid;
-  place-items: center;
+  place-items: start center;
   padding: 18px;
   background: rgba(0, 0, 0, 0.66);
+  overflow-y: auto;
 }
 
 .public-media-viewer section,
@@ -2054,6 +2055,13 @@ body.theme-light .new-subscription-warning {
   padding: 22px;
 }
 
+.install-modal {
+  position: relative;
+  width: min(520px, calc(100vw - 32px));
+  margin: max(24px, 8vh) auto 24px;
+  text-align: center;
+}
+
 .ios-install-steps {
   display: grid;
   gap: 12px;
@@ -2084,8 +2092,8 @@ body.theme-light .new-subscription-warning {
 }
 
 .install-qr {
-  width: 220px;
-  height: 220px;
+  width: min(220px, 68vw);
+  height: auto;
   display: block;
   margin: 18px auto;
 }
