@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
-import { fetchNotifications, sendNotification, announceAllParents, announceGroupParents } from '../services/notifications.js';
+import {
+  fetchNotifications,
+  sendNotification,
+  announceAllParents,
+  announceGroupParents,
+  fetchSavedNotificationMessages,
+  createSavedNotificationMessage,
+  updateSavedNotificationMessage,
+  deleteSavedNotificationMessage
+} from '../services/notifications.js';
 import { fetchParents } from '../services/parents.js';
 import { fetchGroups } from '../services/groups.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
@@ -16,6 +25,11 @@ const readSavedMessages = () => {
     return [];
   }
 };
+
+const normalizeSavedMessage = (item) => ({
+  ...item,
+  id: item._id || item.id
+});
 
 const NotificationsPage = () => {
   const [notifications, setNotifications] = useState([]);
@@ -36,6 +50,12 @@ const NotificationsPage = () => {
   const loadNotifications = useCallback((options = {}) => {
     fetchNotifications({ date: historyDate, ...options }).then(setNotifications).catch(console.error);
   }, [historyDate]);
+
+  const loadSavedMessages = useCallback((options = {}) => {
+    fetchSavedNotificationMessages(options)
+      .then((items) => setSavedMessages((items || []).map(normalizeSavedMessage)))
+      .catch(console.error);
+  }, []);
 
   useEffect(() => {
     loadNotifications();
@@ -59,6 +79,41 @@ const NotificationsPage = () => {
     fetchParents().then(setParents).catch(console.error);
     fetchGroups().then(setGroups).catch(console.error);
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    const migrateLocalSavedMessages = async () => {
+      try {
+        const serverMessages = await fetchSavedNotificationMessages({ force: true });
+        if (!isMounted) return;
+        const normalizedServerMessages = (serverMessages || []).map(normalizeSavedMessage);
+        setSavedMessages(normalizedServerMessages);
+
+        const localMessages = readSavedMessages();
+        if (!localMessages.length) return;
+
+        const existingKeys = new Set(normalizedServerMessages.map((item) => `${item.title}\n${item.message}`));
+        const missingLocalMessages = localMessages.filter((item) => item.title && item.message && !existingKeys.has(`${item.title}\n${item.message}`));
+        if (!missingLocalMessages.length) {
+          localStorage.removeItem(SAVED_MESSAGES_KEY);
+          return;
+        }
+
+        await Promise.all(missingLocalMessages.map((item) => createSavedNotificationMessage({ title: item.title, message: item.message })));
+        localStorage.removeItem(SAVED_MESSAGES_KEY);
+        loadSavedMessages({ force: true });
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    migrateLocalSavedMessages();
+    const intervalId = window.setInterval(() => loadSavedMessages({ force: true }), 10000);
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+    };
+  }, [loadSavedMessages]);
 
   useEffect(() => {
     if (!prefillNotification) return;
@@ -98,34 +153,39 @@ const NotificationsPage = () => {
     }
   };
 
-  const persistSavedMessages = (nextMessages) => {
-    setSavedMessages(nextMessages);
-    localStorage.setItem(SAVED_MESSAGES_KEY, JSON.stringify(nextMessages));
-  };
-
-  const handleSaveMessage = (event) => {
+  const handleSaveMessage = async (event) => {
     event.preventDefault();
     if (!savedForm.title.trim() || !savedForm.message.trim()) return;
     const nextMessage = {
-      id: savedForm.id || `${Date.now()}`,
       title: savedForm.title.trim(),
       message: savedForm.message.trim()
     };
-    const nextMessages = savedForm.id
-      ? savedMessages.map((item) => (item.id === savedForm.id ? nextMessage : item))
-      : [nextMessage, ...savedMessages];
-    persistSavedMessages(nextMessages);
-    setSavedForm({ id: '', title: '', message: '' });
+    try {
+      if (savedForm.id) {
+        await updateSavedNotificationMessage(savedForm.id, nextMessage);
+      } else {
+        await createSavedNotificationMessage(nextMessage);
+      }
+      setSavedForm({ id: '', title: '', message: '' });
+      loadSavedMessages({ force: true });
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Unable to save message.');
+    }
   };
 
   const handleEditSavedMessage = (item) => {
     setSavedForm({ id: item.id, title: item.title, message: item.message });
   };
 
-  const handleDeleteSavedMessage = (id) => {
-    persistSavedMessages(savedMessages.filter((item) => item.id !== id));
-    if (savedForm.id === id) {
-      setSavedForm({ id: '', title: '', message: '' });
+  const handleDeleteSavedMessage = async (id) => {
+    try {
+      await deleteSavedNotificationMessage(id);
+      if (savedForm.id === id) {
+        setSavedForm({ id: '', title: '', message: '' });
+      }
+      loadSavedMessages({ force: true });
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Unable to delete saved message.');
     }
   };
 

@@ -1,10 +1,86 @@
 const Notification = require('../models/Notification');
+const SavedNotificationMessage = require('../models/SavedNotificationMessage');
 const Parent = require('../models/Parent');
 const Player = require('../models/Player');
 const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 
 const adminNotificationRoles = ['admin', 'coach', 'receptionist'];
+
+const getSavedMessages = async (req, res, next) => {
+  try {
+    const messages = await SavedNotificationMessage.find()
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .populate('updatedBy', 'name email')
+      .lean();
+    res.json(messages);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const createSavedMessage = async (req, res, next) => {
+  try {
+    const payload = sanitizeObject(req.body);
+    const { title, message } = payload;
+    if (!title || !message) {
+      return res.status(400).json({ message: 'Title and message are required.' });
+    }
+    const savedMessage = await SavedNotificationMessage.create({
+      title,
+      message,
+      createdBy: req.user._id,
+      updatedBy: req.user._id
+    });
+    await createAuditLog({ userId: req.user._id, action: 'create saved notification message', entity: 'SavedNotificationMessage', entityId: savedMessage._id, req });
+    res.status(201).json(savedMessage);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateSavedMessage = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!validateObjectId(id)) {
+      return res.status(400).json({ message: 'Invalid saved message ID.' });
+    }
+    const payload = sanitizeObject(req.body);
+    const { title, message } = payload;
+    if (!title || !message) {
+      return res.status(400).json({ message: 'Title and message are required.' });
+    }
+    const savedMessage = await SavedNotificationMessage.findByIdAndUpdate(
+      id,
+      { title, message, updatedBy: req.user._id },
+      { new: true, runValidators: true }
+    );
+    if (!savedMessage) {
+      return res.status(404).json({ message: 'Saved message not found.' });
+    }
+    await createAuditLog({ userId: req.user._id, action: 'update saved notification message', entity: 'SavedNotificationMessage', entityId: savedMessage._id, req });
+    res.json(savedMessage);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteSavedMessage = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!validateObjectId(id)) {
+      return res.status(400).json({ message: 'Invalid saved message ID.' });
+    }
+    const savedMessage = await SavedNotificationMessage.findByIdAndDelete(id);
+    if (!savedMessage) {
+      return res.status(404).json({ message: 'Saved message not found.' });
+    }
+    await createAuditLog({ userId: req.user._id, action: 'delete saved notification message', entity: 'SavedNotificationMessage', entityId: savedMessage._id, req });
+    res.json({ message: 'Saved message deleted successfully.' });
+  } catch (error) {
+    next(error);
+  }
+};
 
 const getNotifications = async (req, res, next) => {
   try {
@@ -161,4 +237,15 @@ const announceGroupParents = async (req, res, next) => {
   }
 };
 
-module.exports = { getNotifications, getNotificationById, getUnreadNotificationCount, createNotification, announceAllParents, announceGroupParents };
+module.exports = {
+  getNotifications,
+  getNotificationById,
+  getUnreadNotificationCount,
+  getSavedMessages,
+  createSavedMessage,
+  updateSavedMessage,
+  deleteSavedMessage,
+  createNotification,
+  announceAllParents,
+  announceGroupParents
+};

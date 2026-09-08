@@ -26,6 +26,31 @@ export const fetchUnreadCount = async () => {
   return response.data;
 };
 
+export const fetchSavedNotificationMessages = async (params = {}) => {
+  return fetchCached('notifications:saved', async () => {
+    const response = await api.get('/notifications/saved');
+    return response.data;
+  }, { ttlMs: NOTIFICATIONS_CACHE_TTL_MS, force: params.force });
+};
+
+export const createSavedNotificationMessage = async (data) => {
+  const response = await api.post('/notifications/saved', data);
+  invalidateCache(['notifications:saved']);
+  return response.data;
+};
+
+export const updateSavedNotificationMessage = async (id, data) => {
+  const response = await api.put(`/notifications/saved/${id}`, data);
+  invalidateCache(['notifications:saved']);
+  return response.data;
+};
+
+export const deleteSavedNotificationMessage = async (id) => {
+  const response = await api.delete(`/notifications/saved/${id}`);
+  invalidateCache(['notifications:saved']);
+  return response.data;
+};
+
 export const sendNotification = async (data) => {
   const response = await api.post('/notifications', data);
   invalidateCache(['notifications:', 'parent:']);
