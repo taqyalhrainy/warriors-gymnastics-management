@@ -651,10 +651,8 @@ const getParentDashboard = async (req, res, next) => {
       .populate('groupIds', 'name')
       .populate('coachId', 'name')
       .populate('subscriptionId', 'type status remainingSessions usedSessions startDate endDate price');
-    const paymentSummaryMap = await getCurrentPaymentSummaryMap(children);
     const childSummaries = children.map((child) => {
       const subscription = child.subscriptionId || {};
-      const paymentSummary = paymentSummaryMap.get(String(child._id));
       const childObject = child.toObject({ virtuals: true });
       const visibleRemainingAmount = getParentVisibleRemaining(child);
       const paidTotal = Number(child.payment || 0);
@@ -665,7 +663,7 @@ const getParentDashboard = async (req, res, next) => {
         ...childObject,
         attendanceDueManual: Boolean(child.attendanceDueManual),
         paidTotal,
-        currentSubscriptionPaidAmount: paymentSummary?.paidAmount || 0,
+        currentSubscriptionPaidAmount: 0,
         visibleRemainingAmount,
         remainingAmount: visibleRemainingAmount,
         daysRemaining

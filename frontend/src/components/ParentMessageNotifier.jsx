@@ -111,7 +111,9 @@ const ParentMessageNotifier = () => {
       writeSeenIds(seenIds);
     };
 
-    checkMessages().catch(console.error);
+    const firstCheckTimer = window.setTimeout(() => {
+      checkMessages().catch(console.error);
+    }, 8000);
     const timer = window.setInterval(() => {
       if (!document.hidden) {
         checkMessages().catch(console.error);
@@ -119,6 +121,7 @@ const ParentMessageNotifier = () => {
     }, POLL_MS);
 
     return () => {
+      window.clearTimeout(firstCheckTimer);
       window.clearInterval(timer);
     };
   }, [user?.role]);

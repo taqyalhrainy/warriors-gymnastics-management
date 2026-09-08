@@ -74,7 +74,7 @@ const ParentDashboard = () => {
 
   useEffect(() => {
     let isMounted = true;
-    fetchParentDashboard({ force: true })
+    fetchParentDashboard()
       .then((data) => {
         if (isMounted) setDashboard(data);
       })
