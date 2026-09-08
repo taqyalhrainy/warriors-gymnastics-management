@@ -19,15 +19,6 @@ const getPlatform = () => {
   };
 };
 
-const getAndroidChromeIntentUrl = (url) => {
-  try {
-    const parsed = new URL(url);
-    return `intent://${parsed.host}${parsed.pathname}${parsed.search}#Intent;scheme=${parsed.protocol.replace(':', '')};package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(url)};end`;
-  } catch {
-    return url;
-  }
-};
-
 const InstallAppButton = ({ className = '', label = 'Install App', installPath = '', appName = 'Warriors app' }) => {
   const isAdminInstall = installPath.startsWith('/admin/login') || installPath.startsWith('/admin-login');
   const [installPrompt, setInstallPrompt] = useState(null);
@@ -35,7 +26,6 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
   const [modalMode, setModalMode] = useState('');
   const [platform, setPlatform] = useState(() => typeof window === 'undefined' ? {} : getPlatform());
   const appUrl = useMemo(() => `${window.location.origin}${installPath}`, [installPath]);
-  const androidChromeIntentUrl = useMemo(() => getAndroidChromeIntentUrl(appUrl), [appUrl]);
   const qrTargetUrl = isAdminInstall && !/^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname)
     ? 'https://warriors-gymnastics-management.onrender.com/open-admin'
     : appUrl;
@@ -67,20 +57,8 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
     };
   }, []);
 
-  const openInChrome = (event) => {
-    event?.preventDefault();
-    window.location.href = androidChromeIntentUrl;
-  };
-
   if (isInstalled && !isAdminInstall) return null;
-
-  if (isInstalled && isAdminInstall) {
-    return (
-      <a className={`install-app-button ${className}`} href={androidChromeIntentUrl} onClick={openInChrome}>
-        Open Admin in Chrome
-      </a>
-    );
-  }
+  if (isInstalled && isAdminInstall) return null;
 
   const handleInstall = async () => {
     const platform = getPlatform();
@@ -103,7 +81,7 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
       setModalMode(platform.isSafari ? 'ios' : 'ios-browser');
       return;
     }
-    setModalMode(platform.isAndroid ? 'android-browser' : 'qr');
+    setModalMode(platform.isAndroid ? 'android-install' : 'qr');
   };
 
   const modal = modalMode ? createPortal(
@@ -126,23 +104,11 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
               <span>Safari</span><b>→</b><span>Share</span><b>→</b><span>Add</span>
             </div>
           </>
-        ) : modalMode === 'android-browser' ? (
+        ) : modalMode === 'android-install' ? (
           <>
             <span className="landing-kicker">Install unavailable</span>
-            <h2>Open in Chrome</h2>
-            <p>This browser did not expose the native install prompt. Open this site in Chrome, then tap Install App.</p>
-            {isAdminInstall && (
-              <>
-                <a className="install-app-button" href={androidChromeIntentUrl} onClick={openInChrome}>Open Admin in Chrome</a>
-                <button
-                  type="button"
-                  className="install-app-button is-secondary"
-                  onClick={() => navigator.clipboard?.writeText(appUrl)}
-                >
-                  Copy Admin Link
-                </button>
-              </>
-            )}
+            <h2>Install from Chrome</h2>
+            <p>Chrome has not exposed the install prompt yet. Wait a few seconds, then tap Install App again.</p>
           </>
         ) : (
           <>
@@ -160,7 +126,7 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
   return (
     <>
       <button type="button" className={`install-app-button ${className}`} onClick={handleInstall}>
-        {isAdminInstall && isInstalled ? 'Open Admin Install' : label}
+        {label}
       </button>
       {modal}
     </>

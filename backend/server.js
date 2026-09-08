@@ -32,11 +32,6 @@ const getBackendOrigin = (req) => {
   return `${isLocal ? req.protocol : 'https'}://${host}`;
 };
 
-const getChromeIntentUrl = (url) => {
-  const parsed = new URL(url);
-  return `intent://${parsed.host}${parsed.pathname}${parsed.search}#Intent;scheme=${parsed.protocol.replace(':', '')};package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(url)};end`;
-};
-
 const lazyRouter = (loader) => {
   let router = null;
   return (req, res, next) => {
@@ -84,48 +79,10 @@ app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: false, limit: '5mb' }));
 
 app.get('/open-admin', (req, res) => {
-  const frontendOrigin = getFrontendOrigin();
   const adminUrl = `${getBackendOrigin(req)}/admin/login?source=admin-pwa&from=qr`;
-  const adminIntent = getChromeIntentUrl(adminUrl);
 
   res.set('Cache-Control', 'no-store');
-  res.set('Content-Security-Policy', "default-src 'self' https: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' https: data:");
-  res.type('html').send(`<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Open Admin</title>
-  <style>
-    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #fafafa; font-family: Arial, sans-serif; color: #111827; }
-    main { width: min(88vw, 360px); padding: 28px; border-top: 4px solid #ed1c24; border-radius: 8px; background: #fff; box-shadow: 0 24px 70px rgba(0,0,0,.18); text-align: center; }
-    img { width: 140px; max-width: 70%; margin-bottom: 16px; }
-    h1 { margin: 0 0 10px; font-size: 26px; }
-    p { margin: 0 0 18px; line-height: 1.45; color: #4b5563; }
-    a { display: block; padding: 15px 18px; border-radius: 8px; background: #d70b19; color: #fff; text-decoration: none; font-weight: 800; }
-    small { display: block; margin-top: 14px; color: #6b7280; }
-  </style>
-</head>
-<body>
-  <main>
-    <img src="${frontendOrigin}/warriors-logo.png" alt="Warriors">
-    <h1>Admin App</h1>
-    <p>Open this page in full Chrome, then tap Install Admin Application.</p>
-    <a id="openChrome" href="${adminIntent}">Open Admin in Chrome</a>
-    <small>If Chrome is already open, continue from there.</small>
-  </main>
-  <script>
-    const target = ${JSON.stringify(adminIntent)};
-    document.getElementById('openChrome').addEventListener('click', function (event) {
-      event.preventDefault();
-      window.location.href = target;
-    });
-    setTimeout(function () {
-      window.location.href = target;
-    }, 350);
-  </script>
-</body>
-</html>`);
+  res.redirect(302, adminUrl);
 });
 
 app.use((req, res, next) => {
