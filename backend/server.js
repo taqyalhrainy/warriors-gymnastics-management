@@ -4,7 +4,6 @@ dotenv.config();
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
-const rateLimit = require('express-rate-limit');
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
 
@@ -77,13 +76,7 @@ app.use((req, res, next) => {
   return next();
 });
 
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  message: { message: 'Too many requests from this IP, please try again later.' }
-});
-
-app.use('/api/auth', authLimiter, lazyRouter(() => require('./routes/auth')));
+app.use('/api/auth', lazyRouter(() => require('./routes/auth')));
 app.use('/api/players', lazyRouter(() => require('./routes/players')));
 app.use('/api/groups', lazyRouter(() => require('./routes/groups')));
 app.use('/api/parents', lazyRouter(() => require('./routes/parents')));
