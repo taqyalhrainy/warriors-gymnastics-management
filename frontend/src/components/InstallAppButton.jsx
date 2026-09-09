@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { isNativeAndroidApp } from '../utils/nativePushNotifications.js';
 
+const parentDownloadUrl = 'https://warriors-gymnastics-management.onrender.com/open-parent';
+
 const isStandalone = () => (
   window.matchMedia?.('(display-mode: standalone)').matches
   || window.navigator.standalone === true
@@ -28,7 +30,9 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
   const [installMessage, setInstallMessage] = useState('');
   const [platform, setPlatform] = useState(() => typeof window === 'undefined' ? {} : getPlatform());
   const appUrl = useMemo(() => `${window.location.origin}${installPath}`, [installPath]);
-  const qrTargetUrl = isAdminInstall && !/^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname)
+  const qrTargetUrl = !isAdminInstall
+    ? parentDownloadUrl
+    : !/^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname)
     ? 'https://warriors-gymnastics-management.onrender.com/open-admin'
     : appUrl;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrTargetUrl)}`;
@@ -113,6 +117,10 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
 
   const handleInstall = async () => {
     const platform = getPlatform();
+    if (!isAdminInstall && platform.isAndroid) {
+      window.location.assign(parentDownloadUrl);
+      return;
+    }
     if (platform.isStandalone) {
       setIsInstalled(true);
       return;
