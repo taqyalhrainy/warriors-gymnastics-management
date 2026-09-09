@@ -6,6 +6,7 @@ import ProtectedRoute from './components/ProtectedRoute.jsx';
 import ParentMessageNotifier from './components/ParentMessageNotifier.jsx';
 import ParentNotificationPermissionPrompt from './components/ParentNotificationPermissionPrompt.jsx';
 import warriorsLogo from './assets/warriors-logo.png';
+import { isNativeAndroidApp, setupNativePushListeners } from './utils/nativePushNotifications.js';
 
 const LoginPage = lazy(() => import('./pages/Login.jsx'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard.jsx'));
@@ -40,6 +41,10 @@ function App() {
   const { user } = useAuth();
   const { language, toggleLanguage } = useLanguage();
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+
+  useEffect(() => {
+    if (isNativeAndroidApp()) setupNativePushListeners().catch(console.error);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('theme', theme);
@@ -161,7 +166,7 @@ function App() {
               <Route path="/parent/notifications/:id" element={<NotificationDetailPage />} />
             </Route>
           </Route>
-          <Route path="/" element={<PublicHomePage />} />
+          <Route path="/" element={isNativeAndroidApp() ? <Navigate to="/parent/login" replace /> : <PublicHomePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

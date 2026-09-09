@@ -5,6 +5,7 @@ import InstallAppButton from '../components/InstallAppButton.jsx';
 import { login } from '../services/auth.js';
 import api from '../services/api.js';
 import warriorsLogo from '../assets/warriors-logo.png';
+import { isNativeAndroidApp } from '../utils/nativePushNotifications.js';
 
 const SERVER_WAKE_RETRY_MS = 3000;
 const SERVER_WAKE_MAX_MS = 180000;
@@ -26,7 +27,8 @@ const sendAuthWithWakeRetry = async (requestFn, onWaiting) => {
     try {
       return await requestFn();
     } catch (err) {
-      if (!isServerWakeError(err) || Date.now() - startedAt > SERVER_WAKE_MAX_MS) {
+      const maxWait = isNativeAndroidApp() ? 30000 : SERVER_WAKE_MAX_MS;
+      if (!isServerWakeError(err) || Date.now() - startedAt > maxWait) {
         throw err;
       }
 
@@ -45,7 +47,7 @@ const getAuthErrorMessage = (err) => {
     return 'Connection timed out. Please try again in a moment.';
   }
   if (!err.response) {
-    return 'Could not connect to the server. Make sure the backend is running.';
+    return 'Could not connect to the server. Please check your connection and try again.';
   }
   if (status === 404 || lowerMessage.includes('no account found')) {
     return 'No account found with these login details.';
@@ -160,9 +162,9 @@ const LoginPage = ({ initialRole = 'parent' }) => {
     }
   };
 
-  const loadingTitle = isWaitingForServer ? 'Waking up the server' : 'Signing you in';
+  const loadingTitle = isWaitingForServer ? 'Connecting to the server' : 'Signing you in';
   const loadingMessage = isWaitingForServer
-    ? 'Please wait. Render may need a few moments to start the backend.'
+    ? 'The connection is taking longer than expected. Retrying...'
     : 'Checking your details securely...';
 
   return (

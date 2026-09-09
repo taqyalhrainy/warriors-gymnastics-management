@@ -1,11 +1,14 @@
 import axios from 'axios';
+import { Capacitor } from '@capacitor/core';
 
 const apiUrl = import.meta.env.VITE_API_URL?.trim();
 const normalizedApiUrl = apiUrl ? apiUrl.replace(/\/+$/, '') : '';
 const fallbackApiUrl = import.meta.env.PROD
   ? 'https://warriors-gymnastics-management.onrender.com/api'
   : 'http://localhost:5000/api';
-const baseURL = normalizedApiUrl
+const baseURL = Capacitor.isNativePlatform()
+  ? 'https://warriors-gymnastics-management.onrender.com/api'
+  : normalizedApiUrl
   ? `${normalizedApiUrl}${normalizedApiUrl.endsWith('/api') ? '' : '/api'}`
   : fallbackApiUrl;
 

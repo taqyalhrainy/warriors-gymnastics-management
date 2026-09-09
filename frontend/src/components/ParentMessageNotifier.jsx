@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { fetchNotifications, syncCurrentDevicePushSubscription } from '../services/notifications.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { isNativeAndroidApp } from '../utils/nativePushNotifications.js';
+import { syncNativeNotifications } from '../services/nativeNotifications.js';
 
 const SEEN_KEY = 'warriors-parent-notification-seen-ids';
 const POLL_MS = 30000;
@@ -33,7 +35,7 @@ const ParentMessageNotifier = () => {
       if (syncing || Date.now() - lastSync < 60000) return;
       syncing = true;
       try {
-        await syncCurrentDevicePushSubscription();
+        await (isNativeAndroidApp() ? syncNativeNotifications() : syncCurrentDevicePushSubscription());
         lastSync = Date.now();
       } catch (error) {
         console.error('Phone notification registration failed:', error.message);

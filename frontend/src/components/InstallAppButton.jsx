@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { isNativeAndroidApp } from '../utils/nativePushNotifications.js';
 
 const isStandalone = () => (
   window.matchMedia?.('(display-mode: standalone)').matches
@@ -79,6 +80,7 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
     }).catch(() => undefined);
   }, [isAdminInstall]);
 
+  if (isNativeAndroidApp()) return null;
   if (isInstalled && !isAdminInstall) return null;
   if (isInstalled && isAdminInstall) return null;
 

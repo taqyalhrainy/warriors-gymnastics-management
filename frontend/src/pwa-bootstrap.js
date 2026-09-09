@@ -21,7 +21,7 @@ window.addEventListener('appinstalled', () => {
   window.__warriorsInstallPrompt = null;
 });
 
-if ('serviceWorker' in navigator && window.isSecureContext) {
+if (!window.Capacitor?.isNativePlatform?.() && 'serviceWorker' in navigator && window.isSecureContext) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.getRegistration('/')
       .then((registration) => registration || navigator.serviceWorker.register('/sw.js', { scope: '/' }))

@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { isNativeAndroidApp } from '../utils/nativePushNotifications.js';
+import NativePhoneNotifications from './NativePhoneNotifications.jsx';
 import {
   disableCurrentDeviceNotifications,
   fetchCurrentDevicePushStatus,
@@ -166,4 +168,6 @@ const PushNotificationSettings = () => {
   );
 };
 
-export default PushNotificationSettings;
+export default function PhoneNotificationSettings() {
+  return isNativeAndroidApp() ? <NativePhoneNotifications /> : <PushNotificationSettings />;
+}

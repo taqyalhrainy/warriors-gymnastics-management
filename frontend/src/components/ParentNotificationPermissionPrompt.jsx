@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { isNativeAndroidApp } from '../utils/nativePushNotifications.js';
+import NativePhoneNotifications from './NativePhoneNotifications.jsx';
 import {
   fetchCurrentDevicePushStatus,
   registerAndTestPushSubscription
@@ -192,4 +194,9 @@ const ParentNotificationPermissionPrompt = ({ user }) => {
   );
 };
 
-export default ParentNotificationPermissionPrompt;
+export default function PhoneNotificationPermissionPrompt({ user }) {
+  if (isNativeAndroidApp()) {
+    return user?.role === 'parent' ? <NativePhoneNotifications key={user.id} prompt /> : null;
+  }
+  return <ParentNotificationPermissionPrompt user={user} />;
+}
