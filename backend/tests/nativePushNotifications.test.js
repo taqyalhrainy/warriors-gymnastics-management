@@ -39,11 +39,13 @@ const setup = (failure = null) => {
     }),
     deleteOne: async (filter) => deleted.push(filter)
   };
-  const firebaseAdmin = {
-    apps: [],
-    credential: { cert: (account) => account },
-    initializeApp: () => firebaseAdmin.apps.push({}),
-    messaging: () => ({
+  const firebaseApp = {
+    getApps: () => [],
+    cert: (account) => account,
+    initializeApp: () => ({ name: 'warriors-push' })
+  };
+  const firebaseMessaging = {
+    getMessaging: () => ({
       send: async (message) => {
         sent.push(message);
         if (failure) throw Object.assign(new Error('FCM failed'), failure);
@@ -53,7 +55,8 @@ const setup = (failure = null) => {
   };
   const nativePush = loadModule('../utils/nativePushNotifications.js', {
     '../models/NativePushToken': NativePushToken,
-    'firebase-admin': firebaseAdmin
+    'firebase-admin/app': firebaseApp,
+    'firebase-admin/messaging': firebaseMessaging
   });
   return { nativePush, sent, deleted };
 };
@@ -88,4 +91,20 @@ test('temporary native Android provider errors do not delete the token', async (
 
   assert.equal(result.failed, 1);
   assert.equal(deleted.length, 0);
+});
+
+test('failed Firebase initialization stays unconfigured on subsequent checks', () => {
+  const nativePush = loadModule('../utils/nativePushNotifications.js', {
+    '../models/NativePushToken': {},
+    'firebase-admin/app': { getApps: () => [], cert: () => { throw new Error('Invalid credential'); } },
+    'firebase-admin/messaging': { getMessaging: () => assert.fail('Must not initialize messaging') }
+  });
+  assert.equal(nativePush.isNativePushConfigured(), false);
+  assert.equal(nativePush.isNativePushConfigured(), false);
+});
+
+test('installed Firebase SDK exposes the app and messaging APIs used by production', () => {
+  const { getApps, cert, initializeApp } = require('firebase-admin/app');
+  const { getMessaging } = require('firebase-admin/messaging');
+  for (const api of [getApps, cert, initializeApp, getMessaging]) assert.equal(typeof api, 'function');
 });

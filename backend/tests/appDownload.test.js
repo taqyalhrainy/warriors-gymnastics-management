@@ -23,10 +23,10 @@ test('parent QR serves Android APK and preserves iPhone web login', async (t) =>
     assert.match(response.headers.get('vary'), /User-Agent/);
   }
   const android = await fetch(`${origin}/open-parent`, { headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 14)' }, redirect: 'manual' });
-  assert.equal(android.status, 302);
-  assert.equal(android.headers.get('location'), '/downloads/Warriors-Parent-1.1.apk');
+  assert.equal(android.status, 200);
+  assert.match(await android.text(), /id="progress"/);
 
-  const download = await fetch(`${origin}${android.headers.get('location')}`);
+  const download = await fetch(`${origin}/downloads/Warriors-Parent-1.1.apk`);
   assert.equal(download.status, 200);
   assert.match(download.headers.get('content-type'), /application\/vnd.android.package-archive/);
   assert.match(download.headers.get('content-disposition'), /attachment; filename="Warriors-Parent-1.1.apk"/);

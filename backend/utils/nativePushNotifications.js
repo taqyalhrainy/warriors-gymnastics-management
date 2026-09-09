@@ -1,6 +1,6 @@
 const NativePushToken = require('../models/NativePushToken');
 
-let firebaseAdmin = null;
+let firebaseMessaging = null;
 let firebaseInitError = null;
 
 const parseServiceAccount = () => {
@@ -23,19 +23,19 @@ const parseServiceAccount = () => {
 };
 
 const getFirebaseAdmin = () => {
-  if (firebaseAdmin || firebaseInitError) return firebaseAdmin;
+  if (firebaseInitError) return null;
+  if (firebaseMessaging) return firebaseMessaging;
 
   try {
     const serviceAccount = parseServiceAccount();
     if (!serviceAccount) return null;
 
-    firebaseAdmin = require('firebase-admin');
-    if (!firebaseAdmin.apps.length) {
-      firebaseAdmin.initializeApp({
-        credential: firebaseAdmin.credential.cert(serviceAccount)
-      });
-    }
-    return firebaseAdmin;
+    const { getApps, initializeApp, cert } = require('firebase-admin/app');
+    const { getMessaging } = require('firebase-admin/messaging');
+    const app = getApps().find((item) => item.name === 'warriors-push')
+      || initializeApp({ credential: cert(serviceAccount) }, 'warriors-push');
+    firebaseMessaging = getMessaging(app);
+    return firebaseMessaging;
   } catch (error) {
     firebaseInitError = error;
     console.error('Firebase push initialization failed:', error.message);
@@ -78,7 +78,7 @@ const sendNativePushToUser = async (userId, payload = {}, { token } = {}) => {
       };
       if (data.notificationId) androidNotification.tag = data.notificationId;
 
-      await admin.messaging().send({
+      await admin.send({
         token: savedToken.token,
         notification: {
           title: data.title,
