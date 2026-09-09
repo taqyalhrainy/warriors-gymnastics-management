@@ -1,94 +1,137 @@
 import { useEffect, useState } from 'react';
 import {
-  deletePushSubscription,
-  fetchPushPublicKey,
-  fetchPushStatus,
-  savePushSubscription
+  disableCurrentDeviceNotifications,
+  fetchCurrentDevicePushStatus,
+  registerAndTestPushSubscription
 } from '../services/notifications.js';
+import {
+  isIos,
+  isPushSupported,
+  isStandalone,
+  pushTestMessage,
+  requestPhoneNotificationPermission,
+  observeNotificationPermission
+} from '../utils/pushNotifications.js';
 
-const isStandalone = () => window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone;
-const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-const isSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
-
-const urlBase64ToUint8Array = (base64String) => {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = `${base64String}${padding}`.replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
-};
-
-const getSubscription = async () => {
-  if (!isSupported()) return null;
-  const registration = await navigator.serviceWorker.ready;
-  return registration.pushManager.getSubscription();
-};
+const getIosHelp = () => (
+  isStandalone()
+    ? 'Open iPhone Settings > Notifications > Warriors, then turn on Allow Notifications. If Warriors is not listed, remove the Home Screen app, add it again from Safari, then tap Allow.'
+    : 'Open this site in Safari, tap Share, Add to Home Screen, then open Warriors from the Home Screen icon and tap Allow.'
+);
 
 const PushNotificationSettings = () => {
   const [status, setStatus] = useState('checking');
   const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
 
   const refreshStatus = async () => {
-    if (!isSupported()) {
-      setStatus('unsupported');
-      return;
-    }
     if (isIos() && !isStandalone()) {
+      setMessage(getIosHelp());
       setStatus('install-first');
       return;
     }
-    const subscription = await getSubscription();
-    if (!subscription) {
-      setStatus(Notification.permission === 'denied' ? 'denied' : 'disabled');
-      return;
-    }
-    const serverStatus = await fetchPushStatus(subscription.endpoint).catch(() => ({ subscribed: true }));
-    setStatus(serverStatus.subscribed ? 'enabled' : 'disabled');
-  };
-
-  useEffect(() => {
-    refreshStatus().catch(() => setStatus('disabled'));
-  }, []);
-
-  const enableNotifications = async () => {
-    setMessage('');
-    if (!isSupported()) {
+    if (!isPushSupported()) {
+      setMessage(window.isSecureContext ? 'This browser does not support phone notifications.' : 'Open the app with HTTPS to enable phone notifications.');
       setStatus('unsupported');
       return;
     }
-    if (isIos() && !isStandalone()) {
-      setStatus('install-first');
-      return;
-    }
-    const permission = await Notification.requestPermission();
-    if (permission !== 'granted') {
+    if (Notification.permission === 'denied') {
+      setMessage('');
       setStatus('denied');
       return;
     }
-    const publicKey = await fetchPushPublicKey();
-    if (!publicKey) {
+    if (Notification.permission === 'default') {
+      setMessage('');
+      setStatus('disabled');
+      return;
+    }
+    const currentStatus = await fetchCurrentDevicePushStatus();
+    if (!currentStatus.configured) {
       setMessage('Push is not configured on the server yet.');
       setStatus('disabled');
       return;
     }
-    const registration = await navigator.serviceWorker.ready;
-    let subscription = await registration.pushManager.getSubscription();
-    if (!subscription) {
-      subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey)
-      });
+    setStatus(currentStatus.subscribed ? 'enabled' : 'disabled');
+  };
+
+  useEffect(() => {
+    const refresh = () => refreshStatus().catch(() => {
+      setStatus('disabled');
+      setMessage('Unable to check phone notifications. Please try Enable again.');
+    });
+    refresh();
+    window.addEventListener('push:changed', refresh);
+    const stopObserving = observeNotificationPermission(refresh);
+    return () => {
+      window.removeEventListener('push:changed', refresh);
+      stopObserving();
+    };
+  }, []);
+
+  const enableNotifications = async () => {
+    setMessage('');
+    if (isIos() && !isStandalone()) {
+      setMessage(getIosHelp());
+      setStatus('install-first');
+      return;
     }
-    await savePushSubscription(subscription.toJSON());
-    setStatus('enabled');
+    if (!isPushSupported()) {
+      setMessage(window.isSecureContext ? 'This browser does not support phone notifications.' : 'Open the app with HTTPS to enable phone notifications.');
+      setStatus('unsupported');
+      return;
+    }
+    if (Notification.permission === 'denied') {
+      setMessage(isIos() ? getIosHelp() : 'Android or the browser has blocked notifications. The app cannot change this permission.');
+      setStatus('denied');
+      return;
+    }
+    setBusy(true);
+    try {
+      const permission = await requestPhoneNotificationPermission();
+      if (permission !== 'granted') {
+        setMessage(permission === 'denied'
+          ? (isIos() ? getIosHelp() : 'Chrome or Android has blocked notifications for this site.')
+          : 'Permission was not granted. Tap Enable to ask again.');
+        setStatus(permission === 'denied' ? 'denied' : 'disabled');
+        return;
+      }
+      const { delivery } = await registerAndTestPushSubscription();
+      setMessage(pushTestMessage(delivery));
+      setStatus('enabled');
+    } catch (error) {
+      setMessage(error.response?.data?.message || error.message || 'Unable to enable phone notifications. Please try again.');
+      setStatus('disabled');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const disableNotifications = async () => {
-    const subscription = await getSubscription();
-    if (subscription) {
-      await deletePushSubscription({ endpoint: subscription.endpoint });
-      await subscription.unsubscribe();
+    setBusy(true);
+    try {
+      await disableCurrentDeviceNotifications();
+      setStatus('disabled');
+      setMessage('Phone notifications are disabled on this device.');
+    } catch (error) {
+      setMessage(error.response?.data?.message || error.message || 'Unable to disable phone notifications.');
+    } finally {
+      setBusy(false);
     }
-    setStatus('disabled');
+  };
+
+  const testNotifications = async () => {
+    setMessage('');
+    setBusy(true);
+    try {
+      const { delivery } = await registerAndTestPushSubscription();
+      setMessage(pushTestMessage(delivery));
+      setStatus('enabled');
+    } catch (error) {
+      setMessage(error.response?.data?.message || error.message || 'Unable to send a test notification.');
+      setStatus('disabled');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const label = status === 'enabled'
@@ -98,7 +141,7 @@ const PushNotificationSettings = () => {
       : status === 'unsupported'
         ? 'Not supported on this device'
         : status === 'denied'
-          ? 'Permission blocked'
+          ? (isIos() ? getIosHelp() : 'Permission blocked')
           : 'Disabled';
 
   return (
@@ -107,12 +150,18 @@ const PushNotificationSettings = () => {
         type="button"
         className={`parent-setting-choice ${status === 'enabled' ? 'is-selected' : ''}`}
         onClick={status === 'enabled' ? disableNotifications : enableNotifications}
-        disabled={status === 'checking' || status === 'unsupported' || status === 'install-first'}
+        disabled={busy || status === 'checking' || status === 'unsupported' || status === 'install-first'}
       >
         <span>Phone notifications</span>
-        <strong>{status === 'enabled' ? 'Disable' : 'Enable'}</strong>
+        <strong>{busy ? 'Please wait...' : status === 'enabled' ? 'Disable' : 'Enable'}</strong>
       </button>
-      <p className="parent-setting-note">{message || label}</p>
+      {status === 'enabled' && (
+        <button type="button" className="parent-setting-choice" onClick={testNotifications} disabled={busy}>
+          <span>Test notification</span>
+          <strong>Send</strong>
+        </button>
+      )}
+      <p className="parent-setting-note" role="status">{message || label}</p>
     </div>
   );
 };

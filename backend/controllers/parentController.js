@@ -301,6 +301,38 @@ const formatParentResponse = (parent) => {
   return obj;
 };
 
+const getCurrentParent = async (user) => {
+  let parent = await Parent.findOne({ userId: user._id });
+  if (parent || user.role !== 'parent') {
+    return parent;
+  }
+
+  let phoneEncrypted = '';
+  if (user.phone) {
+    try {
+      phoneEncrypted = encrypt(user.phone);
+    } catch (error) {
+      phoneEncrypted = '';
+    }
+  }
+
+  parent = await Parent.findOneAndUpdate(
+    { userId: user._id },
+    {
+      $setOnInsert: {
+        userId: user._id,
+        name: user.name,
+        email: user.email || '',
+        phoneEncrypted,
+        children: []
+      }
+    },
+    { new: true, upsert: true, setDefaultsOnInsert: true }
+  );
+
+  return parent;
+};
+
 const getParents = async (req, res, next) => {
   try {
     const parents = await Parent.find()
@@ -450,11 +482,11 @@ const deleteParent = async (req, res, next) => {
 
 const getParentMe = async (req, res, next) => {
   try {
-    const parent = await Parent.findOne({ userId: req.user._id })
-      .populate('children', 'fullName status programId groupId groupIds subscriptionId');
+    const parent = await getCurrentParent(req.user);
     if (!parent) {
       return res.status(404).json({ message: 'Parent record not found.' });
     }
+    await parent.populate('children', 'fullName status programId groupId groupIds subscriptionId');
     res.json(formatParentResponse(parent));
   } catch (error) {
     next(error);
@@ -463,7 +495,7 @@ const getParentMe = async (req, res, next) => {
 
 const getParentChildren = async (req, res, next) => {
   try {
-    const parent = await Parent.findOne({ userId: req.user._id });
+    const parent = await getCurrentParent(req.user);
     if (!parent) {
       return res.status(404).json({ message: 'Parent record not found.' });
     }
@@ -482,7 +514,7 @@ const getParentChildren = async (req, res, next) => {
 
 const getParentAttendance = async (req, res, next) => {
   try {
-    const parent = await Parent.findOne({ userId: req.user._id });
+    const parent = await getCurrentParent(req.user);
     if (!parent) {
       return res.status(404).json({ message: 'Parent record not found.' });
     }
@@ -513,7 +545,7 @@ const getParentAttendance = async (req, res, next) => {
 
 const getParentAttendanceHistory = async (req, res, next) => {
   try {
-    const parent = await Parent.findOne({ userId: req.user._id });
+    const parent = await getCurrentParent(req.user);
     if (!parent) {
       return res.status(404).json({ message: 'Parent record not found.' });
     }
@@ -568,7 +600,7 @@ const getParentAttendanceHistory = async (req, res, next) => {
 
 const getParentPayments = async (req, res, next) => {
   try {
-    const parent = await Parent.findOne({ userId: req.user._id });
+    const parent = await getCurrentParent(req.user);
     if (!parent) {
       return res.status(404).json({ message: 'Parent record not found.' });
     }
@@ -639,7 +671,7 @@ const getParentPayments = async (req, res, next) => {
 
 const getParentDashboard = async (req, res, next) => {
   try {
-    const parent = await Parent.findOne({ userId: req.user._id });
+    const parent = await getCurrentParent(req.user);
     if (!parent) {
       return res.status(404).json({ message: 'Parent record not found.' });
     }

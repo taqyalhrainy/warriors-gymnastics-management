@@ -4,6 +4,7 @@ import { useAuth } from './context/AuthContext.jsx';
 import { useLanguage } from './context/LanguageContext.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import ParentMessageNotifier from './components/ParentMessageNotifier.jsx';
+import ParentNotificationPermissionPrompt from './components/ParentNotificationPermissionPrompt.jsx';
 import warriorsLogo from './assets/warriors-logo.png';
 
 const LoginPage = lazy(() => import('./pages/Login.jsx'));
@@ -106,6 +107,7 @@ function App() {
   return (
     <div className={`app-shell${user?.role === 'parent' ? ' parent-app-shell' : ''}`}>
       <ParentMessageNotifier />
+      <ParentNotificationPermissionPrompt user={user} />
       {user?.role === 'parent' ? (
         null
       ) : (

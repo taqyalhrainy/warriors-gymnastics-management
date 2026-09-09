@@ -1,5 +1,6 @@
 const Notification = require('../models/Notification');
 const { sendPushToUser } = require('./pushNotifications');
+const { sendNativePushToUser } = require('./nativePushNotifications');
 
 const safeInternalUrl = (url, type, id) => {
   const fallback = id ? `/parent/notifications/${id}` : '/parent/notifications';
@@ -12,25 +13,36 @@ const safeInternalUrl = (url, type, id) => {
 
 const pushNotification = (notification) => {
   const id = notification._id;
-  return sendPushToUser(notification.recipientUserId, {
+  const payload = {
     title: notification.title,
     body: notification.message,
     notificationId: id,
     type: notification.type,
     url: safeInternalUrl(notification.url, notification.type, id)
-  }).catch((error) => console.error('Push side effect failed:', error.message));
+  };
+
+  return Promise.allSettled([
+    sendPushToUser(notification.recipientUserId, payload),
+    sendNativePushToUser(notification.recipientUserId, payload)
+  ]).then((results) => {
+    results.forEach((result) => {
+      if (result.status === 'rejected') {
+        console.error('Push side effect failed:', result.reason?.message || result.reason);
+      }
+    });
+  });
 };
 
 const createNotification = async (data) => {
   const notification = await Notification.create(data);
-  pushNotification(notification);
+  await pushNotification(notification);
   return notification;
 };
 
 const createNotifications = async (items) => {
   if (!items.length) return [];
   const notifications = await Notification.insertMany(items);
-  notifications.forEach(pushNotification);
+  await Promise.all(notifications.map(pushNotification));
   return notifications;
 };
 

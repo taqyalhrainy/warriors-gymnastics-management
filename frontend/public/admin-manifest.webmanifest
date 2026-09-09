@@ -11,13 +11,13 @@
   "background_color": "#f4fbfb",
   "icons": [
     {
-      "src": "/warriors-logo.png",
+      "src": "/warriors-icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/warriors-logo.png",
+      "src": "/warriors-icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

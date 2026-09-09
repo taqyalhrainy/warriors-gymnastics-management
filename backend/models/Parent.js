@@ -8,4 +8,6 @@ const parentSchema = new mongoose.Schema({
   children: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Player' }]
 });
 
+parentSchema.index({ userId: 1 });
+
 module.exports = mongoose.model('Parent', parentSchema);

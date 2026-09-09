@@ -7,6 +7,7 @@ const {
   savePushSubscription,
   deletePushSubscription,
   getPushStatus,
+  sendTestPushNotification,
   getSavedMessages,
   createSavedMessage,
   updateSavedMessage,
@@ -25,6 +26,7 @@ router.get('/count', authorize('admin', 'coach', 'receptionist', 'parent'), getU
 router.get('/push/public-key', authorize('parent'), getPushPublicKey);
 router.get('/push/status', authorize('parent'), getPushStatus);
 router.post('/push/subscribe', authorize('parent'), savePushSubscription);
+router.post('/push/test', authorize('parent'), sendTestPushNotification);
 router.delete('/push/unsubscribe', authorize('parent'), deletePushSubscription);
 router.get('/saved', authorize('admin', 'coach', 'receptionist'), getSavedMessages);
 router.post('/saved', authorize('admin', 'coach', 'receptionist'), createSavedMessage);

@@ -3,9 +3,11 @@ const SavedNotificationMessage = require('../models/SavedNotificationMessage');
 const Parent = require('../models/Parent');
 const Player = require('../models/Player');
 const PushSubscription = require('../models/PushSubscription');
+const NativePushToken = require('../models/NativePushToken');
 const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
-const { getVapidPublicKey, isPushConfigured } = require('../utils/pushNotifications');
+const { getVapidPublicKey, isPushConfigured, sendPushToUser } = require('../utils/pushNotifications');
+const { isNativePushConfigured, sendNativePushToUser } = require('../utils/nativePushNotifications');
 const { createNotification: createAndPushNotification, createNotifications } = require('../utils/notificationDelivery');
 
 const adminNotificationRoles = ['admin', 'coach', 'receptionist'];
@@ -60,6 +62,135 @@ const getPushStatus = async (req, res, next) => {
     if (endpoint) filter.endpoint = endpoint;
     const count = await PushSubscription.countDocuments(filter);
     res.json({ configured: isPushConfigured(), subscribed: count > 0 });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const sendTestPushNotification = async (req, res, next) => {
+  try {
+    if (!isPushConfigured()) {
+      return res.status(503).json({ message: 'Push is not configured on the server.' });
+    }
+
+    const endpoint = req.body?.endpoint;
+    if (typeof endpoint !== 'string' || !endpoint.trim()) {
+      return res.status(400).json({ message: 'This device subscription endpoint is required.' });
+    }
+
+    const result = await sendPushToUser(req.user._id, {
+      title: 'Warriors Gymnastics',
+      body: 'This is your Warriors Gymnastics notification test.',
+      type: 'test',
+      testId: /^[a-zA-Z0-9-]{1,64}$/.test(req.body?.testId || '') ? req.body.testId : '',
+      url: '/parent/notifications'
+    }, { endpoint });
+
+    if (!result.attempted) {
+      return res.status(404).json({ message: 'Enable notifications on this device first.', ...result });
+    }
+
+    if (!result.sent) {
+      return res.status(502).json({
+        message: result.deleted
+          ? 'The old phone subscription was removed. Please enable notifications again.'
+          : 'Unable to send a test notification right now.',
+        ...result
+      });
+    }
+
+    res.json({ ...result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const saveNativePushToken = async (req, res, next) => {
+  try {
+    const payload = sanitizeObject(req.body);
+    const token = String(payload.token || '').trim();
+    if (!token) {
+      return res.status(400).json({ message: 'Android notification token is required.' });
+    }
+
+    await NativePushToken.findOneAndUpdate(
+      { token },
+      {
+        userId: req.user._id,
+        token,
+        platform: 'android',
+        appVersion: String(payload.appVersion || '').trim(),
+        userAgent: req.get('user-agent') || '',
+        updatedAt: new Date()
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteNativePushToken = async (req, res, next) => {
+  try {
+    const payload = sanitizeObject(req.body);
+    const token = String(payload.token || '').trim();
+    if (!token) {
+      return res.status(400).json({ message: 'Android notification token is required.' });
+    }
+
+    await NativePushToken.deleteOne({ userId: req.user._id, token });
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getNativePushStatus = async (req, res, next) => {
+  try {
+    const token = String(req.query.token || '').trim();
+    const filter = { userId: req.user._id, platform: 'android' };
+    if (token) filter.token = token;
+    const count = await NativePushToken.countDocuments(filter);
+    res.json({ configured: isNativePushConfigured(), subscribed: count > 0 });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const sendNativeTestPushNotification = async (req, res, next) => {
+  try {
+    if (!isNativePushConfigured()) {
+      return res.status(503).json({ message: 'Android push is not configured on the server.' });
+    }
+
+    const token = String(req.body?.token || '').trim();
+    if (!token) {
+      return res.status(400).json({ message: 'Android notification token is required.' });
+    }
+
+    const result = await sendNativePushToUser(req.user._id, {
+      title: 'Warriors Gymnastics',
+      body: 'Android notifications are enabled for this phone.',
+      type: 'test',
+      url: '/parent/notifications'
+    }, { token });
+
+    if (!result.attempted) {
+      return res.status(404).json({ message: 'Enable Android notifications on this phone first.', ...result });
+    }
+
+    if (!result.sent) {
+      return res.status(502).json({
+        message: result.deleted
+          ? 'The old Android notification token was removed. Please enable notifications again.'
+          : 'Unable to send an Android test notification right now.',
+        ...result
+      });
+    }
+
+    res.json({ ...result });
   } catch (error) {
     next(error);
   }
@@ -303,6 +434,11 @@ module.exports = {
   savePushSubscription,
   deletePushSubscription,
   getPushStatus,
+  sendTestPushNotification,
+  saveNativePushToken,
+  deleteNativePushToken,
+  getNativePushStatus,
+  sendNativeTestPushNotification,
   getSavedMessages,
   createSavedMessage,
   updateSavedMessage,

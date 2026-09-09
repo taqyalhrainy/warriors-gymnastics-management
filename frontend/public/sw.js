@@ -1,5 +1,5 @@
-const CACHE_NAME = 'warriors-shell-v9';
-const SHELL_ASSETS = ['/', '/login?source=pwa', '/parent/login?source=parent-pwa', '/admin/login?source=admin-pwa', '/manifest.webmanifest', '/admin-manifest.webmanifest', '/warriors-logo.png'];
+const CACHE_NAME = 'warriors-shell-v16';
+const SHELL_ASSETS = ['/', '/login?source=pwa', '/parent/login?source=parent-pwa', '/admin/login?source=admin-pwa', '/manifest.webmanifest', '/admin-manifest.webmanifest', '/warriors-logo.png', '/warriors-icon-192.png', '/warriors-icon-512.png'];
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -13,10 +13,9 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => Promise.all(
-      keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-    ))
+      keys.filter((key) => key.startsWith('warriors-shell-') && key !== CACHE_NAME).map((key) => caches.delete(key))
+    )).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
@@ -73,18 +72,37 @@ self.addEventListener('push', (event) => {
   let data = {};
   try {
     data = event.data ? event.data.json() : {};
+    if (!data || typeof data !== 'object') data = {};
   } catch (error) {
     data = { title: 'New message', body: event.data?.text() || '' };
   }
 
-  const title = data.title || 'New message';
+  const title = data.title || 'Warriors Gymnastics';
+  const notificationId = data.notificationId || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const options = {
     body: data.body || data.message || '',
-    icon: '/warriors-logo.png',
-    badge: '/warriors-logo.png',
-    tag: data.notificationId ? `parent-message-${data.notificationId}` : 'parent-message',
-    data: { url: data.url || '/parent/notifications' }
+    icon: data.icon || '/warriors-icon-192.png',
+    badge: data.badge || '/warriors-icon-192.png',
+    tag: data.testId ? `push-test-${data.testId}` : `parent-message-${notificationId}`,
+    silent: false,
+    timestamp: Date.now(),
+    data: {
+      url: data.url || '/parent/notifications',
+      notificationId
+    }
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil((async () => {
+    let displayed = false;
+    try {
+      await self.registration.showNotification(title, options);
+      displayed = true;
+    } catch (error) {
+      console.error('Unable to display push notification:', error);
+    }
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    windows.forEach((client) => client.postMessage({
+      type: 'push:receipt', testId: data.testId || '', notificationId, displayed
+    }));
+  })());
 });

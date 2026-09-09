@@ -24,6 +24,7 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
   const [installPrompt, setInstallPrompt] = useState(() => window.__warriorsInstallPrompt || null);
   const [isInstalled, setIsInstalled] = useState(() => typeof window !== 'undefined' && isStandalone());
   const [modalMode, setModalMode] = useState('');
+  const [installMessage, setInstallMessage] = useState('');
   const [platform, setPlatform] = useState(() => typeof window === 'undefined' ? {} : getPlatform());
   const appUrl = useMemo(() => `${window.location.origin}${installPath}`, [installPath]);
   const qrTargetUrl = isAdminInstall && !/^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname)
@@ -81,6 +82,33 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
   if (isInstalled && !isAdminInstall) return null;
   if (isInstalled && isAdminInstall) return null;
 
+  const prepareAndroidInstall = async () => {
+    if (!('serviceWorker' in navigator) || !window.isSecureContext) {
+      setModalMode('android-wait');
+      setInstallMessage('Open this site with HTTPS in Chrome, then tap Install App again.');
+      return;
+    }
+
+    try {
+      const registration = await navigator.serviceWorker.getRegistration('/')
+        || await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      await registration.update?.().catch(() => undefined);
+      await navigator.serviceWorker.ready;
+      setModalMode('android-wait');
+      setInstallMessage('Chrome is preparing the real app install. Close this message and tap Install App again in a few seconds.');
+      window.setTimeout(() => {
+        const promptEvent = window.__warriorsInstallPrompt;
+        if (promptEvent) {
+          setInstallPrompt(promptEvent);
+          setModalMode('');
+        }
+      }, 2500);
+    } catch {
+      setModalMode('android-wait');
+      setInstallMessage('Chrome could not prepare the real app install yet. Please open this page in Chrome and try again.');
+    }
+  };
+
   const handleInstall = async () => {
     const platform = getPlatform();
     if (platform.isStandalone) {
@@ -106,7 +134,11 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
       setModalMode(platform.isSafari ? 'ios' : 'ios-browser');
       return;
     }
-    setModalMode(platform.isAndroid ? 'manual' : 'qr');
+    if (platform.isAndroid) {
+      await prepareAndroidInstall();
+      return;
+    }
+    setModalMode('qr');
   };
 
   const modal = modalMode ? createPortal(
@@ -128,6 +160,12 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
             <div className="ios-install-flow" aria-label="iOS install steps">
               <span>Safari</span><b>→</b><span>Share</span><b>→</b><span>Add</span>
             </div>
+          </>
+        ) : modalMode === 'android-wait' ? (
+          <>
+            <span className="landing-kicker">Android install</span>
+            <h2>Install App</h2>
+            <p>{installMessage || 'Refresh this page, then tap Install App again when Chrome is ready.'}</p>
           </>
         ) : modalMode === 'manual' ? (
           <>

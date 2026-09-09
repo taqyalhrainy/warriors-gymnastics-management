@@ -9,3 +9,6 @@ frontend/.env
 backend/node_modules
 frontend/node_modules
 *.log
+*firebase-adminsdk*.json
+*.apk
+*.aab

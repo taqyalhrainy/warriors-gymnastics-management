@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { fetchNotifications, fetchPushPublicKey, savePushSubscription } from '../services/notifications.js';
+import { fetchNotifications, syncCurrentDevicePushSubscription } from '../services/notifications.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const SEEN_KEY = 'warriors-parent-notification-seen-ids';
@@ -18,64 +18,6 @@ const writeSeenIds = (ids) => {
   localStorage.setItem(SEEN_KEY, JSON.stringify([...ids].slice(-300)));
 };
 
-const canNotify = () => 'Notification' in window;
-
-const ensurePermission = async () => {
-  if (!canNotify() || Notification.permission === 'denied') return false;
-  if (Notification.permission === 'granted') return true;
-  const permission = await Notification.requestPermission();
-  return permission === 'granted';
-};
-
-const urlBase64ToUint8Array = (base64String) => {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = `${base64String}${padding}`.replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
-};
-
-const ensurePushSubscription = async () => {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-  if (!(await ensurePermission())) return;
-
-  const registration = await navigator.serviceWorker.ready;
-  let subscription = await registration.pushManager.getSubscription();
-  if (!subscription) {
-    const publicKey = await fetchPushPublicKey();
-    subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey)
-    });
-  }
-  await savePushSubscription(subscription.toJSON());
-};
-
-const showParentNotification = async (note) => {
-  if (!canNotify() || Notification.permission !== 'granted') return;
-
-  const url = `/parent/notifications/${note._id}`;
-  const options = {
-    body: note.message || 'New message',
-    icon: '/warriors-logo.png',
-    badge: '/warriors-logo.png',
-    tag: `parent-message-${note._id}`,
-    data: { url }
-  };
-
-  const registration = await navigator.serviceWorker?.ready.catch(() => null);
-  if (registration?.showNotification) {
-    registration.showNotification(note.title || 'New message', options);
-    return;
-  }
-
-  const notification = new Notification(note.title || 'New message', options);
-  notification.onclick = () => {
-    window.focus();
-    window.location.assign(url);
-    notification.close();
-  };
-};
-
 const ParentMessageNotifier = () => {
   const { user } = useAuth();
   const seenIdsRef = useRef(readSeenIds());
@@ -84,9 +26,27 @@ const ParentMessageNotifier = () => {
   useEffect(() => {
     if (user?.role !== 'parent') return undefined;
 
-    if (canNotify() && Notification.permission === 'granted') {
-      ensurePushSubscription().catch(console.error);
-    }
+    seededRef.current = false;
+    let syncing = false;
+    let lastSync = 0;
+    const sync = async () => {
+      if (syncing || Date.now() - lastSync < 60000) return;
+      syncing = true;
+      try {
+        await syncCurrentDevicePushSubscription();
+        lastSync = Date.now();
+      } catch (error) {
+        console.error('Phone notification registration failed:', error.message);
+      } finally {
+        syncing = false;
+      }
+    };
+    sync();
+    const resume = () => {
+      if (!document.hidden) sync();
+    };
+    window.addEventListener('online', resume);
+    document.addEventListener('visibilitychange', resume);
 
     const checkMessages = async () => {
       const notes = await fetchNotifications({ force: true });
@@ -104,7 +64,7 @@ const ParentMessageNotifier = () => {
         const id = String(note._id);
         if (!seenIds.has(id)) {
           seenIds.add(id);
-          showParentNotification(note).catch(console.error);
+          // OS notifications come only from push, including while this page is open.
           window.dispatchEvent(new Event('notifications:changed'));
         }
       }
@@ -116,6 +76,7 @@ const ParentMessageNotifier = () => {
     }, 8000);
     const timer = window.setInterval(() => {
       if (!document.hidden) {
+        sync();
         checkMessages().catch(console.error);
       }
     }, POLL_MS);
@@ -123,8 +84,10 @@ const ParentMessageNotifier = () => {
     return () => {
       window.clearTimeout(firstCheckTimer);
       window.clearInterval(timer);
+      window.removeEventListener('online', resume);
+      document.removeEventListener('visibilitychange', resume);
     };
-  }, [user?.role]);
+  }, [user?.role, user?.id]);
 
   return null;
 };
