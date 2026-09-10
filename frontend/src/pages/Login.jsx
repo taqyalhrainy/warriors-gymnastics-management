@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import InstallAppButton from '../components/InstallAppButton.jsx';
 import { login } from '../services/auth.js';
@@ -216,6 +216,7 @@ const LoginPage = ({ initialRole = 'parent' }) => {
 
           <button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Signing In...' : 'Sign In'}</button>
         </form>
+        {loginRole === 'admin' && <Link to="/admin/forgot-password">Forgot Password?</Link>}
       </div>
     </div>
   );

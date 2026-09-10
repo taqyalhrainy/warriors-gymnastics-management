@@ -4,6 +4,8 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   email: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
   passwordHash: { type: String, required: true },
+  recoveryCodeHash: { type: String, select: false, unique: true, sparse: true },
+  sessionVersion: { type: Number, default: 0 },
   role: { type: String, enum: ['admin', 'coach', 'receptionist', 'parent'], default: 'parent' },
   phone: { type: String, trim: true },
   isActive: { type: Boolean, default: true },

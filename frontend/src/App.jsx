@@ -10,6 +10,7 @@ import { isNativeAndroidApp, setupNativePushListeners } from './utils/nativePush
 import NativeAppLifecycle from './components/NativeAppLifecycle.jsx';
 
 const LoginPage = lazy(() => import('./pages/Login.jsx'));
+const AdminPasswordRecovery = lazy(() => import('./pages/AdminPasswordRecovery.jsx'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard.jsx'));
 const PlayersPage = lazy(() => import('./pages/Players.jsx'));
 const PlayerFormPage = lazy(() => import('./pages/PlayerForm.jsx'));
@@ -132,6 +133,7 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/parent/login" element={<LoginPage />} />
           <Route path="/admin/login" element={<LoginPage initialRole="admin" />} />
+          <Route path="/admin/forgot-password" element={<AdminPasswordRecovery />} />
           <Route path="/admin-login" element={<Navigate to="/admin/login" replace />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<ProtectedRoute roles={adminRoles} />}>

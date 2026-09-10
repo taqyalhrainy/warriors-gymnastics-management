@@ -6,8 +6,8 @@ const { sanitizeObject, validateEmail } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { encrypt } = require('../utils/encryption');
 
-const signToken = (id, remember = false) => jwt.sign(
-  { id },
+const signToken = (id, remember = false, sessionVersion = 0) => jwt.sign(
+  { id, sessionVersion },
   process.env.JWT_SECRET,
   { expiresIn: remember ? '90d' : '7d' }
 );
@@ -87,7 +87,7 @@ const loginUser = async (req, res, next) => {
       return res.status(401).json({ message: 'Incorrect password. Please try again.' });
     }
     await createAuditLog({ userId: user._id, action: 'login', entity: 'User', entityId: user._id, req });
-    return res.json({ token: signToken(user._id, Boolean(remember)), user: { id: user._id, name: user.name, email: user.email, role: user.role } });
+    return res.json({ token: signToken(user._id, Boolean(remember), user.sessionVersion || 0), user: { id: user._id, name: user.name, email: user.email, role: user.role } });
   } catch (error) {
     next(error);
   }

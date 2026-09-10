@@ -3,6 +3,8 @@ import Sidebar from '../components/Sidebar.jsx';
 import api from '../services/api.js';
 import { updatePaymentPassword } from '../services/security.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
+import AdminAccountSecurity from '../components/AdminAccountSecurity.jsx';
 
 const initialPasswordForm = {
   oldPassword: '',
@@ -20,6 +22,7 @@ const AuditLogsPage = () => {
   const [securityError, setSecurityError] = useState('');
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const { t } = useLanguage();
+  const { user } = useAuth();
 
   const formatEntity = (log) => {
     if (log.entity === 'User' && log.userId?.role) {
@@ -72,10 +75,12 @@ const AuditLogsPage = () => {
       <main className="page-content">
         <div className="page-header"><h1>{t('security')}</h1></div>
         <div className="security-tabs">
+          {user?.role === 'admin' && <button type="button" className={activeSecurityTab === 'account' ? 'active' : ''} onClick={() => setActiveSecurityTab('account')}>Admin Settings</button>}
           <button type="button" className={activeSecurityTab === 'audit' ? 'active' : ''} onClick={() => setActiveSecurityTab('audit')}>{t('auditLogs')}</button>
           <button type="button" className={activeSecurityTab === 'paymentPassword' ? 'active' : ''} onClick={() => setActiveSecurityTab('paymentPassword')}>Payment Password</button>
         </div>
 
+        {activeSecurityTab === 'account' && user?.role === 'admin' && <AdminAccountSecurity />}
         {activeSecurityTab === 'paymentPassword' && (
           <div className="security-card">
             <div className="security-card-heading">

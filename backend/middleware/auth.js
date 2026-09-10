@@ -10,7 +10,7 @@ const protect = async (req, res, next) => {
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.id).select('-passwordHash');
-    if (!user) {
+    if (!user || (decoded.sessionVersion || 0) !== (user.sessionVersion || 0)) {
       return res.status(401).json({ message: 'Invalid authentication token' });
     }
     req.user = user;
