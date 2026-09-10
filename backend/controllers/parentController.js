@@ -6,6 +6,11 @@ const Attendance = require('../models/Attendance');
 const Payment = require('../models/Payment');
 const Notification = require('../models/Notification');
 const HistoryEntry = require('../models/HistoryEntry');
+// Parent routes load independently of admin routes after a server restart.
+require('../models/Program');
+require('../models/TrainingGroup');
+require('../models/Coach');
+require('../models/Subscription');
 const { sanitizeObject, validateEmail, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { encrypt, decrypt } = require('../utils/encryption');
