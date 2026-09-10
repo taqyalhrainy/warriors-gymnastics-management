@@ -188,5 +188,6 @@ export default function PhoneNotificationPermissionPrompt({ user }) {
   if (isNativeAndroidApp()) {
     return user?.role === 'parent' ? <NativePhoneNotifications key={user.id} prompt /> : null;
   }
+  if (!isStandalone()) return null;
   return <ParentNotificationPermissionPrompt user={user} />;
 }
