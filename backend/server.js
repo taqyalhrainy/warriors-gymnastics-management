@@ -6,6 +6,7 @@ const helmet = require('helmet');
 const cors = require('cors');
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
+const adminAppHtml = require('./utils/adminAppHtml');
 
 const normalizeGroupName = (value) => String(value || '')
   .replace(/&amp;amp;#x2F;/g, '/')
@@ -204,7 +205,7 @@ app.get('*', async (req, res, next) => {
   try {
     const response = await fetchFrontend('/admin/login?source=admin-pwa');
     let html = await response.text();
-    html = html.replace(/<title>.*?<\/title>/, '<title>Warriors Admin Login</title>');
+    html = adminAppHtml(html);
     res.set('Cache-Control', 'no-cache');
     res.type('html').send(html);
   } catch (error) {
