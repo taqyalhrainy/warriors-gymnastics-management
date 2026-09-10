@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { getNativeAndroidPermissionState } from '../utils/nativePushNotifications.js';
 import {
   getNativeNotificationStatus, enableNativeNotifications, disableNativeNotifications
 } from '../services/nativeNotifications.js';
@@ -12,10 +13,11 @@ const NativePhoneNotifications = ({ prompt = false }) => {
 
   useEffect(() => {
     let active = true;
-    const refresh = () => getNativeNotificationStatus().then((status) => {
+    const refresh = () => (prompt
+      ? getNativeAndroidPermissionState().then((permission) => ({ configured: true, subscribed: permission === 'granted' }))
+      : getNativeNotificationStatus()).then((status) => {
       if (!active) return;
       setEnabled(status.subscribed);
-      if (status.subscribed && prompt) setDismissed(true);
       if (!status.configured) setMessage('Phone notifications are not available yet. Please try again later.');
     }).catch(() => {
       if (active) setMessage('Unable to check notifications. Please try Enable.');
@@ -58,7 +60,7 @@ const NativePhoneNotifications = ({ prompt = false }) => {
   };
 
   if (prompt) {
-    if (checking || dismissed) return null;
+    if (checking || dismissed || enabled) return null;
     return (
       <div className="parent-push-prompt-backdrop">
         <section className="parent-push-prompt" role="dialog" aria-modal="true" aria-label="Phone notifications">

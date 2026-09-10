@@ -18,7 +18,7 @@ const PublicHomePage = () => {
 
   useEffect(() => {
     if (!isStandaloneApp()) return;
-    navigate(user ? (user.role === 'parent' ? '/parent' : '/admin') : '/parent/login?source=parent-pwa', { replace: true });
+    navigate(user?.role === 'parent' ? '/parent' : '/parent/login?source=parent-pwa', { replace: true });
   }, [navigate, user]);
 
   useEffect(() => {
@@ -27,7 +27,7 @@ const PublicHomePage = () => {
   }, []);
 
   const featured = media.find((item) => item.isFeatured) || media[0];
-  const dashboardPath = user?.role === 'parent' ? '/parent' : '/admin';
+  const dashboardPath = user?.role === 'parent' ? '/parent' : '/parent/login';
 
   return (
     <main className="public-site">
@@ -37,7 +37,7 @@ const PublicHomePage = () => {
           <span>Warriors Gymnastics</span>
         </Link>
         <nav>
-          {user ? <Link className="public-login-link" to={dashboardPath}>Dashboard</Link> : <Link className="public-login-link" to="/login">Login</Link>}
+          <Link className="public-login-link" to={dashboardPath}>{user?.role === 'parent' ? 'Dashboard' : 'Login'}</Link>
           <InstallAppButton installPath="/parent/login?source=parent-pwa" appName="Warriors app" />
         </nav>
       </header>
@@ -55,7 +55,7 @@ const PublicHomePage = () => {
           <h1>Train with confidence. Grow with discipline.</h1>
           <p>Professional gymnastics training, organized attendance, parent updates, and club media in one polished app.</p>
           <div className="public-hero-actions">
-            {user ? <Link className="btn-primary" to={dashboardPath}>Open Dashboard</Link> : <Link className="btn-primary" to="/login">Login</Link>}
+            <Link className="btn-primary" to={dashboardPath}>{user?.role === 'parent' ? 'Open Dashboard' : 'Login'}</Link>
             <InstallAppButton className="is-secondary" installPath="/parent/login?source=parent-pwa" appName="Warriors app" />
           </div>
         </div>

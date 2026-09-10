@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { isNativeAndroidApp } from '../utils/nativePushNotifications.js';
 import NativePhoneNotifications from './NativePhoneNotifications.jsx';
 import {
-  fetchCurrentDevicePushStatus,
   registerAndTestPushSubscription
 } from '../services/notifications.js';
 import {
@@ -41,7 +40,7 @@ const ParentNotificationPermissionPrompt = ({ user }) => {
     let isMounted = true;
     dismissedRef.current = false;
     setStatus('checking');
-    setVisible(true);
+    setVisible(false);
 
     const checkStatus = async () => {
       if (enablingRef.current || dismissedRef.current) return;
@@ -83,19 +82,9 @@ const ParentNotificationPermissionPrompt = ({ user }) => {
         return;
       }
 
-      const serverStatus = await fetchCurrentDevicePushStatus();
-      if (!serverStatus.configured) {
-        if (isMounted) {
-          setMessage('Push is not configured on the server yet.');
-          setStatus('unsupported');
-          setVisible(true);
-        }
-        return;
-      }
-
       if (isMounted && !dismissedRef.current && !enablingRef.current) {
-        setVisible(!serverStatus.subscribed);
-        setStatus(serverStatus.subscribed ? 'enabled' : 'ready');
+        setVisible(false);
+        setStatus('enabled');
       }
     };
 
@@ -155,6 +144,7 @@ const ParentNotificationPermissionPrompt = ({ user }) => {
       const { delivery } = await registerAndTestPushSubscription();
       setStatus('enabled');
       setMessage(pushTestMessage(delivery));
+      setVisible(false);
     } catch (error) {
       setMessage(error.response?.data?.message || error.message || 'Unable to enable phone notifications. Please try again.');
       setStatus('ready');
@@ -163,7 +153,7 @@ const ParentNotificationPermissionPrompt = ({ user }) => {
     }
   };
 
-  if (!visible) return null;
+  if (!visible || status === 'checking' || user?.role !== 'parent') return null;
 
   const isBlocked = status === 'blocked';
   const canEnable = status === 'ready';
