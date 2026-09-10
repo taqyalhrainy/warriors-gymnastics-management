@@ -6,6 +6,7 @@ const Attendance = require('../models/Attendance');
 const Payment = require('../models/Payment');
 const Notification = require('../models/Notification');
 const HistoryEntry = require('../models/HistoryEntry');
+const { summarizeParentPayments } = require('../utils/parentPaymentSummary');
 // Parent routes load independently of admin routes after a server restart.
 require('../models/Program');
 require('../models/TrainingGroup');
@@ -264,14 +265,12 @@ const getAttendancePresentCountMapFromRecords = (players, records) => {
   }));
 };
 
-const getCurrentPaymentSummaryMap = async (players) => {
+const getCurrentPaymentSummaryMap = async (players, existingPayments) => {
   const playerIds = players.map((player) => player._id).filter(Boolean);
   if (!playerIds.length) return new Map();
 
-  const playerById = new Map(players.map((player) => [String(player._id), player]));
-  const paymentRows = await Payment.find({
-    playerId: { $in: playerIds },
-    transactionType: { $in: ['Full payment', 'Partial payment'] }
+  const paymentRows = existingPayments || await Payment.find({
+    playerId: { $in: playerIds }
   }).select('playerId paidAmount paymentDate createdAt transactionType').lean();
 
   const summaryMap = new Map(players.map((player) => {
@@ -279,15 +278,8 @@ const getCurrentPaymentSummaryMap = async (players) => {
     return [String(player._id), { totalAmount, paidAmount: 0, remainingAmount: Math.max(0, totalAmount) }];
   }));
 
-  paymentRows.forEach((payment) => {
-    const playerId = String(payment.playerId);
-    const player = playerById.get(playerId);
-    const summary = summaryMap.get(playerId);
-    if (!player || !summary) return;
-    const subscriptionStart = getCurrentSubscriptionStart(player);
-    if (subscriptionStart && !isOnOrAfter(payment.paymentDate, subscriptionStart) && !isOnOrAfter(payment.createdAt, subscriptionStart)) return;
-    summary.paidAmount += Number(payment.paidAmount || 0);
-    summary.remainingAmount = Math.max(0, Number(summary.totalAmount || 0));
+  summarizeParentPayments(players, paymentRows).forEach((paidAmount, playerId) => {
+    summaryMap.get(playerId).paidAmount = paidAmount;
   });
 
   return summaryMap;
@@ -625,7 +617,7 @@ const getParentPayments = async (req, res, next) => {
       .lean();
     const [countMap, paymentSummaryMap] = await Promise.all([
       getAttendancePresentCountMap(children),
-      getCurrentPaymentSummaryMap(children)
+      getCurrentPaymentSummaryMap(children, payments)
     ]);
 
     const paymentRows = payments.map((payment) => {
@@ -639,11 +631,11 @@ const getParentPayments = async (req, res, next) => {
         ? {
           ...payment,
           totalAmount: paymentSummary?.totalAmount ?? payment.totalAmount,
-          visiblePaidAmount: Number(payment.playerId?.payment || 0),
+          visiblePaidAmount: paymentSummary?.paidAmount || 0,
           visibleRemainingAmount: paymentSummary?.remainingAmount ?? payment.remainingAmount,
           remainingAmount: paymentSummary?.remainingAmount ?? payment.remainingAmount
         }
-        : { ...payment, visiblePaidAmount: Number(payment.playerId?.payment || 0), visibleRemainingAmount: 0, remainingAmount: 0 };
+        : { ...payment, visiblePaidAmount: paymentSummary?.paidAmount || 0, visibleRemainingAmount: 0, remainingAmount: 0 };
     });
 
     const playersWithPaymentRows = new Set(paymentRows.map((payment) => String(payment.playerId?._id || payment.playerId || '')).filter(Boolean));
@@ -659,7 +651,7 @@ const getParentPayments = async (req, res, next) => {
         playerId: childObject,
         paymentDate: child.updatedAt || child.createdAt || new Date(),
         paidAmount: 0,
-        visiblePaidAmount: Number(child.payment || 0),
+        visiblePaidAmount: paymentSummaryMap.get(childId)?.paidAmount || 0,
         totalAmount: visibleRemainingAmount,
         remainingAmount: visibleRemainingAmount,
         visibleRemainingAmount,
@@ -688,11 +680,12 @@ const getParentDashboard = async (req, res, next) => {
       .populate('groupIds', 'name')
       .populate('coachId', 'name')
       .populate('subscriptionId', 'type status remainingSessions usedSessions startDate endDate price');
+    const paymentSummaryMap = await getCurrentPaymentSummaryMap(children);
     const childSummaries = children.map((child) => {
       const subscription = child.subscriptionId || {};
       const childObject = child.toObject({ virtuals: true });
       const visibleRemainingAmount = getParentVisibleRemaining(child);
-      const paidTotal = Number(child.payment || 0);
+      const paidTotal = paymentSummaryMap.get(String(child._id))?.paidAmount || 0;
       const daysRemaining = subscription.type === 'time' && subscription.endDate
         ? Math.max(0, Math.ceil((subscription.endDate - new Date()) / (1000 * 60 * 60 * 24)))
         : null;
@@ -700,7 +693,7 @@ const getParentDashboard = async (req, res, next) => {
         ...childObject,
         attendanceDueManual: Boolean(child.attendanceDueManual),
         paidTotal,
-        currentSubscriptionPaidAmount: 0,
+        currentSubscriptionPaidAmount: paidTotal,
         visibleRemainingAmount,
         remainingAmount: visibleRemainingAmount,
         daysRemaining

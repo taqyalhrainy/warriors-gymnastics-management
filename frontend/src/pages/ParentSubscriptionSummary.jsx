@@ -45,7 +45,7 @@ const getUniqueChildren = (children = []) => {
 };
 
 const getVisibleRemaining = (child) => Number(child?.visibleRemainingAmount ?? (child?.attendanceDueManual ? child.remainingAmount : 0) ?? 0);
-const getVisiblePaid = (child) => Number(child?.paidTotal ?? child?.payment ?? 0);
+const getVisiblePaid = (child) => Number(child?.paidTotal ?? child?.currentSubscriptionPaidAmount ?? 0);
 
 const ParentSubscriptionSummaryPage = () => {
   const cached = getCachedParentDashboard();

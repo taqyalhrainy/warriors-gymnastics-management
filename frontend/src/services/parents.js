@@ -1,9 +1,9 @@
 import api from './api';
 import { fetchCached, getCachedValue, invalidateCache } from './cache.js';
 
-const PARENT_DASHBOARD_CACHE_KEY = 'parent:dashboard';
+const PARENT_DASHBOARD_CACHE_KEY = 'parent:dashboard:v2';
 const PARENT_ATTENDANCE_CACHE_KEY = 'parent:attendance';
-const PARENT_PAYMENTS_CACHE_KEY = 'parent:payments';
+const PARENT_PAYMENTS_CACHE_KEY = 'parent:payments:v2';
 const PARENT_CHILDREN_CACHE_KEY = 'parent:children';
 const PARENT_CACHE_TTL_MS = 5 * 60 * 1000;
 const PERSIST_PREFIX = 'warriors-cache:';

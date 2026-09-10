@@ -6,7 +6,7 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 import warriorsLogo from '../assets/warriors-logo.png';
 
 const formatMoney = (value) => Number(value || 0).toLocaleString('en-US');
-const getVisiblePaid = (payment) => Number(payment?.visiblePaidAmount ?? payment?.playerId?.payment ?? payment?.paidAmount ?? 0);
+const getVisiblePaid = (payment) => Number(payment?.visiblePaidAmount ?? payment?.playerId?.currentSubscriptionPaidAmount ?? 0);
 const getVisibleRemaining = (payment) => Number(payment?.visibleRemainingAmount ?? (payment?.playerId?.attendanceDueManual ? payment.remainingAmount : 0) ?? 0);
 
 const ParentPaymentsPage = () => {
