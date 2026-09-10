@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { webcrypto } from 'node:crypto';
 
 const load = async (file, dependencies, globals = {}, env = {}) => {
   const context = vm.createContext(globals);
@@ -42,18 +43,23 @@ for (const native of [true, false]) {
 test('APK uses native token endpoints and does not resubscribe after Disable', async () => {
   const calls = [];
   const service = await load('../src/services/nativeNotifications.js', {
+    '@capacitor/app': { App: { getInfo: async () => ({ version: '2.0' }) } },
     './api.js': { default: {
       post: async (url, body) => { calls.push({ url, body }); },
       delete: async (url) => { calls.push({ url }); }
     } },
     '../utils/nativePushNotifications.js': {
+      isNativeAndroidApp: () => true,
+      NativePushSession: { setSession: async () => {}, getDevice: async () => ({ deviceId: 'test-device-123456' }) },
       getNativeAndroidPermissionState: async () => 'granted',
       getStoredNativeAndroidToken: () => 'phone-token',
       requestNativeAndroidToken: async () => 'phone-token',
       setupNativePushListeners: async () => {},
       unregisterNativeAndroidPush: async () => {}
     }
-  }, { localStorage: storage() });
+  }, { localStorage: storage(), crypto: webcrypto, TextEncoder, Uint8Array, console,
+    window: { addEventListener() {} } });
+  await service.setNativeNotificationSession({ id: 'parent', role: 'parent' }, 'auth-token');
   await service.enableNativeNotifications();
   assert.equal(calls[0].url, '/push/native/subscribe');
   assert.equal(calls[0].body.token, 'phone-token');

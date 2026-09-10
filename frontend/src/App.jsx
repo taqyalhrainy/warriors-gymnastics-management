@@ -7,6 +7,7 @@ import ParentMessageNotifier from './components/ParentMessageNotifier.jsx';
 import ParentNotificationPermissionPrompt from './components/ParentNotificationPermissionPrompt.jsx';
 import warriorsLogo from './assets/warriors-logo.png';
 import { isNativeAndroidApp, setupNativePushListeners } from './utils/nativePushNotifications.js';
+import NativeAppLifecycle from './components/NativeAppLifecycle.jsx';
 
 const LoginPage = lazy(() => import('./pages/Login.jsx'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard.jsx'));
@@ -126,6 +127,7 @@ function App() {
         </>
       )}
       <Suspense fallback={<div className="route-loading"><img src={warriorsLogo} alt="" /><span className="loading-spinner" />Loading...</div>}>
+        <NativeAppLifecycle />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/parent/login" element={<LoginPage />} />

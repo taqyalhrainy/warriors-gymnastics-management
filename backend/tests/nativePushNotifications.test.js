@@ -26,11 +26,11 @@ const loadModule = (file, dependencies, env = {}) => {
   return module.exports;
 };
 
-const setup = (failure = null) => {
+const setup = (failure = null, transportVersion = 1) => {
   const sent = [];
   const deleted = [];
   const tokens = [
-    { userId: 'parent', token: 'android-token', platform: 'android' },
+    { userId: 'parent', token: 'android-token', platform: 'android', transportVersion, sessionId: 'session' },
     { userId: 'other-parent', token: 'other-token', platform: 'android' }
   ];
   const NativePushToken = {
@@ -75,6 +75,17 @@ test('native Android push sends only to this parent token with high priority', a
   assert.equal(sent[0].token, 'android-token');
   assert.equal(sent[0].android.priority, 'high');
   assert.equal(sent[0].data.url, '/parent/notifications/note-1');
+});
+
+test('Capacitor 8 uses session-gated native data messages, without Chrome or automatic FCM display', async () => {
+  const { nativePush, sent } = setup(null, 2);
+  await nativePush.sendNativePushToUser('parent', { title: 'Warriors', body: 'Message' });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].notification, undefined);
+  assert.equal(sent[0].android.notification, undefined);
+  assert.equal(sent[0].data.userId, 'parent');
+  assert.equal(sent[0].data.sessionId, 'session');
+  assert.equal(sent[0].android.priority, 'high');
 });
 
 test('expired native Android token is removed without deleting other devices', async () => {

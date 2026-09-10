@@ -12,7 +12,7 @@ const NativePhoneNotifications = ({ prompt = false }) => {
 
   useEffect(() => {
     let active = true;
-    getNativeNotificationStatus().then((status) => {
+    const refresh = () => getNativeNotificationStatus().then((status) => {
       if (!active) return;
       setEnabled(status.subscribed);
       if (status.subscribed && prompt) setDismissed(true);
@@ -20,7 +20,15 @@ const NativePhoneNotifications = ({ prompt = false }) => {
     }).catch(() => {
       if (active) setMessage('Unable to check notifications. Please try Enable.');
     }).finally(() => { if (active) setChecking(false); });
-    return () => { active = false; };
+    refresh();
+    const resume = () => { if (!document.hidden) refresh(); };
+    window.addEventListener('native-push:status', refresh);
+    document.addEventListener('visibilitychange', resume);
+    return () => {
+      active = false;
+      window.removeEventListener('native-push:status', refresh);
+      document.removeEventListener('visibilitychange', resume);
+    };
   }, [prompt]);
 
   const enable = async () => {

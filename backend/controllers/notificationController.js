@@ -113,18 +113,29 @@ const saveNativePushToken = async (req, res, next) => {
       return res.status(400).json({ message: 'Android notification token is required.' });
     }
 
+    const deviceId = String(payload.deviceId || '').trim();
+    const sessionId = String(payload.sessionId || '').trim();
+    const transportVersion = payload.transportVersion === 2 ? 2 : 1;
+    if (token.length > 4096 || (transportVersion === 2
+      && (!/^[a-zA-Z0-9-]{16,128}$/.test(deviceId) || !/^[a-f0-9]{64}$/.test(sessionId)))) {
+      return res.status(400).json({ message: 'Invalid Android device registration.' });
+    }
     await NativePushToken.findOneAndUpdate(
       { token },
       {
         userId: req.user._id,
         token,
         platform: 'android',
+        deviceId: deviceId || undefined,
+        sessionId: sessionId || undefined,
+        transportVersion,
         appVersion: String(payload.appVersion || '').trim(),
         userAgent: req.get('user-agent') || '',
         updatedAt: new Date()
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
+    if (deviceId) await NativePushToken.deleteMany({ deviceId, token: { $ne: token } });
 
     res.status(204).send();
   } catch (error) {

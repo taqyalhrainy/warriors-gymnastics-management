@@ -11,5 +11,8 @@ frontend/node_modules
 *.log
 *firebase-adminsdk*.json
 *.apk
-!backend/downloads/Warriors-Parent-1.1.apk
+!backend/downloads/Warriors-Parent-2.0.apk
 *.aab
+.ota-secrets/
+*.keystore
+*.jks

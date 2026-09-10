@@ -1,10 +1,11 @@
 export const isStandalone = () => window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone;
 export const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 export const isAndroid = () => /android/i.test(navigator.userAgent);
-export const isPushSupported = () => window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+export const isPushSupported = () => !window.Capacitor?.isNativePlatform?.() && window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 
 // Call directly from the click handler: do not put this behind a request or timer.
 export const requestPhoneNotificationPermission = () => {
+  if (globalThis.window?.Capacitor?.isNativePlatform?.()) return Promise.resolve('denied');
   if (Notification.permission === 'granted') return Promise.resolve('granted');
   return Notification.requestPermission();
 };
@@ -45,6 +46,7 @@ const uint8ArrayToBase64Url = (bytes) => window.btoa(String.fromCharCode(...new 
   .replace(/=+$/, '');
 
 export const getServiceWorkerRegistration = async () => {
+  if (window.Capacitor?.isNativePlatform?.()) throw new Error('Web Push is disabled inside the Android app.');
   const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' });
   if (registration.active && !registration.installing && !registration.waiting) return registration;
   await new Promise((resolve, reject) => {

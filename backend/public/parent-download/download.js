@@ -25,7 +25,7 @@ button.addEventListener('click', async () => {
   const timeout = setTimeout(() => controller?.abort(), 120000);
 
   try {
-    const response = await fetch('/downloads/Warriors-Parent-1.1.apk', { signal: controller.signal, cache: 'no-store' });
+    const response = await fetch('/downloads/Warriors-Parent-2.0.apk', { signal: controller.signal, cache: 'no-store' });
     if (!response.ok || !response.headers.get('content-type')?.includes('application/vnd.android.package-archive')) {
       throw new Error('Download unavailable');
     }

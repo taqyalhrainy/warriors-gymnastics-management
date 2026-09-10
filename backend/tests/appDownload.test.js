@@ -26,11 +26,11 @@ test('parent QR serves Android APK and preserves iPhone web login', async (t) =>
   assert.equal(android.status, 200);
   assert.match(await android.text(), /id="progress"/);
 
-  const download = await fetch(`${origin}/downloads/Warriors-Parent-1.1.apk`);
+  const download = await fetch(`${origin}/downloads/Warriors-Parent-2.0.apk`);
   assert.equal(download.status, 200);
   assert.match(download.headers.get('content-type'), /application\/vnd.android.package-archive/);
-  assert.match(download.headers.get('content-disposition'), /attachment; filename="Warriors-Parent-1.1.apk"/);
-  const expected = readFileSync(path.join(__dirname, '../downloads/Warriors-Parent-1.1.apk'));
+  assert.match(download.headers.get('content-disposition'), /attachment; filename="Warriors-Parent-2.0.apk"/);
+  const expected = readFileSync(path.join(__dirname, '../downloads/Warriors-Parent-2.0.apk'));
   const actual = Buffer.from(await download.arrayBuffer());
   assert.equal(createHash('sha256').update(actual).digest('hex'), createHash('sha256').update(expected).digest('hex'));
 });

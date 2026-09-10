@@ -1,109 +1,91 @@
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 
-const ANDROID_CHANNEL_ID = 'warriors_messages';
-const NATIVE_ANDROID_TOKEN_KEY = 'warriors-native-android-push-token';
-let listenersReady = false;
+export const NativePushSession = registerPlugin('NativePushSession');
+const TOKEN_KEY = 'warriors-native-android-push-token';
+export const NATIVE_TAP_KEY = 'warriors-native-push-destination';
+let setupPromise;
+let pendingRegistration;
 
-export const isNativeAndroidApp = () => (
-  Capacitor.isNativePlatform?.()
-  && Capacitor.getPlatform?.() === 'android'
-  && Capacitor.isPluginAvailable?.('PushNotifications')
+// Never fall back to Chrome if a native plugin is missing or fails.
+export const isNativeAndroidApp = () => Boolean(
+  Capacitor.isNativePlatform?.() && Capacitor.getPlatform?.() === 'android'
 );
 
-const getNotificationUrl = (notification) => {
-  const data = notification?.notification?.data || notification?.data || {};
-  const url = data.url || data.link || '/parent/notifications';
-  return String(url).startsWith('/') && !String(url).startsWith('//') ? url : '/parent/notifications';
+export const safeNotificationUrl = (value) => {
+  const url = String(value || '');
+  return /^\/parent(?:\/(?:notifications(?:\/[a-f\d]{24})?|attendance|payments|settings|children|subscriptions))?(?:\?[^\\#]*)?$/.test(url)
+    && !/[\x00-\x20\\]/.test(url) ? url : '/parent/notifications';
 };
 
-export const setupNativePushListeners = async () => {
-  if (!isNativeAndroidApp() || listenersReady) return;
-  listenersReady = true;
-
-  await PushNotifications.addListener('pushNotificationActionPerformed', (event) => {
-    const url = getNotificationUrl(event);
-    window.location.assign(url);
-  });
-
-  await PushNotifications.createChannel({
-    id: ANDROID_CHANNEL_ID,
-    name: 'Warriors Messages',
-    description: 'Parent messages from Warriors Gymnastics',
-    importance: 4,
-    visibility: 1,
-    vibration: true,
-    lights: true,
-    lightColor: '#0EA5E9'
-  }).catch(() => undefined);
+export const setupNativePushListeners = () => {
+  if (!isNativeAndroidApp()) return Promise.resolve();
+  if (setupPromise) return setupPromise;
+  setupPromise = (async () => {
+    const handles = [];
+    try {
+      handles.push(await PushNotifications.addListener('registration', ({ value }) => {
+        if (!value) return;
+        localStorage.setItem(TOKEN_KEY, value);
+        if (pendingRegistration) pendingRegistration.resolve(value);
+        else window.dispatchEvent(new CustomEvent('native-push:token', { detail: value }));
+      }));
+      handles.push(await PushNotifications.addListener('registrationError', (error) => {
+        pendingRegistration?.reject(new Error(error.error || 'Android push registration failed.'));
+      }));
+      handles.push(await PushNotifications.addListener('pushNotificationActionPerformed', (event) => {
+        const data = event?.notification?.data || {};
+        sessionStorage.setItem(NATIVE_TAP_KEY, JSON.stringify({ url: safeNotificationUrl(data.url), userId: data.userId || '' }));
+        window.dispatchEvent(new Event('native-push:tap'));
+      }));
+      await PushNotifications.createChannel({ id: 'warriors_messages', name: 'Warriors Messages',
+        description: 'Parent messages from Warriors Gymnastics', importance: 4, visibility: 0,
+        vibration: true, lights: true });
+    } catch (error) {
+      await Promise.all(handles.map((handle) => handle.remove()));
+      setupPromise = undefined;
+      throw error;
+    }
+  })();
+  return setupPromise;
 };
 
-export const requestNativeAndroidToken = async () => {
-  if (!isNativeAndroidApp()) {
-    throw new Error('Android app notifications are only available inside the installed app.');
-  }
-
+export const requestNativeAndroidToken = async ({ prompt = true } = {}) => {
+  if (!isNativeAndroidApp()) throw new Error('Native Android app required.');
   await setupNativePushListeners();
-  const permission = await PushNotifications.requestPermissions();
-  if (permission.receive !== 'granted') {
-    throw new Error('Android notification permission was not allowed.');
+  const permission = prompt ? await PushNotifications.requestPermissions() : await PushNotifications.checkPermissions();
+  if (permission.receive !== 'granted') throw new Error('Android notification permission was not allowed.');
+  if (!(await NativePushSession.getDevice()).notificationsEnabled) {
+    throw new Error('Notifications are disabled in Android settings for this app.');
   }
-
-  let cleanup = () => Promise.resolve();
-  let listenersPromise = Promise.resolve();
-  const tokenPromise = new Promise((resolve, reject) => {
-    let registrationHandle = null;
-    let errorHandle = null;
-    let timer = window.setTimeout(() => {
-      reject(new Error('Android notification setup timed out. Please try again.'));
-    }, 20000);
-
-    cleanup = async () => {
-      window.clearTimeout(timer);
-      await registrationHandle?.remove?.();
-      await errorHandle?.remove?.();
-    };
-
-    const finish = async (callback) => {
-      await cleanup();
-      callback();
-    };
-
-    listenersPromise = Promise.all([
-      PushNotifications.addListener('registration', async (token) => {
-        await finish(() => resolve(token.value));
-      }),
-      PushNotifications.addListener('registrationError', async (error) => {
-        await finish(() => reject(new Error(error.error || 'Android notification registration failed.')));
-      })
-    ]).then(([registration, registrationError]) => {
-      registrationHandle = registration;
-      errorHandle = registrationError;
-    }).catch(reject);
-  });
-
+  if (pendingRegistration) return pendingRegistration.promise;
+  let resolve, reject;
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  pendingRegistration = { resolve, reject, promise };
+  const timer = window.setTimeout(() => reject(new Error('Android notification registration timed out.')), 20000);
+  const registration = PushNotifications.register().catch(reject);
   try {
-    await listenersPromise;
-    await PushNotifications.register();
-    const token = await tokenPromise;
-    localStorage.setItem(NATIVE_ANDROID_TOKEN_KEY, token);
+    const token = await promise;
+    await registration;
     return token;
-  } catch (error) {
-    await cleanup();
-    throw error;
+  } finally {
+    window.clearTimeout(timer);
+    pendingRegistration = undefined;
   }
 };
 
 export const getNativeAndroidPermissionState = async () => {
   if (!isNativeAndroidApp()) return 'denied';
   const permission = await PushNotifications.checkPermissions();
-  return permission.receive;
+  if (permission.receive !== 'granted') return permission.receive;
+  const device = await NativePushSession.getDevice();
+  return device.notificationsEnabled ? 'granted' : 'denied';
 };
 
 export const unregisterNativeAndroidPush = async () => {
   if (!isNativeAndroidApp()) return;
-  await PushNotifications.unregister();
-  localStorage.removeItem(NATIVE_ANDROID_TOKEN_KEY);
+  localStorage.removeItem(TOKEN_KEY);
+  await NativePushSession.deleteToken();
 };
 
-export const getStoredNativeAndroidToken = () => localStorage.getItem(NATIVE_ANDROID_TOKEN_KEY) || '';
+export const getStoredNativeAndroidToken = () => localStorage.getItem(TOKEN_KEY) || '';

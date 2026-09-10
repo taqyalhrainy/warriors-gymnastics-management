@@ -78,17 +78,18 @@ const sendNativePushToUser = async (userId, payload = {}, { token } = {}) => {
       };
       if (data.notificationId) androidNotification.tag = data.notificationId;
 
+      const nativeSession = savedToken.transportVersion === 2;
       await admin.send({
         token: savedToken.token,
-        notification: {
+        ...(!nativeSession && { notification: {
           title: data.title,
           body: data.body
-        },
-        data,
+        } }),
+        data: nativeSession ? { ...data, userId: String(userId), sessionId: savedToken.sessionId || '' } : data,
         android: {
           priority: 'high',
           ttl: 60 * 60 * 1000,
-          notification: androidNotification
+          ...(!nativeSession && { notification: androidNotification })
         }
       });
       return { sent: 1, deleted: 0, failed: 0 };

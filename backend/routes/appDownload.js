@@ -1,11 +1,14 @@
 const express = require('express');
 const path = require('path');
 
-const apkName = 'Warriors-Parent-1.1.apk';
+const apkName = 'Warriors-Parent-2.0.apk';
 const apkPath = path.join(__dirname, '..', 'downloads', apkName);
 
 module.exports = ({ getFrontendOrigin }) => {
   const router = express.Router();
+  router.use('/ota', express.static(path.join(__dirname, '..', 'public', 'ota'), {
+    maxAge: 0, setHeaders: (res) => res.set('Cache-Control', 'no-store')
+  }));
   const pageDir = path.join(__dirname, '..', 'public', 'parent-download');
   router.use('/parent-download', express.static(pageDir, { maxAge: 0 }));
 

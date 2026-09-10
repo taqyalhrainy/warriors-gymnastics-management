@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import api, { clearStoredAuth, getStoredToken } from '../services/api.js';
 import { clearCache } from '../services/cache.js';
 import { warmAdminAppCache, warmParentAppCache, resetPrefetchState } from '../services/prefetch.js';
+import { setNativeNotificationSession, syncNativeNotifications } from '../services/nativeNotifications.js';
 
 const AuthContext = createContext(null);
 let verifiedServerToken = '';
@@ -54,6 +55,10 @@ export const AuthProvider = ({ children }) => {
   const [rememberSession, setRememberSession] = useState(() => isRememberedAuth());
   const [isServerReady, setIsServerReady] = useState(true);
   const [isServerChecking, setIsServerChecking] = useState(false);
+
+  useEffect(() => {
+    setNativeNotificationSession(user, token).then(syncNativeNotifications).catch(console.error);
+  }, [user?.id, token]);
 
   useEffect(() => {
     if (token) {
@@ -118,6 +123,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
+    setNativeNotificationSession(null, null).catch(console.error);
     setUser(null);
     setToken(null);
     setRememberSession(false);

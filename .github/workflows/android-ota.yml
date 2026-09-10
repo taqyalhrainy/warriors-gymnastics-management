@@ -1,0 +1,42 @@
+name: Android Web Asset Updates
+on:
+  push:
+    branches: [main]
+    paths: ['frontend/**', '.github/workflows/android-ota.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: android-ota-main
+  cancel-in-progress: true
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm test
+        working-directory: frontend
+      - name: Sign web assets
+        working-directory: frontend
+        env:
+          OTA_SIGNING_PRIVATE_KEY: ${{ secrets.OTA_SIGNING_PRIVATE_KEY }}
+        run: |
+          test -n "$OTA_SIGNING_PRIVATE_KEY" || { echo 'Set the OTA_SIGNING_PRIVATE_KEY repository secret first.'; exit 1; }
+          npm run ota:publish
+      - name: Publish to existing Render backend
+        run: |
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$GITHUB_SHA" || { echo 'A newer source revision exists; skipping stale publication.'; exit 0; }
+          git config user.name 'Warriors OTA'
+          git config user.email 'ota@users.noreply.github.com'
+          git add backend/public/ota
+          git diff --cached --quiet && exit 0
+          git commit -m 'Publish signed Android web assets'
+          git push origin HEAD:main
