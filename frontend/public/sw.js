@@ -1,11 +1,28 @@
-const CACHE_NAME = 'warriors-shell-v16';
+const CACHE_NAME = 'warriors-shell-v17';
 const SHELL_ASSETS = ['/', '/login?source=pwa', '/parent/login?source=parent-pwa', '/admin/login?source=admin-pwa', '/manifest.webmanifest', '/admin-manifest.webmanifest', '/warriors-logo.png', '/warriors-icon-192.png', '/warriors-icon-512.png'];
+
+const isAppShell = async (response) => response?.ok
+  && (response.headers.get('content-type') || '').includes('text/html')
+  && /<div\s+id=["']root["']/.test(await response.clone().text());
+
+const loadingPage = () => new Response(`<!doctype html><html><head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="5"><title>Warriors Gymnastics</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#fff;color:#222;font:16px system-ui;text-align:center}img{width:100px;height:100px;object-fit:contain}.spinner{width:30px;height:30px;border:3px solid #eee;border-top-color:#d70b19;border-radius:50%;margin:24px auto;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}</style>
+</head><body><main role="status"><img src="/warriors-logo.png" alt="Warriors Gymnastics"><div class="spinner"></div><p>Connecting to the server...</p></main></body></html>`, {
+  headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }
+});
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(SHELL_ASSETS))
+      .then((cache) => Promise.all(SHELL_ASSETS.map(async (url) => {
+        const response = await fetch(url);
+        const pathname = new URL(url, self.location.origin).pathname;
+        const isPage = !/\.(png|webmanifest)$/.test(pathname);
+        if (response.ok && (!isPage || await isAppShell(response))) await cache.put(url, response);
+      })))
       .catch(() => undefined)
   );
 });
@@ -26,22 +43,29 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put('/', clone));
-          return response;
-        })
-        .catch(() => caches.match('/'))
-    );
+    const adminPaths = /^\/(admin(?:\/|$)|admin-login$|players|groups|attendance|coaches|payments|notifications|parents|reports|history|security|audit-logs|owner-summary|media-gallery)/;
+    const shellUrl = adminPaths.test(requestUrl.pathname)
+      ? '/admin/login?source=admin-pwa' : '/parent/login?source=parent-pwa';
+    const cacheReady = caches.open(CACHE_NAME);
+    // Never replace our UI with a hosting provider's wake-up/error page.
+    event.waitUntil((async () => {
+      try {
+        const response = await fetch(event.request);
+        if (await isAppShell(response)) await (await cacheReady).put(shellUrl, response);
+      } catch { /* The saved app remains available while offline. */ }
+    })());
+    event.respondWith((async () => {
+      const cached = await (await cacheReady).match(shellUrl);
+      return await isAppShell(cached) ? cached : loadingPage();
+    })());
     return;
   }
 
   event.respondWith(
     caches.match(event.request).then((cached) => (
       cached || fetch(event.request).then((response) => {
-        if (requestUrl.origin === self.location.origin) {
+        if (response.ok && requestUrl.origin === self.location.origin
+          && !(response.headers.get('content-type') || '').includes('text/html')) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
