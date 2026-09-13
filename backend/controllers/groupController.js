@@ -1,6 +1,9 @@
 const TrainingGroup = require('../models/TrainingGroup');
 const Player = require('../models/Player');
 require('../models/Parent');
+require('../models/Program');
+require('../models/Coach');
+require('../models/Subscription');
 const Attendance = require('../models/Attendance');
 const { sanitizeObject, decodeText, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
@@ -284,12 +287,7 @@ const deleteGroup = async (req, res, next) => {
   }
 };
 
-const getGroupPlayers = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    if (!validateObjectId(id)) {
-      return res.status(400).json({ message: 'Invalid group ID.' });
-    }
+const loadGroupPlayers = async (id) => {
     const players = await Player.find({
       isDeleted: { $ne: true },
       status: { $ne: 'left' },
@@ -301,7 +299,7 @@ const getGroupPlayers = async (req, res, next) => {
           ]
         }
       ],
-      $or: [{ groupId: id }, { groupIds: id }]
+      ...(id ? { $or: [{ groupId: id }, { groupIds: id }] } : {})
     })
       .sort({ createdAt: -1, _id: -1 })
       .populate('parentId', 'name email')
@@ -349,7 +347,7 @@ const getGroupPlayers = async (req, res, next) => {
       }
     });
 
-    res.json(players.map((player) => ({
+    return players.map((player) => ({
       ...formatPlayerResponse(player),
       attendanceGroupId: id,
       attendancePresentCount: Math.min(
@@ -359,10 +357,32 @@ const getGroupPlayers = async (req, res, next) => {
       paymentRemainingAmount: player.attendanceDueManual
         ? Number(player.previousDueBalance || 0) - Number(player.dueAdjustment || 0)
         : 0
-    })));
+    }));
+};
+
+const getGroupPlayers = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!validateObjectId(id)) {
+      return res.status(400).json({ message: 'Invalid group ID.' });
+    }
+    res.json(await loadGroupPlayers(id));
   } catch (error) {
     next(error);
   }
 };
 
-module.exports = { getGroups, createGroup, updateGroup, deleteGroup, getGroupPlayers, reorderGroups };
+const getAttendanceBoard = async (req, res, next) => {
+  try {
+    scheduleGroupMaintenance();
+    const [groups, players] = await Promise.all([
+      TrainingGroup.find().sort({ displayOrder: 1, _id: -1 }).populate('coachId', 'name'),
+      loadGroupPlayers()
+    ]);
+    res.json({ groups: groups.map(formatGroupResponse), players });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { getGroups, createGroup, updateGroup, deleteGroup, getGroupPlayers, reorderGroups, getAttendanceBoard };

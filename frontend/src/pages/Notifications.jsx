@@ -60,7 +60,7 @@ const NotificationsPage = () => {
   useEffect(() => {
     loadNotifications();
     const intervalId = window.setInterval(() => {
-      loadNotifications({ force: true });
+      if (document.visibilityState === 'visible') loadNotifications({ force: true });
     }, 10000);
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -108,7 +108,9 @@ const NotificationsPage = () => {
     };
 
     migrateLocalSavedMessages();
-    const intervalId = window.setInterval(() => loadSavedMessages({ force: true }), 10000);
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') loadSavedMessages({ force: true });
+    }, 30000);
     return () => {
       isMounted = false;
       window.clearInterval(intervalId);

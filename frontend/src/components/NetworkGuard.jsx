@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiHealthURL } from '../services/api.js';
 
-const PING_INTERVAL_MS = 8000;
+const PING_INTERVAL_MS = 30000;
 const PING_TIMEOUT_MS = 15000;
 const FAILURE_THRESHOLD = 3;
 const RECOVERY_SUCCESSES = 1;
@@ -25,6 +25,7 @@ const NetworkGuard = () => {
     let isMounted = true;
     let timeoutId = null;
     let controller = null;
+    let pingInFlight = false;
 
     const blockConnection = (nextMessage) => {
       if (!isMounted) return;
@@ -52,12 +53,19 @@ const NetworkGuard = () => {
     };
 
     const runPing = async () => {
+      if (!isMounted || pingInFlight) return;
+      if (timeoutId) clearTimeout(timeoutId);
+      if (document.visibilityState === 'hidden') {
+        scheduleNextPing();
+        return;
+      }
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         registerFailure('Internet connection is offline.', { force: true });
         scheduleNextPing();
         return;
       }
 
+      pingInFlight = true;
       controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
       const startedAt = performance.now();
@@ -84,13 +92,15 @@ const NetworkGuard = () => {
         clearTimeout(timeout);
         registerFailure(error.name === 'AbortError' ? 'Connection is too weak to save safely.' : 'Connection to the server was lost.');
       } finally {
+        pingInFlight = false;
         scheduleNextPing();
       }
     };
 
     const scheduleNextPing = () => {
       if (!isMounted) return;
-      timeoutId = setTimeout(runPing, PING_INTERVAL_MS);
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(runPing, isBlockedRef.current ? 8000 : PING_INTERVAL_MS);
     };
 
     const handleBrowserOffline = () => {
@@ -108,7 +118,8 @@ const NetworkGuard = () => {
           : 'Connection to the server was lost.');
       }
 
-      if (event.detail?.status === 'online' && isBlockedRef.current) {
+      if (event.detail?.status === 'online') {
+        failureCountRef.current = 0;
         successCountRef.current += 1;
         if (successCountRef.current >= RECOVERY_SUCCESSES) {
           releaseConnection();
@@ -118,6 +129,7 @@ const NetworkGuard = () => {
 
     window.addEventListener('offline', handleBrowserOffline);
     window.addEventListener('online', handleBrowserOnline);
+    document.addEventListener('visibilitychange', handleBrowserOnline);
     window.addEventListener('network:status', handleApiNetworkStatus);
     runPing();
 
@@ -127,6 +139,7 @@ const NetworkGuard = () => {
       if (controller) controller.abort();
       window.removeEventListener('offline', handleBrowserOffline);
       window.removeEventListener('online', handleBrowserOnline);
+      document.removeEventListener('visibilitychange', handleBrowserOnline);
       window.removeEventListener('network:status', handleApiNetworkStatus);
     };
   }, []);

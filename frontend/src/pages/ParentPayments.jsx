@@ -18,7 +18,7 @@ const ParentPaymentsPage = () => {
 
   useEffect(() => {
     let isMounted = true;
-    fetchParentPayments({ force: true })
+    fetchParentPayments()
       .then((data) => {
         if (isMounted) setPayments(data);
       })

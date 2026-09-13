@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchTodayAttendance } from '../services/attendance.js';
-import { fetchGroups, fetchGroupPlayers } from '../services/groups.js';
+import { fetchAttendanceBoard } from '../services/groups.js';
 import { fetchPayments } from '../services/payments.js';
 import { fetchPlayers } from '../services/players.js';
 
@@ -98,15 +98,15 @@ const OwnerDashboard = () => {
       const [playerRows, paymentRows, groups, todayRecords] = await Promise.all([
         fetchPlayers({ fresh: Date.now() }),
         fetchPayments({ fresh: Date.now() }),
-        fetchGroups({ force: true }),
+        fetchAttendanceBoard({ force: true }),
         fetchTodayAttendance({ date: today }, { force: true })
       ]);
       const recordsByPlayerAndGroupId = new Map();
       todayRecords.forEach((record) => {
         recordsByPlayerAndGroupId.set(getAttendanceRecordKey(record.playerId, record.groupId), record);
       });
-      const groupsWithPlayers = await Promise.all(groups.map(async (group) => {
-        const groupPlayers = (await fetchGroupPlayers(group._id, { force: true }))
+      const groupsWithPlayers = groups.map((group) => {
+        const groupPlayers = group.players
           .filter(isPlayerVisibleInAttendance)
           .map((player) => ({
             ...player,
@@ -120,7 +120,7 @@ const OwnerDashboard = () => {
           presentCount: groupPlayers.filter((player) => player.todayAttendance?.status === 'present').length,
           color: group.color || '#c83fcb'
         };
-      }));
+      });
 
       if (requestId === dashboardLoadRequestIdRef.current) {
         setPlayers(playerRows);

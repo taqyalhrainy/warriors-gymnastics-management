@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
 import { updateTodayAttendance, cancelTodayAttendance, fetchAttendanceByPlayer, fetchTodayAttendance } from '../services/attendance.js';
-import { fetchGroups, fetchGroupPlayers, reorderGroups as reorderGroupsRequest } from '../services/groups.js';
+import { fetchGroups, fetchAttendanceBoard, reorderGroups as reorderGroupsRequest } from '../services/groups.js';
 import { fetchHistorySnapshot, fetchPlayerHistory } from '../services/history.js';
 import { fetchParents } from '../services/parents.js';
 import { deletePlayer, getPlayer, updatePlayer } from '../services/players.js';
@@ -780,7 +780,7 @@ const AttendancePage = () => {
         }
       }
       const [groups, todayRecords] = await Promise.all([
-        fetchGroups({ force }),
+        fetchAttendanceBoard({ force }),
         fetchTodayAttendance({ date }, { force })
       ]);
       const playerSnapshotResult = viewingToday
@@ -789,9 +789,8 @@ const AttendancePage = () => {
           entityType: 'player',
           at: getHistorySnapshotIsoForDate(date)
         });
-      const currentGroupsWithPlayers = await Promise.all(
-        groups.map(async (group) => {
-          const players = dedupePlayersById(await fetchGroupPlayers(group._id, { force }))
+      const currentGroupsWithPlayers = groups.map((group) => {
+          const players = dedupePlayersById(group.players)
             .filter((player) => isPlayerVisibleInAttendance(player, date));
 
           return {
@@ -799,8 +798,7 @@ const AttendancePage = () => {
             players,
             color: group.color
           };
-        })
-      );
+        });
       const groupsWithPlayers = viewingToday
         ? currentGroupsWithPlayers
         : buildHistoricalGroups(groups, playerSnapshotResult?.rows || [], date, currentGroupsWithPlayers);

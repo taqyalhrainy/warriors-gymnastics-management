@@ -287,7 +287,7 @@ const runStartupMaintenance = async () => {
   const { cleanupOldAttendanceData } = require('./utils/retention');
 
   await Promise.all([
-    Attendance.syncIndexes(),
+    Attendance.createIndexes(),
     initializeDefaultData(),
     ensureHistoryBaselines()
   ]);
@@ -314,6 +314,8 @@ const startServer = async () => {
 
   await connectDB();
   isDatabaseReady = true;
+  require('./utils/performanceIndexes').ensurePerformanceIndexes(require('mongoose').connection.db)
+    .catch((error) => console.error('Query index setup failed:', error.message));
 
   setTimeout(() => {
     runStartupMaintenance().catch((error) => {

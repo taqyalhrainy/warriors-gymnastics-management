@@ -20,7 +20,7 @@ export const fetchCached = async (key, loader, options = {}) => {
     return cachedEntry.value;
   }
 
-  if (!options.force && pendingRequests.has(key)) {
+  if (pendingRequests.has(key)) {
     return pendingRequests.get(key).promise;
   }
 

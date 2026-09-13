@@ -1,6 +1,7 @@
 const express = require('express');
 const {
   getGroups,
+  getAttendanceBoard,
   createGroup,
   updateGroup,
   deleteGroup,
@@ -12,6 +13,7 @@ const { protect, authorize } = require('../middleware/auth');
 const router = express.Router();
 
 router.use(protect);
+router.get('/attendance-board', authorize('admin', 'coach', 'receptionist'), getAttendanceBoard);
 router.get('/', authorize('admin', 'coach', 'receptionist', 'parent'), getGroups);
 router.post('/', authorize('admin', 'coach', 'receptionist'), createGroup);
 router.put('/reorder', authorize('admin', 'coach', 'receptionist'), reorderGroups);
