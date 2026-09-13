@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import DataStatus from '../components/DataStatus.jsx';
-import { useSectionLoader, canShowEmpty } from '../hooks/useSectionLoader.js';
+import { useSectionLoader, canShowEmpty, isSectionBlocking } from '../hooks/useSectionLoader.js';
 import { fetchPlayers, deletePlayer, createPlayer } from '../services/players.js';
 import { fetchGroups } from '../services/groups.js';
 import { createParent, fetchParents } from '../services/parents.js';
@@ -74,10 +74,17 @@ const PlayersPage = () => {
   useEffect(() => {
     loadSection('players', fetchPlayers, setPlayers);
     loadSection('groups', fetchGroups, setGroups);
+  }, []);
+
+  useEffect(() => {
+    if (isWaitingFormOpen) loadSection('waiting', fetchWaitingList, setWaitingList);
+  }, [isWaitingFormOpen]);
+
+  useEffect(() => {
+    if (!movingWaitingEntry) return;
     loadSection('parents', fetchParents, setParents);
     loadSection('packages', fetchPackageOptions, setPackageOptions);
-    loadSection('waiting', fetchWaitingList, setWaitingList);
-  }, []);
+  }, [movingWaitingEntry]);
 
   const handleDelete = async (id) => {
     const confirmed = confirmAction('حذف اللاعب');
@@ -315,7 +322,7 @@ const PlayersPage = () => {
 
   const handleMoveToPlayersSubmit = async (event) => {
     event.preventDefault();
-    if (!movingWaitingEntry || isMovingToPlayers) return;
+    if (!movingWaitingEntry || isMovingToPlayers || !canShowEmpty(loadStates.parents)) return;
     setMovePlayerMessage('');
 
     if (!movePlayerForm.fullName.trim()) {
@@ -656,7 +663,8 @@ const PlayersPage = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {loadStates.waiting?.loading || loadStates.waiting?.error ? <tr><td colSpan="6"><DataStatus state={loadStates.waiting} /></td></tr> : filteredWaitingList.length ? filteredWaitingList.map((entry) => (
+                    {loadStates.waiting.ready && (loadStates.waiting.loading || loadStates.waiting.error) && <tr><td colSpan="6"><DataStatus state={loadStates.waiting} /></td></tr>}
+                    {isSectionBlocking(loadStates.waiting) ? <tr><td colSpan="6"><DataStatus state={loadStates.waiting} /></td></tr> : filteredWaitingList.length ? filteredWaitingList.map((entry) => (
                       <tr key={entry._id}>
                         <td>{entry.playerName || '-'}</td>
                         <td>{entry.playerAge ?? '-'}</td>
@@ -893,7 +901,9 @@ const PlayersPage = () => {
                 </div>
 
                 <div className="move-player-actions">
-                  <button className="btn-primary" type="submit" disabled={isMovingToPlayers}>
+                  <DataStatus state={loadStates.parents} retry={() => loadSection('parents', fetchParents, setParents)} />
+                  <DataStatus state={loadStates.packages} retry={() => loadSection('packages', fetchPackageOptions, setPackageOptions)} />
+                  <button className="btn-primary" type="submit" disabled={isMovingToPlayers || !canShowEmpty(loadStates.parents)}>
                     {isMovingToPlayers ? 'Moving...' : 'Add to Players'}
                   </button>
                   <button className="btn-secondary" type="button" onClick={closeMoveToPlayers} disabled={isMovingToPlayers}>Cancel</button>

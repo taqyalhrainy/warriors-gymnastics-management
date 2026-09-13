@@ -548,15 +548,15 @@ const PaymentsPage = () => {
           <div className="payment-metrics">
             <div>
               <span>{activeViewLabel} Paid</span>
-              <strong>{canShowEmpty(loadStates.payments) ? formatMoney(viewTotals.paid) : <DataStatus state={loadStates.payments} />}</strong>
+              <strong>{loadStates.payments.ready ? formatMoney(viewTotals.paid) : <DataStatus state={loadStates.payments} />}</strong>
             </div>
             <div>
               <span>{activeViewLabel} Remaining</span>
-              <strong>{canShowEmpty(loadStates.payments) ? formatMoney(viewTotals.remaining) : <DataStatus state={loadStates.payments} />}</strong>
+              <strong>{loadStates.payments.ready ? formatMoney(viewTotals.remaining) : <DataStatus state={loadStates.payments} />}</strong>
             </div>
             <div>
               <span>{activeViewLabel} Records</span>
-              <strong>{canShowEmpty(loadStates.payments) ? searchedPayments.length : <DataStatus state={loadStates.payments} />}</strong>
+              <strong>{loadStates.payments.ready ? searchedPayments.length : <DataStatus state={loadStates.payments} />}</strong>
             </div>
           </div>
 

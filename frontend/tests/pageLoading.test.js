@@ -109,13 +109,15 @@ test('failed history does not remove a loaded player or display no records', asy
 
 test('players table renders rows while unrelated group options are pending', async () => {
   const players = deferred(), groups = deferred();
+  let optionalRequests = 0;
+  const optional = async () => { optionalRequests++; return []; };
   const unused = () => {};
   const render = await mount('../src/pages/Players.jsx', {
     '../services/players.js': { fetchPlayers: () => players.promise, deletePlayer: unused, createPlayer: unused },
     '../services/groups.js': { fetchGroups: () => groups.promise },
-    '../services/parents.js': { fetchParents: async () => [], createParent: unused },
-    '../services/packageOptions.js': { fetchPackageOptions: async () => [] },
-    '../services/waitingList.js': { fetchWaitingList: async () => [], createWaitingListEntry: unused, deleteWaitingListEntry: unused, updateWaitingListEntry: unused },
+    '../services/parents.js': { fetchParents: optional, createParent: unused },
+    '../services/packageOptions.js': { fetchPackageOptions: optional },
+    '../services/waitingList.js': { fetchWaitingList: optional, createWaitingListEntry: unused, deleteWaitingListEntry: unused, updateWaitingListEntry: unused },
     '../utils/confirmAction.js': { confirmAction: unused },
     '../utils/numberInput.js': { normalizeDigits: (value) => value, parseLocalizedNumber: Number },
     '../utils/imageUpload.js': { compressProfileImage: unused }
@@ -132,4 +134,24 @@ test('players table renders rows while unrelated group options are pending', asy
   groups.resolve([]);
   await new Promise(setImmediate);
   assert.doesNotMatch(render(), /Loading/);
+  assert.equal(optionalRequests, 0, 'closed windows must not compete for initial bandwidth');
+});
+
+test('parent navigation is available before dashboard data arrives and after failure', async () => {
+  const dashboard = deferred();
+  const render = await mount('../src/pages/ParentDashboard.jsx', {
+    '../services/parents.js': { fetchParentDashboard: () => dashboard.promise, getCachedParentDashboard: () => undefined },
+    '../context/AuthContext.jsx': { useAuth: () => ({ user: { name: 'Test Parent' } }) },
+    '../assets/warriors-logo.png': { default: 'logo.png' }
+  });
+  const initial = render();
+  assert.match(initial, /Settings/);
+  assert.match(initial, /attendance/);
+  assert.match(initial, /payments/);
+  assert.match(initial, /Loading parent data/);
+  dashboard.reject(new Error('timeout'));
+  await new Promise(setImmediate);
+  const failed = render();
+  assert.match(failed, /Settings/);
+  assert.match(failed, /LOAD ERROR/);
 });

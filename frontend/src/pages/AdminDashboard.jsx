@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import DataStatus from '../components/DataStatus.jsx';
-import { useSectionLoader, canShowEmpty } from '../hooks/useSectionLoader.js';
+import { useSectionLoader, canShowEmpty, isSectionBlocking } from '../hooks/useSectionLoader.js';
 import StatsCard from '../components/StatsCard.jsx';
 import { downloadPlayersBackup, fetchDashboard } from '../services/reports.js';
 import { fetchGroups } from '../services/groups.js';
@@ -739,7 +739,8 @@ const AdminDashboard = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {loadStates.waiting?.loading || loadStates.waiting?.error ? <tr><td colSpan="8"><DataStatus state={loadStates.waiting} /></td></tr> : waitingList.length ? waitingList.map((entry) => (
+                    {loadStates.waiting.ready && (loadStates.waiting.loading || loadStates.waiting.error) && <tr><td colSpan="8"><DataStatus state={loadStates.waiting} /></td></tr>}
+                    {isSectionBlocking(loadStates.waiting) ? <tr><td colSpan="8"><DataStatus state={loadStates.waiting} /></td></tr> : waitingList.length ? waitingList.map((entry) => (
                       <tr key={entry._id}>
                         <td>{entry.playerName}</td>
                         <td>{entry.playerAge ?? '-'}</td>
@@ -797,7 +798,8 @@ const AdminDashboard = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {loadStates.players?.loading || loadStates.players?.error ? <tr><td colSpan="7"><DataStatus state={loadStates.players} /></td></tr> : expiredAlertPlayers.length ? expiredAlertPlayers.map((player) => (
+                    {loadStates.players.ready && (loadStates.players.loading || loadStates.players.error) && <tr><td colSpan="7"><DataStatus state={loadStates.players} /></td></tr>}
+                    {isSectionBlocking(loadStates.players) ? <tr><td colSpan="7"><DataStatus state={loadStates.players} /></td></tr> : expiredAlertPlayers.length ? expiredAlertPlayers.map((player) => (
                       <tr key={player._id}>
                         <td>
                           <button
@@ -865,7 +867,8 @@ const AdminDashboard = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {loadStates.players?.loading || loadStates.players?.error ? <tr><td colSpan="7"><DataStatus state={loadStates.players} /></td></tr> : expiredTimePlayers.length ? expiredTimePlayers.map((player) => (
+                    {loadStates.players.ready && (loadStates.players.loading || loadStates.players.error) && <tr><td colSpan="7"><DataStatus state={loadStates.players} /></td></tr>}
+                    {isSectionBlocking(loadStates.players) ? <tr><td colSpan="7"><DataStatus state={loadStates.players} /></td></tr> : expiredTimePlayers.length ? expiredTimePlayers.map((player) => (
                       <tr key={player._id}>
                         <td><strong>{player.fullName}</strong></td>
                         <td>{player.parentId?.name || t('notSet')}</td>

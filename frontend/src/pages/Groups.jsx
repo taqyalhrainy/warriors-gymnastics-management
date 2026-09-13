@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
 import DataStatus from '../components/DataStatus.jsx';
-import { useSectionLoader, canShowEmpty } from '../hooks/useSectionLoader.js';
+import { useSectionLoader, canShowEmpty, isSectionBlocking } from '../hooks/useSectionLoader.js';
 import { fetchGroups, createGroup, updateGroup, deleteGroup } from '../services/groups.js';
 import { fetchPackageOptions, createPackageOption, updatePackageOption, deletePackageOption } from '../services/packageOptions.js';
 import { confirmAction } from '../utils/confirmAction.js';
@@ -276,7 +276,8 @@ const GroupsPage = () => {
             <table className="data-table">
               <thead><tr><th>{t('name')}</th><th>{t('classes')}</th><th>{t('hours')}</th><th>{t('actions')}</th></tr></thead>
               <tbody>
-                {loadStates.packages?.loading || loadStates.packages?.error ? <tr><td colSpan="4"><DataStatus state={loadStates.packages} retry={loadPackages} /></td></tr> : filteredPackages.length ? filteredPackages.map((pkg) => (
+                {loadStates.packages.ready && (loadStates.packages.loading || loadStates.packages.error) && <tr><td colSpan="4"><DataStatus state={loadStates.packages} retry={loadPackages} /></td></tr>}
+                {isSectionBlocking(loadStates.packages) ? <tr><td colSpan="4"><DataStatus state={loadStates.packages} retry={loadPackages} /></td></tr> : filteredPackages.length ? filteredPackages.map((pkg) => (
                   <tr key={pkg._id}>
                     <td>{pkg.name}</td>
                     <td>{pkg.classes ?? 0}</td>

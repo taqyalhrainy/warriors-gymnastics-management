@@ -145,14 +145,6 @@ const ParentDashboard = () => {
           </div>
         </section>
 
-        {loadError && !dashboard ? <DataStatus state={{ error: loadError }} /> : isLoading ? (
-          <div className="parent-loading-panel">
-            <img src={warriorsLogo} alt="" />
-            <span className="parent-loading-spinner" />
-            <strong>Loading parent data...</strong>
-          </div>
-        ) : (
-        <>
         <section className="parent-app-tile-grid" aria-label="Parent navigation">
           {appTiles.map((tile) => (
             <Link className="parent-app-tile" to={tile.path} key={tile.label}>
@@ -162,6 +154,14 @@ const ParentDashboard = () => {
             </Link>
           ))}
         </section>
+        {loadError && !dashboard ? <DataStatus state={{ error: loadError }} /> : isLoading ? (
+          <div className="parent-loading-panel">
+            <img src={warriorsLogo} alt="" />
+            <span className="parent-loading-spinner" />
+            <strong>Loading parent data...</strong>
+          </div>
+        ) : (
+        <>
         <section className="parent-hero parent-dashboard-strip">
           <div>
             <span className="parent-kicker">Overview</span>

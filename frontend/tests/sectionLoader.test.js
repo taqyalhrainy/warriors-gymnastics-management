@@ -24,7 +24,7 @@ async function setup(keys = ['players', 'payments']) {
     }
   });
   const loader = module.useSectionLoader(keys);
-  return { ...loader, state: () => state, unmount: () => cleanup(), canShowEmpty: module.canShowEmpty };
+  return { ...loader, state: () => state, unmount: () => cleanup(), canShowEmpty: module.canShowEmpty, isSectionBlocking: module.isSectionBlocking };
 }
 
 test('sections publish independently and do not show empty while pending', async () => {
@@ -91,4 +91,18 @@ test('refresh preserves readiness without showing false empty on error', async (
   assert.deepEqual(rows, ['saved']);
   assert.equal(loader.state().players.ready, true);
   assert.equal(loader.canShowEmpty(loader.state().players), false);
+  assert.equal(loader.isSectionBlocking(loader.state().players), false);
+});
+
+test('only the initial request blocks the section, not a background refresh', async () => {
+  const loader = await setup();
+  assert.equal(loader.isSectionBlocking(loader.state().players), true);
+  await loader.load('players', async () => ['existing'], () => {});
+  const refresh = deferred();
+  const pending = loader.load('players', () => refresh.promise, () => {});
+  assert.equal(loader.state().players.loading, true);
+  assert.equal(loader.isSectionBlocking(loader.state().players), false);
+  refresh.resolve(['updated']);
+  await pending;
+  assert.equal(loader.isSectionBlocking(loader.state().players), false);
 });

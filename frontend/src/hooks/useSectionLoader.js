@@ -28,3 +28,5 @@ export const useSectionLoader = (keys = []) => {
 };
 
 export const canShowEmpty = (state) => Boolean(state?.ready && !state.loading && !state.error);
+
+export const isSectionBlocking = (state) => Boolean(!state?.ready && (state?.loading || state?.error));
