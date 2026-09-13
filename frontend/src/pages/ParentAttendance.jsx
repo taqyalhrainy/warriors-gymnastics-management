@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
+import DataStatus from '../components/DataStatus.jsx';
+import { useSectionLoader } from '../hooks/useSectionLoader.js';
 import { fetchParentAttendance, fetchParentAttendanceHistory, getCachedParentAttendance } from '../services/parents.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import warriorsLogo from '../assets/warriors-logo.png';
@@ -128,7 +130,8 @@ const ParentAttendancePage = () => {
   const [isLoading, setIsLoading] = useState(() => !cachedAttendance);
   const [previewProfileImage, setPreviewProfileImage] = useState('');
   const [historyByChildId, setHistoryByChildId] = useState({});
-  const [loadingHistoryChildId, setLoadingHistoryChildId] = useState('');
+  const { states: loadStates, load: loadSection } = useSectionLoader();
+  const [loadError, setLoadError] = useState('');
   const navigate = useNavigate();
   const { t } = useLanguage();
 
@@ -160,14 +163,10 @@ const ParentAttendancePage = () => {
   );
 
   const loadChildHistory = (childId) => {
-    if (!childId || historyByChildId[childId] || loadingHistoryChildId === childId) return;
-    setLoadingHistoryChildId(childId);
-    fetchParentAttendanceHistory(childId)
-      .then((data) => {
+    if (!childId || historyByChildId[childId] || loadStates[childId]?.loading) return;
+    loadSection(childId, () => fetchParentAttendanceHistory(childId), (data) => {
         setHistoryByChildId((current) => ({ ...current, [childId]: data.subscriptionHistory || [] }));
-      })
-      .catch(console.error)
-      .finally(() => setLoadingHistoryChildId(''));
+      });
   };
 
   useEffect(() => {
@@ -182,7 +181,7 @@ const ParentAttendancePage = () => {
         setChildren(getUniqueParentChildren(data.children || []).filter((child) => child.status !== 'left'));
         setAttendance(data.attendance || []);
       })
-      .catch(console.error)
+      .catch(() => { if (isMounted) setLoadError('Unable to load attendance.'); })
       .finally(() => {
         if (isMounted) setIsLoading(false);
       });
@@ -247,11 +246,11 @@ const ParentAttendancePage = () => {
             <h1>{t('attendanceHistory')}</h1>
           </div>
           <div className="parent-hero-stats">
-            <div><span>{t('yourChildren')}</span><strong>{children.length}</strong></div>
-            <div><span>{t('classes')}</span><strong>{totalUsed}</strong></div>
+            <div><span>{t('yourChildren')}</span><strong>{isLoading || (loadError && !children.length) ? '...' : children.length}</strong></div>
+            <div><span>{t('classes')}</span><strong>{isLoading || (loadError && !children.length) ? '...' : totalUsed}</strong></div>
           </div>
         </section>
-        {isLoading ? (
+        {loadError && !children.length ? <DataStatus state={{ error: loadError }} /> : isLoading ? (
           <div className="parent-loading-panel">
             <img src={warriorsLogo} alt="" />
             <span className="parent-loading-spinner" />
@@ -279,8 +278,8 @@ const ParentAttendancePage = () => {
                 </button>
                 {isChildOpen && (
                   <div className="parent-attendance-class-list">
-                    {loadingHistoryChildId === String(child._id) && <p className="empty-state">Loading classes...</p>}
-                    {childPackages.map((item) => {
+                    <DataStatus state={loadStates[String(child._id)]} retry={() => loadChildHistory(String(child._id))} />
+                    {(loadStates[String(child._id)]?.loading || loadStates[String(child._id)]?.error ? [] : childPackages).map((item) => {
                       const isClassOpen = openClassKey === item.key;
                       return (
                         <section className="subscription-history-group parent-package-card" key={item.key}>

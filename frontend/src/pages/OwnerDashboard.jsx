@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import DataStatus from '../components/DataStatus.jsx';
+import { useSectionLoader, canShowEmpty } from '../hooks/useSectionLoader.js';
 import { fetchTodayAttendance } from '../services/attendance.js';
 import { fetchAttendanceBoard } from '../services/groups.js';
 import { fetchPayments } from '../services/payments.js';
@@ -74,6 +76,7 @@ const getNewSubscriptionAlertKey = (row) => {
 };
 
 const OwnerDashboard = () => {
+  const { states: loadStates, load: loadSection } = useSectionLoader(['players', 'payments', 'board']);
   const [players, setPlayers] = useState([]);
   const [payments, setPayments] = useState([]);
   const [groupColumns, setGroupColumns] = useState([]);
@@ -95,12 +98,12 @@ const OwnerDashboard = () => {
     setError('');
 
     try {
-      const [playerRows, paymentRows, groups, todayRecords] = await Promise.all([
-        fetchPlayers({ fresh: Date.now() }),
-        fetchPayments({ fresh: Date.now() }),
+      const playersRequest = loadSection('players', () => fetchPlayers({ fresh: Date.now() }), setPlayers);
+      const paymentsRequest = loadSection('payments', () => fetchPayments({ fresh: Date.now() }), setPayments);
+      const boardRequest = loadSection('board', () => Promise.all([
         fetchAttendanceBoard({ force: true }),
         fetchTodayAttendance({ date: today }, { force: true })
-      ]);
+      ]), ([groups, todayRecords]) => {
       const recordsByPlayerAndGroupId = new Map();
       todayRecords.forEach((record) => {
         recordsByPlayerAndGroupId.set(getAttendanceRecordKey(record.playerId, record.groupId), record);
@@ -123,10 +126,10 @@ const OwnerDashboard = () => {
       });
 
       if (requestId === dashboardLoadRequestIdRef.current) {
-        setPlayers(playerRows);
-        setPayments(paymentRows);
         setGroupColumns(groupsWithPlayers);
       }
+      });
+      await Promise.all([playersRequest, paymentsRequest, boardRequest]);
     } catch (err) {
       if (requestId === dashboardLoadRequestIdRef.current) {
         setError(err.response?.data?.message || 'Unable to load owner dashboard.');
@@ -299,15 +302,15 @@ const OwnerDashboard = () => {
             <div className="new-subscription-side-grid">
               <button className="new-subscription-summary-card" type="button" onClick={openSubscriptionDetails}>
                 <span>New subscriptions</span>
-                <strong>{newSubscriptionSummary.count}</strong>
+                <strong>{canShowEmpty(loadStates.players) ? newSubscriptionSummary.count : <DataStatus state={loadStates.players} />}</strong>
               </button>
               <div className="new-subscription-summary-card is-collected">
                 <span>Collected</span>
-                <strong>{formatMoney(newSubscriptionSummary.paidAmount)}</strong>
+                <strong>{canShowEmpty(loadStates.players) && canShowEmpty(loadStates.payments) ? formatMoney(newSubscriptionSummary.paidAmount) : <DataStatus state={!canShowEmpty(loadStates.players) ? loadStates.players : loadStates.payments} />}</strong>
               </div>
               <div className="new-subscription-summary-card is-remaining">
                 <span>Remaining</span>
-                <strong>{formatMoney(newSubscriptionSummary.remainingAmount)}</strong>
+                <strong>{canShowEmpty(loadStates.players) && canShowEmpty(loadStates.payments) ? formatMoney(newSubscriptionSummary.remainingAmount) : <DataStatus state={!canShowEmpty(loadStates.players) ? loadStates.players : loadStates.payments} />}</strong>
               </div>
             </div>
           </div>
@@ -328,6 +331,7 @@ const OwnerDashboard = () => {
           </div>
 
           <div className="attendance-summary-card owner-attendance-summary" aria-label="Attendance summary">
+            <DataStatus state={loadStates.board} />
             <div className="attendance-donut">
               <svg viewBox="0 0 120 120" role="img">
                 <circle className="attendance-donut-track" cx="60" cy="60" r={donutRadius} />
@@ -414,7 +418,7 @@ const OwnerDashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {newSubscriptionRows.length ? newSubscriptionRows.map((row) => {
+                  {!canShowEmpty(loadStates.players) ? <tr><td colSpan="9"><DataStatus state={loadStates.players} /></td></tr> : newSubscriptionRows.length ? newSubscriptionRows.map((row) => {
                     const isNewAlert = highlightedNewSubscriptionIds.includes(getNewSubscriptionAlertKey(row));
                     return (
                       <tr className={isNewAlert ? 'owner-new-subscription-row is-new-alert' : 'owner-new-subscription-row'} key={row.player._id}>
@@ -425,8 +429,8 @@ const OwnerDashboard = () => {
                       <td>{getPlayerGroups(row.player) || '-'}</td>
                       <td>{getPackageName(row.player)}</td>
                       <td>{formatMoney(row.expectedAmount)}</td>
-                      <td>{formatMoney(row.paidAmount)}</td>
-                      <td>{formatMoney(row.remainingAmount)}</td>
+                      <td>{canShowEmpty(loadStates.payments) ? formatMoney(row.paidAmount) : <DataStatus state={loadStates.payments} />}</td>
+                      <td>{canShowEmpty(loadStates.payments) ? formatMoney(row.remainingAmount) : <DataStatus state={loadStates.payments} />}</td>
                       </tr>
                     );
                   }) : (

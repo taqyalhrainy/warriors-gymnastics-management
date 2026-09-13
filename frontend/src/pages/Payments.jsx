@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
+import DataStatus from '../components/DataStatus.jsx';
+import { useSectionLoader, canShowEmpty } from '../hooks/useSectionLoader.js';
 import { fetchPayments, createPayment, updatePayment, deletePayment } from '../services/payments.js';
 import { fetchPlayers } from '../services/players.js';
 import { verifyPaymentPassword } from '../services/security.js';
@@ -129,6 +131,7 @@ const initialPaymentForm = {
 };
 
 const PaymentsPage = () => {
+  const { states: loadStates, load: loadSection } = useSectionLoader(["payments","players"]);
   const [payments, setPayments] = useState([]);
   const [players, setPlayers] = useState([]);
   const [form, setForm] = useState(initialPaymentForm);
@@ -160,10 +163,12 @@ const PaymentsPage = () => {
       const params = isPaymentUnlocked || forceAll
         ? { fresh: Date.now() }
         : { day: selectedDay || getDateInputValue(), fresh: Date.now() };
-      const paymentRows = sortPaymentsNewestFirst(await fetchPayments(params));
+      await loadSection('payments', () => fetchPayments(params), (rows) => {
+      const paymentRows = sortPaymentsNewestFirst(rows);
       if (requestId === paymentsLoadRequestIdRef.current && startedRevision === paymentsRevisionRef.current) {
         setPayments(paymentRows);
       }
+      });
     } catch (err) {
       console.error(err);
     }
@@ -174,7 +179,7 @@ const PaymentsPage = () => {
   };
 
   useEffect(() => {
-    fetchPlayers().then(setPlayers).catch(console.error);
+    loadSection('players', fetchPlayers, setPlayers);
   }, []);
 
   useEffect(() => {
@@ -543,15 +548,15 @@ const PaymentsPage = () => {
           <div className="payment-metrics">
             <div>
               <span>{activeViewLabel} Paid</span>
-              <strong>{formatMoney(viewTotals.paid)}</strong>
+              <strong>{canShowEmpty(loadStates.payments) ? formatMoney(viewTotals.paid) : <DataStatus state={loadStates.payments} />}</strong>
             </div>
             <div>
               <span>{activeViewLabel} Remaining</span>
-              <strong>{formatMoney(viewTotals.remaining)}</strong>
+              <strong>{canShowEmpty(loadStates.payments) ? formatMoney(viewTotals.remaining) : <DataStatus state={loadStates.payments} />}</strong>
             </div>
             <div>
               <span>{activeViewLabel} Records</span>
-              <strong>{searchedPayments.length}</strong>
+              <strong>{canShowEmpty(loadStates.payments) ? searchedPayments.length : <DataStatus state={loadStates.payments} />}</strong>
             </div>
           </div>
 
@@ -687,6 +692,8 @@ const PaymentsPage = () => {
                 </div>
           </form>
 
+          <DataStatus state={loadStates.players} />
+          <DataStatus state={loadStates.payments} retry={loadPayments} />
           <div className="payment-database-card">
             <div className="payment-table-tools">
               <div className="payment-tool-icons">
@@ -798,7 +805,7 @@ const PaymentsPage = () => {
                       </tr>
                     );
                   }) : (
-                    <tr><td colSpan={activeView === 'pending' ? 6 : 12} className="payment-empty-row">{t('noPaymentsRecorded')}</td></tr>
+                    canShowEmpty(loadStates.payments) && <tr><td colSpan={activeView === 'pending' ? 6 : 12} className="payment-empty-row">{t('noPaymentsRecorded')}</td></tr>
                   )}
                 </tbody>
               </table>

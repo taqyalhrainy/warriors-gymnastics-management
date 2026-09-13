@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
+import DataStatus from '../components/DataStatus.jsx';
+import { useSectionLoader, canShowEmpty } from '../hooks/useSectionLoader.js';
 import StatsCard from '../components/StatsCard.jsx';
 import { downloadPlayersBackup, fetchDashboard } from '../services/reports.js';
 import { fetchGroups } from '../services/groups.js';
@@ -98,6 +100,7 @@ const writeExpiredAlertIds = (ids) => {
 };
 
 const AdminDashboard = () => {
+  const { states: loadStates, load: loadSection } = useSectionLoader(['waiting', 'groups', 'players']);
   const navigate = useNavigate();
   const [stats, setStats] = useState(() => dashboardStatsCache);
   const [groups, setGroups] = useState([]);
@@ -230,17 +233,15 @@ const AdminDashboard = () => {
     const requestId = waitingDataRequestIdRef.current + 1;
     waitingDataRequestIdRef.current = requestId;
     try {
-      const [groupRows, waitingRows, playerRows] = await Promise.all([
-        fetchGroups(),
-        fetchWaitingList(),
-        fetchPlayers({ dashboard: 'expired-alert' })
+      await Promise.allSettled([
+        loadSection('groups', fetchGroups, (rows) => { if (requestId === waitingDataRequestIdRef.current) setGroups(rows); }),
+        loadSection('waiting', fetchWaitingList, (rows) => { if (requestId === waitingDataRequestIdRef.current) setWaitingList(rows); }),
+        loadSection('players', () => fetchPlayers({ dashboard: 'expired-alert' }), (rows) => {
+          if (requestId !== waitingDataRequestIdRef.current) return;
+          setDashboardPlayers(rows);
+          setExpiredAlertPlayers(getExpiredAlertPlayers(rows));
+        })
       ]);
-      if (requestId === waitingDataRequestIdRef.current) {
-        setGroups(groupRows);
-        setWaitingList(waitingRows);
-        setDashboardPlayers(playerRows);
-        setExpiredAlertPlayers(getExpiredAlertPlayers(playerRows));
-      }
     } catch (err) {
       if (requestId === waitingDataRequestIdRef.current) {
         setWaitingMessage(err.response?.data?.message || copy.unableLoad);
@@ -364,17 +365,16 @@ const AdminDashboard = () => {
     setIsPlayerViewLoading(true);
 
     try {
-      const [playerData, attendanceData, paymentData] = await Promise.all([
-        getPlayer(player._id),
-        fetchAttendanceByPlayer(player._id),
-        fetchPaymentsByPlayer(player._id)
+      await Promise.allSettled([
+        loadSection('viewPlayer', () => getPlayer(player._id), (data) => { if (requestId === playerViewRequestIdRef.current) setViewedPlayer(data); }),
+        loadSection('viewAttendance', () => fetchAttendanceByPlayer(player._id), (data) => {
+          if (requestId !== playerViewRequestIdRef.current) return;
+          const cutoff = new Date();
+          cutoff.setMonth(cutoff.getMonth() - 3);
+          setViewedPlayerAttendance(data.filter((record) => new Date(record.date) >= cutoff));
+        }),
+        loadSection('viewPayments', () => fetchPaymentsByPlayer(player._id), (data) => { if (requestId === playerViewRequestIdRef.current) setViewedPlayerPayments(data); })
       ]);
-      const threeMonthsAgo = new Date();
-      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-      if (requestId !== playerViewRequestIdRef.current) return;
-      setViewedPlayer(playerData);
-      setViewedPlayerAttendance(attendanceData.filter((record) => new Date(record.date) >= threeMonthsAgo));
-      setViewedPlayerPayments(paymentData);
     } catch (err) {
       if (requestId === playerViewRequestIdRef.current) {
         setPlayerViewError(err.response?.data?.message || 'Unable to load player details.');
@@ -739,7 +739,7 @@ const AdminDashboard = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {waitingList.length ? waitingList.map((entry) => (
+                    {loadStates.waiting?.loading || loadStates.waiting?.error ? <tr><td colSpan="8"><DataStatus state={loadStates.waiting} /></td></tr> : waitingList.length ? waitingList.map((entry) => (
                       <tr key={entry._id}>
                         <td>{entry.playerName}</td>
                         <td>{entry.playerAge ?? '-'}</td>
@@ -797,7 +797,7 @@ const AdminDashboard = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {expiredAlertPlayers.length ? expiredAlertPlayers.map((player) => (
+                    {loadStates.players?.loading || loadStates.players?.error ? <tr><td colSpan="7"><DataStatus state={loadStates.players} /></td></tr> : expiredAlertPlayers.length ? expiredAlertPlayers.map((player) => (
                       <tr key={player._id}>
                         <td>
                           <button
@@ -865,7 +865,7 @@ const AdminDashboard = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {expiredTimePlayers.length ? expiredTimePlayers.map((player) => (
+                    {loadStates.players?.loading || loadStates.players?.error ? <tr><td colSpan="7"><DataStatus state={loadStates.players} /></td></tr> : expiredTimePlayers.length ? expiredTimePlayers.map((player) => (
                       <tr key={player._id}>
                         <td><strong>{player.fullName}</strong></td>
                         <td>{player.parentId?.name || t('notSet')}</td>
@@ -897,9 +897,8 @@ const AdminDashboard = () => {
               </div>
 
               {playerViewError && <p className="alert-error">{playerViewError}</p>}
-              {isPlayerViewLoading ? (
-                <p className="empty-state">{t('loadingPlayer')}</p>
-              ) : (
+              <DataStatus state={loadStates.viewPlayer} />
+              {(
                 <>
                   <div className="student-info-grid expired-player-info-grid">
                     <div><span>{t('name')}</span><strong>{viewedPlayer.fullName}</strong></div>
@@ -913,14 +912,14 @@ const AdminDashboard = () => {
                     <div><span>{t('classes')}</span><strong>{viewedPlayer.packageClasses || t('notSet')}</strong></div>
                     <div><span>{t('hours')}</span><strong>{viewedPlayer.packageHours || t('notSet')}</strong></div>
                     <div><span>{t('payment')}</span><strong>{formatCurrency(viewedPlayer.payment || 0)}</strong></div>
-                    <div><span>Total Paid</span><strong>{formatCurrency(viewedPlayerTotalPaid)}</strong></div>
+                    <div><span>Total Paid</span><strong>{canShowEmpty(loadStates.viewPayments) ? formatCurrency(viewedPlayerTotalPaid) : <DataStatus state={loadStates.viewPayments} />}</strong></div>
                     <div className="student-info-grid-full"><span>{t('note')}</span><strong>{viewedPlayer.note || t('notSet')}</strong></div>
                   </div>
 
                   <div className="student-history expired-player-attendance-history">
                     <h3>Attendance History</h3>
                     <div className="student-history-list">
-                      {viewedPlayerAttendance.length ? viewedPlayerAttendance.map((record) => (
+                      {loadStates.viewAttendance?.loading || loadStates.viewAttendance?.error ? <DataStatus state={loadStates.viewAttendance} /> : viewedPlayerAttendance.length ? viewedPlayerAttendance.map((record) => (
                         <div className="student-history-row" key={record._id}>
                           <span>{new Date(record.date).toLocaleDateString()}</span>
                           <strong>{record.status}</strong>

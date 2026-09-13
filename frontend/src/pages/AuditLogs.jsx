@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
+import DataStatus from '../components/DataStatus.jsx';
+import { useSectionLoader, canShowEmpty } from '../hooks/useSectionLoader.js';
 import api from '../services/api.js';
 import { updatePaymentPassword } from '../services/security.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
@@ -13,6 +15,7 @@ const initialPasswordForm = {
 };
 
 const AuditLogsPage = () => {
+  const { states: loadStates, load: loadSection } = useSectionLoader(["logs"]);
   const [logs, setLogs] = useState([]);
   const [search, setSearch] = useState('');
   const [activeSecurityTab, setActiveSecurityTab] = useState('audit');
@@ -33,7 +36,7 @@ const AuditLogsPage = () => {
   };
 
   useEffect(() => {
-    api.get('/audit-logs').then((res) => setLogs(res.data)).catch(console.error);
+    loadSection('logs', () => api.get('/audit-logs'), (res) => setLogs(res.data));
   }, []);
 
   const handlePasswordFormChange = (event) => {
@@ -148,7 +151,7 @@ const AuditLogsPage = () => {
             <table className="data-table">
               <thead><tr><th>{t('actor')}</th><th>{t('action')}</th><th>{t('entity')}</th><th>{t('date')}</th></tr></thead>
               <tbody>
-                {filteredLogs.length ? filteredLogs.map((log) => (
+                {loadStates.logs?.loading || loadStates.logs?.error ? <tr><td colSpan="5"><DataStatus state={loadStates.logs} /></td></tr> : filteredLogs.length ? filteredLogs.map((log) => (
                   <tr key={log._id}>
                     <td>
                       {log.userId ? (

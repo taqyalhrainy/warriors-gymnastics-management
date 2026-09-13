@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
+import DataStatus from '../components/DataStatus.jsx';
+import { useSectionLoader, canShowEmpty } from '../hooks/useSectionLoader.js';
 import { fetchCoaches, createCoach, updateCoach, deleteCoach, updateCoachAttendance } from '../services/coaches.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
@@ -31,6 +33,7 @@ const getCoachStatusLabel = (attendance) => {
 };
 
 const CoachesPage = () => {
+  const { states: loadStates, load: loadSection } = useSectionLoader(["coaches"]);
   const [coaches, setCoaches] = useState([]);
   const [selectedCoach, setSelectedCoach] = useState(null);
   const [form, setForm] = useState(initialForm);
@@ -41,11 +44,7 @@ const CoachesPage = () => {
   const { t } = useLanguage();
 
   const loadCoaches = async () => {
-    try {
-      setCoaches(await fetchCoaches({ date: selectedDate, fresh: Date.now() }));
-    } catch (error) {
-      setMessage(error.response?.data?.message || 'Unable to load coaches.');
-    }
+    return loadSection('coaches', () => fetchCoaches({ date: selectedDate, fresh: Date.now() }), setCoaches);
   };
 
   useEffect(() => {
@@ -201,6 +200,7 @@ const CoachesPage = () => {
               </label>
             </div>
             <div className="coach-card-grid">
+              {filteredCoaches.length > 0 && <DataStatus state={loadStates.coaches} retry={loadCoaches} />}
               {filteredCoaches.length ? filteredCoaches.map((coach) => {
                 const attendance = coach.todayAttendance;
                 const status = getCoachStatusLabel(attendance);
@@ -256,7 +256,7 @@ const CoachesPage = () => {
                   </article>
                 );
               }) : (
-                <p className="empty-state">{t('noCoachesAvailable')}</p>
+                canShowEmpty(loadStates.coaches) ? <p className="empty-state">{t('noCoachesAvailable')}</p> : <DataStatus state={loadStates.coaches} retry={loadCoaches} />
               )}
             </div>
           </section>

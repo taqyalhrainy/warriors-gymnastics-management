@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
+import DataStatus from '../components/DataStatus.jsx';
+import { useSectionLoader, canShowEmpty } from '../hooks/useSectionLoader.js';
 import {
   fetchNotifications,
   sendNotification,
@@ -32,6 +34,7 @@ const normalizeSavedMessage = (item) => ({
 });
 
 const NotificationsPage = () => {
+  const { states: loadStates, load: loadSection } = useSectionLoader(["messages","saved","parents","groups"]);
   const [notifications, setNotifications] = useState([]);
   const [parents, setParents] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -48,13 +51,11 @@ const NotificationsPage = () => {
   const prefillNotification = location.state?.prefillNotification || null;
 
   const loadNotifications = useCallback((options = {}) => {
-    fetchNotifications({ date: historyDate, ...options }).then(setNotifications).catch(console.error);
+    return loadSection('messages', () => fetchNotifications({ date: historyDate, ...options }), setNotifications);
   }, [historyDate]);
 
   const loadSavedMessages = useCallback((options = {}) => {
-    fetchSavedNotificationMessages(options)
-      .then((items) => setSavedMessages((items || []).map(normalizeSavedMessage)))
-      .catch(console.error);
+    return loadSection('saved', () => fetchSavedNotificationMessages(options), (items) => setSavedMessages((items || []).map(normalizeSavedMessage)));
   }, []);
 
   useEffect(() => {
@@ -76,15 +77,16 @@ const NotificationsPage = () => {
   }, [loadNotifications]);
 
   useEffect(() => {
-    fetchParents().then(setParents).catch(console.error);
-    fetchGroups().then(setGroups).catch(console.error);
+    loadSection('parents', fetchParents, setParents);
+    loadSection('groups', fetchGroups, setGroups);
   }, []);
 
   useEffect(() => {
     let isMounted = true;
     const migrateLocalSavedMessages = async () => {
       try {
-        const serverMessages = await fetchSavedNotificationMessages({ force: true });
+        const serverMessages = await loadSection('saved', () => fetchSavedNotificationMessages({ force: true }), () => {});
+        if (!serverMessages) return;
         if (!isMounted) return;
         const normalizedServerMessages = (serverMessages || []).map(normalizeSavedMessage);
         setSavedMessages(normalizedServerMessages);
@@ -235,6 +237,7 @@ const NotificationsPage = () => {
             {message && <p className="alert-info">{message}</p>}
             <form onSubmit={handleSend}>
               <label>{t('recipient')}</label>
+              <DataStatus state={loadStates.parents} />
               <input
                 className="select-search-input"
                 type="search"
@@ -253,6 +256,7 @@ const NotificationsPage = () => {
               {form.recipientUserId === 'group' && (
                 <>
                   <label>{t('group')}</label>
+                  <DataStatus state={loadStates.groups} />
                   <input
                     className="select-search-input"
                     type="search"
@@ -285,6 +289,7 @@ const NotificationsPage = () => {
                 </div>
               </form>
               <div className="saved-message-list">
+                <DataStatus state={loadStates.saved} retry={loadSavedMessages} />
                 {savedMessages.length ? savedMessages.map((item) => (
                   <article className="saved-message-item" key={item.id}>
                     <div>
@@ -297,7 +302,7 @@ const NotificationsPage = () => {
                       <button className="btn-danger" type="button" onClick={() => handleDeleteSavedMessage(item.id)}>Delete</button>
                     </div>
                   </article>
-                )) : <p className="empty-state">No saved messages yet.</p>}
+                )) : canShowEmpty(loadStates.saved) && <p className="empty-state">No saved messages yet.</p>}
               </div>
             </section>
           </div>
@@ -316,6 +321,7 @@ const NotificationsPage = () => {
             <table className="data-table">
               <thead><tr><th>{t('title')}</th><th>{t('recipient')}</th><th>{t('type')}</th><th>{t('read')}</th><th>{t('viewedAt')}</th><th>{t('action')}</th></tr></thead>
               <tbody>
+                {loadStates.messages?.loading || loadStates.messages?.error ? <tr><td colSpan="6"><DataStatus state={loadStates.messages} retry={loadNotifications} /></td></tr> : null}
                 {filteredNotifications.length ? filteredNotifications.map((note) => (
                   <tr key={note._id}>
                     <td>{note.title}</td>
@@ -325,7 +331,7 @@ const NotificationsPage = () => {
                     <td>{note.viewedAt ? new Date(note.viewedAt).toLocaleString() : '-'}</td>
                     <td><Link to={`/notifications/${note._id}`}>{t('view')}</Link></td>
                   </tr>
-                )) : <tr><td colSpan="6">{t('noNotifications')}</td></tr>}
+                )) : canShowEmpty(loadStates.messages) && <tr><td colSpan="6">{t('noNotifications')}</td></tr>}
               </tbody>
             </table>
           </div>

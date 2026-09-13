@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
+import DataStatus from '../components/DataStatus.jsx';
+import { useSectionLoader, canShowEmpty } from '../hooks/useSectionLoader.js';
 import { fetchDashboard, fetchRevenue, fetchAttendanceReport } from '../services/reports.js';
 import StatsCard from '../components/StatsCard.jsx';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
 const ReportsPage = () => {
+  const { states: loadStates, load: loadSection } = useSectionLoader(["dashboard","revenue","attendance"]);
   const [dashboard, setDashboard] = useState(null);
   const [revenue, setRevenue] = useState(null);
   const [attendance, setAttendance] = useState([]);
@@ -12,9 +15,9 @@ const ReportsPage = () => {
   const { t } = useLanguage();
 
   useEffect(() => {
-    fetchDashboard().then(setDashboard).catch(console.error);
-    fetchRevenue().then(setRevenue).catch(console.error);
-    fetchAttendanceReport().then(setAttendance).catch(console.error);
+    loadSection('dashboard', fetchDashboard, setDashboard);
+    loadSection('revenue', fetchRevenue, setRevenue);
+    loadSection('attendance', fetchAttendanceReport, setAttendance);
   }, []);
 
   const filteredAttendance = attendance.filter((item) => [
@@ -27,6 +30,8 @@ const ReportsPage = () => {
       <Sidebar />
       <main className="page-content">
         <div className="page-header"><h1>{t('reports')}</h1></div>
+        <DataStatus state={loadStates.dashboard} />
+        <DataStatus state={loadStates.revenue} />
         <div className="stats-grid">
           <StatsCard title={t('activePlayers')} value={dashboard?.activePlayers ?? '...'} description={t('activePlayersDesc')} />
           <StatsCard title={t('totalPaidReport')} value={revenue?.totalPaid ?? '...'} description={t('totalPaidDesc')} />
@@ -44,7 +49,7 @@ const ReportsPage = () => {
           <table className="data-table">
             <thead><tr><th>{t('status')}</th><th>{t('count')}</th></tr></thead>
             <tbody>
-              {filteredAttendance.length ? filteredAttendance.map((item) => (
+              {loadStates.attendance?.loading || loadStates.attendance?.error ? <tr><td colSpan="2"><DataStatus state={loadStates.attendance} /></td></tr> : filteredAttendance.length ? filteredAttendance.map((item) => (
                 <tr key={item._id}><td>{item._id}</td><td>{item.count}</td></tr>
               )) : <tr><td colSpan="2">{t('noAttendanceData')}</td></tr>}
             </tbody>

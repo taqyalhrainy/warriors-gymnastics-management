@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
+import DataStatus from '../components/DataStatus.jsx';
+import { useSectionLoader, canShowEmpty } from '../hooks/useSectionLoader.js';
 import { fetchParents, createParent, updateParent, deleteParent } from '../services/parents';
 import { confirmAction } from '../utils/confirmAction.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
@@ -7,6 +9,7 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 const initialForm = { name: '', phone: '', password: '', isActive: true };
 
 const Parents = () => {
+  const { states: loadStates, load: loadSection } = useSectionLoader(["parents"]);
   const [parents, setParents] = useState([]);
   const [form, setForm] = useState(initialForm);
   const [selectedParent, setSelectedParent] = useState(null);
@@ -17,12 +20,7 @@ const Parents = () => {
   const { t } = useLanguage();
 
   const loadParents = async () => {
-    try {
-      const data = await fetchParents();
-      setParents(data);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Could not load parents.');
-    }
+    return loadSection('parents', fetchParents, setParents);
   };
 
   useEffect(() => {
@@ -161,8 +159,9 @@ const Parents = () => {
                 <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search parents..." />
               </label>
             </div>
+            <DataStatus state={loadStates.parents} retry={loadParents} />
             {filteredParents.length === 0 ? (
-              <p>{t('noParentsAvailable')}</p>
+              canShowEmpty(loadStates.parents) && <p>{t('noParentsAvailable')}</p>
             ) : (
               <table className="data-table">
                 <thead>

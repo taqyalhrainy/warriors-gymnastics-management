@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
+import DataStatus from '../components/DataStatus.jsx';
+import { useSectionLoader, canShowEmpty } from '../hooks/useSectionLoader.js';
 import { createPlayer, updatePlayer, getPlayer } from '../services/players.js';
 import { fetchGroups } from '../services/groups.js';
 import { fetchParents } from '../services/parents.js';
@@ -10,6 +12,7 @@ import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
 import { compressProfileImage } from '../utils/imageUpload.js';
 
 const PlayerFormPage = () => {
+  const { states: loadStates, load: loadSection } = useSectionLoader(["parents","groups","packages"]);
   const { id } = useParams();
   const navigate = useNavigate();
   const [player, setPlayer] = useState({
@@ -52,16 +55,12 @@ const PlayerFormPage = () => {
   };
 
   useEffect(() => {
-    Promise.all([fetchParents(), fetchGroups(), fetchPackageOptions()])
-      .then(([parentData, groupData, packageData]) => {
-        setParents(parentData);
-        setGroups(groupData);
-        setPackageOptions(packageData);
-      })
-      .catch(console.error);
+    loadSection('parents', fetchParents, setParents);
+    loadSection('groups', fetchGroups, setGroups);
+    loadSection('packages', fetchPackageOptions, setPackageOptions);
 
     if (id) {
-      getPlayer(id).then((data) => {
+      loadSection('player', () => getPlayer(id), (data) => {
         const parentId = data.parentId?._id || data.parentId || '';
         if (data.parentId && typeof data.parentId === 'object') {
           setCurrentParent({
@@ -87,7 +86,7 @@ const PlayerFormPage = () => {
           makeupClassesNote: data.makeupClassesNote || '',
           status: data.status || 'active'
         });
-      }).catch(console.error);
+      });
     }
   }, [id]);
 
@@ -199,7 +198,12 @@ const PlayerFormPage = () => {
         <div className="page-header"><h1>{id ? t('editPlayer') : t('addPlayer')}</h1></div>
         <div className="form-card">
           {message && <p className="alert-error">{message}</p>}
+          <DataStatus state={loadStates.player} />
+          <DataStatus state={loadStates.parents} />
+          <DataStatus state={loadStates.groups} />
+          <DataStatus state={loadStates.packages} />
           <form onSubmit={handleSubmit}>
+          <fieldset disabled={Boolean(id && !canShowEmpty(loadStates.player))} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
             <label>{t('name')}</label>
             <input name="fullName" value={player.fullName} onChange={handleChange} required />
 
@@ -249,7 +253,7 @@ const PlayerFormPage = () => {
                     <small>{[group.days?.join(', '), [group.startTime, group.endTime].filter(Boolean).join(' - ')].filter(Boolean).join(' | ')}</small>
                   </span>
                 </label>
-              )) : <p className="empty-state">{t('noGroupsFound')}</p>}
+              )) : canShowEmpty(loadStates.groups) ? <p className="empty-state">{t('noGroupsFound')}</p> : <DataStatus state={loadStates.groups} />}
             </div>
 
             <label>{t('startDate')}</label>
@@ -301,6 +305,7 @@ const PlayerFormPage = () => {
             <button type="submit" className="btn-primary" disabled={isSaving}>
               {isSaving ? 'Saving...' : t('savePlayer')}
             </button>
+          </fieldset>
           </form>
         </div>
       </main>

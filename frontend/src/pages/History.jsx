@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
+import DataStatus from '../components/DataStatus.jsx';
 import { fetchHistorySnapshot } from '../services/history.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
@@ -24,6 +25,7 @@ const HistoryPage = () => {
   const [requestedAt, setRequestedAt] = useState('');
   const [availableSince, setAvailableSince] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const { t } = useLanguage();
 
   const isTodaySelected = selectedDate === nowParts.date;
@@ -45,6 +47,7 @@ const HistoryPage = () => {
 
     try {
       setIsLoading(true);
+      setLoadError('');
       setMessage('');
       const result = await fetchHistorySnapshot({
         entityType,
@@ -55,6 +58,7 @@ const HistoryPage = () => {
       setAvailableSince(result.availableSince || '');
       setMessage(`Loaded ${result.count || 0} ${entityType === 'player' ? 'players' : entityType === 'payment' ? 'payments' : 'attendance records'} from the selected moment.`);
     } catch (error) {
+      setLoadError('Unable to load history snapshot.');
       setRows([]);
       setRequestedAt('');
       setAvailableSince('');
@@ -107,7 +111,7 @@ const HistoryPage = () => {
           <div className="history-controls">
             <label>
               <span>Type</span>
-              <select value={entityType} onChange={(event) => setEntityType(event.target.value)}>
+              <select disabled={isLoading} value={entityType} onChange={(event) => { setEntityType(event.target.value); setRows([]); setRequestedAt(''); setLoadError(''); }}>
                 <option value="player">{t('players')}</option>
                 <option value="payment">{t('payments')}</option>
                 <option value="attendance">Attendance</option>
@@ -176,7 +180,7 @@ const HistoryPage = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRows.length ? filteredRows.map((row) => (
+                  {isLoading || loadError ? <tr><td colSpan="9"><DataStatus state={{ loading: isLoading, error: loadError }} retry={handleLoad} /></td></tr> : !requestedAt ? null : filteredRows.length ? filteredRows.map((row) => (
                     <tr key={row._id}>
                       <td>{row.fullName}</td>
                       <td>{row.parentName || t('unknown')}</td>
@@ -207,7 +211,7 @@ const HistoryPage = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRows.length ? filteredRows.map((row) => (
+                  {isLoading || loadError ? <tr><td colSpan="9"><DataStatus state={{ loading: isLoading, error: loadError }} retry={handleLoad} /></td></tr> : !requestedAt ? null : filteredRows.length ? filteredRows.map((row) => (
                     <tr key={row._id}>
                       <td>{row.playerName || t('unknown')}</td>
                       <td>{row.parentName || t('unknown')}</td>
@@ -238,7 +242,7 @@ const HistoryPage = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRows.length ? filteredRows.map((row) => (
+                  {isLoading || loadError ? <tr><td colSpan="9"><DataStatus state={{ loading: isLoading, error: loadError }} retry={handleLoad} /></td></tr> : !requestedAt ? null : filteredRows.length ? filteredRows.map((row) => (
                     <tr key={row._id}>
                       <td>{row.playerName || t('unknown')}</td>
                       <td>{row.parentName || t('unknown')}</td>

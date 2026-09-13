@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
+import DataStatus from '../components/DataStatus.jsx';
 import { fetchParentDashboard, getCachedParentDashboard } from '../services/parents.js';
 import { formatCurrency } from '../utils/format.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
@@ -70,6 +71,7 @@ const ParentDashboard = () => {
   const [isLoading, setIsLoading] = useState(() => !getCachedParentDashboard());
   const [previewProfileImage, setPreviewProfileImage] = useState('');
   const { t } = useLanguage();
+  const [loadError, setLoadError] = useState('');
   const { user } = useAuth();
 
   useEffect(() => {
@@ -78,7 +80,7 @@ const ParentDashboard = () => {
       .then((data) => {
         if (isMounted) setDashboard(data);
       })
-      .catch(console.error)
+      .catch(() => { if (isMounted) setLoadError('Unable to load data.'); })
       .finally(() => {
         if (isMounted) setIsLoading(false);
       });
@@ -143,7 +145,7 @@ const ParentDashboard = () => {
           </div>
         </section>
 
-        {isLoading ? (
+        {loadError && !dashboard ? <DataStatus state={{ error: loadError }} /> : isLoading ? (
           <div className="parent-loading-panel">
             <img src={warriorsLogo} alt="" />
             <span className="parent-loading-spinner" />

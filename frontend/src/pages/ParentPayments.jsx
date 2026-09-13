@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
+import DataStatus from '../components/DataStatus.jsx';
 import { fetchParentPayments, getCachedParentPayments } from '../services/parents.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import warriorsLogo from '../assets/warriors-logo.png';
@@ -15,6 +16,7 @@ const ParentPaymentsPage = () => {
   const [previewProfileImage, setPreviewProfileImage] = useState('');
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -22,7 +24,7 @@ const ParentPaymentsPage = () => {
       .then((data) => {
         if (isMounted) setPayments(data);
       })
-      .catch(console.error)
+      .catch(() => { if (isMounted) setLoadError('Unable to load data.'); })
       .finally(() => {
         if (isMounted) setIsLoading(false);
       });
@@ -79,12 +81,12 @@ const ParentPaymentsPage = () => {
             <h1>{t('paymentHistory')}</h1>
           </div>
           <div className="parent-hero-stats">
-            <div><span>{t('paid')}</span><strong>{formatMoney(totalPaid)}</strong></div>
-            <div><span>{t('remaining')}</span><strong>{formatMoney(totalRemaining)}</strong></div>
-            <div><span>Records</span><strong>{payments.length}</strong></div>
+            <div><span>{t('paid')}</span><strong>{isLoading || (loadError && !payments.length) ? '...' : formatMoney(totalPaid)}</strong></div>
+            <div><span>{t('remaining')}</span><strong>{isLoading || (loadError && !payments.length) ? '...' : formatMoney(totalRemaining)}</strong></div>
+            <div><span>Records</span><strong>{isLoading || (loadError && !payments.length) ? '...' : payments.length}</strong></div>
           </div>
         </section>
-        {isLoading ? (
+        {loadError && !payments.length ? <DataStatus state={{ error: loadError }} /> : isLoading ? (
           <div className="parent-loading-panel">
             <img src={warriorsLogo} alt="" />
             <span className="parent-loading-spinner" />

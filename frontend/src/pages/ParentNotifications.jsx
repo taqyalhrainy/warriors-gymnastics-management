@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
+import DataStatus from '../components/DataStatus.jsx';
 import { fetchNotifications, getCachedNotifications } from '../services/notifications.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import warriorsLogo from '../assets/warriors-logo.png';
@@ -10,6 +11,7 @@ const ParentNotificationsPage = () => {
   const [isLoading, setIsLoading] = useState(() => !getCachedNotifications());
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -17,7 +19,7 @@ const ParentNotificationsPage = () => {
       .then((data) => {
         if (isMounted) setNotifications(data);
       })
-      .catch(console.error)
+      .catch(() => { if (isMounted) setLoadError('Unable to load data.'); })
       .finally(() => {
         if (isMounted) setIsLoading(false);
       });
@@ -39,11 +41,11 @@ const ParentNotificationsPage = () => {
             <h1>{t('notifications')}</h1>
           </div>
           <div className="parent-hero-stats">
-            <div><span>{t('messages')}</span><strong>{notifications.length}</strong></div>
-            <div><span>New</span><strong>{notifications.filter((note) => !note.isRead).length}</strong></div>
+            <div><span>{t('messages')}</span><strong>{isLoading || (loadError && !notifications.length) ? '...' : notifications.length}</strong></div>
+            <div><span>New</span><strong>{isLoading || (loadError && !notifications.length) ? '...' : notifications.filter((note) => !note.isRead).length}</strong></div>
           </div>
         </section>
-        {isLoading ? (
+        {loadError && !notifications.length ? <DataStatus state={{ error: loadError }} /> : isLoading ? (
           <div className="parent-loading-panel">
             <img src={warriorsLogo} alt="" />
             <span className="parent-loading-spinner" />

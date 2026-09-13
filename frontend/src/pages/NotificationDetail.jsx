@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
+import DataStatus from '../components/DataStatus.jsx';
 import { fetchNotificationById } from '../services/notifications.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import warriorsLogo from '../assets/warriors-logo.png';
@@ -16,17 +17,23 @@ const NotificationDetailPage = () => {
   const backPath = location.pathname.startsWith('/parent') ? '/parent/notifications' : '/notifications';
 
   useEffect(() => {
+    let active = true;
+    setNotification(null);
+    setError('');
     const loadNotification = async () => {
       try {
         const note = await fetchNotificationById(id);
+        if (!active) return;
         setNotification(note);
         window.dispatchEvent(new Event('notifications:changed'));
       } catch (err) {
+        if (!active) return;
         setError(err.response?.data?.message || 'Unable to load notification.');
       }
     };
 
     loadNotification();
+    return () => { active = false; };
   }, [id]);
 
   const isParentArea = location.pathname.startsWith('/parent');
@@ -59,7 +66,7 @@ const NotificationDetailPage = () => {
               <span className="parent-loading-spinner" />
               <strong>{t('loadingNotification')}</strong>
             </div>
-          ) : <p>{t('loadingNotification')}</p>
+          ) : <DataStatus state={{ loading: true }} />
         ) : null}
       </main>
     </div>

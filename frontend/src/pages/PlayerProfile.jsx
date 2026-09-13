@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
+import DataStatus from '../components/DataStatus.jsx';
+import { useSectionLoader, canShowEmpty } from '../hooks/useSectionLoader.js';
 import { getPlayer, updatePlayer } from '../services/players.js';
 import { fetchAttendanceByPlayer } from '../services/attendance.js';
 import { fetchPaymentsByPlayer } from '../services/payments.js';
@@ -107,6 +109,7 @@ const getPlayerAge = (dateOfBirth) => {
 };
 
 const PlayerProfilePage = () => {
+  const { states: loadStates, load: loadSection } = useSectionLoader(["player","attendance","payments"]);
   const { id } = useParams();
   const [player, setPlayer] = useState(null);
   const [attendanceHistory, setAttendanceHistory] = useState([]);
@@ -118,15 +121,16 @@ const PlayerProfilePage = () => {
   const { t } = useLanguage();
 
   useEffect(() => {
-    Promise.all([getPlayer(id), fetchAttendanceByPlayer(id), fetchPaymentsByPlayer(id)])
-      .then(([playerData, attendanceData, paymentData]) => {
+    setPlayer(null);
+    setAttendanceHistory([]);
+    setPaymentHistory([]);
+    loadSection('player', () => getPlayer(id), setPlayer);
+    loadSection('attendance', () => fetchAttendanceByPlayer(id), (attendanceData) => {
         const threeMonthsAgo = new Date();
         threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-        setPlayer(playerData);
         setAttendanceHistory(attendanceData.filter((record) => new Date(record.date) >= threeMonthsAgo));
-        setPaymentHistory(paymentData);
-      })
-      .catch(console.error);
+    });
+    loadSection('payments', () => fetchPaymentsByPlayer(id), setPaymentHistory);
   }, [id]);
 
   const getPlayerGroups = (value) => {
@@ -184,9 +188,8 @@ const PlayerProfilePage = () => {
         status: player?.status === 'expired' ? 'active' : player?.status,
         newSubscription: true
       });
-      const refreshedPayments = await fetchPaymentsByPlayer(id);
       setPlayer(updatedPlayer);
-      setPaymentHistory(refreshedPayments);
+      loadSection('payments', () => fetchPaymentsByPlayer(id), setPaymentHistory);
       setShowSubscriptionModal(false);
     } catch (error) {
       setSubscriptionMessage(error.response?.data?.message || 'Unable to start a new subscription.');
@@ -202,7 +205,7 @@ const PlayerProfilePage = () => {
         <div className="page-header">
           <h1>{t('playerProfile')}</h1>
           <div className="profile-header-actions">
-            <button className="new-subscription-button" type="button" onClick={openSubscriptionModal}>
+            <button className="new-subscription-button" type="button" onClick={openSubscriptionModal} disabled={!player}>
               <span>New Subscription</span>
             </button>
             <Link className="btn-secondary" to="/players">{t('backToList')}</Link>
@@ -231,13 +234,13 @@ const PlayerProfilePage = () => {
             <div><strong>{t('classes')}:</strong> {player.packageClasses || t('notSet')}</div>
             <div><strong>{t('hours')}:</strong> {player.packageHours || t('notSet')}</div>
             <div><strong>{t('payment')}:</strong> {formatCurrency(player.payment || 0)}</div>
-            <div><strong>Total Paid:</strong> {formatCurrency(totalPaid)}</div>
+            <div><strong>Total Paid:</strong> {canShowEmpty(loadStates.payments) ? formatCurrency(totalPaid) : <DataStatus state={loadStates.payments} retry={() => loadSection('payments', () => fetchPaymentsByPlayer(id), setPaymentHistory)} />}</div>
             <div><strong>{t('note')}:</strong> {player.note || t('notSet')}</div>
             <div><strong>{t('makeupClasses')}:</strong> {player.makeupClassesNote || t('notSet')}</div>
             <div className="profile-attendance-history">
               <h2>Attendance History</h2>
               <div className="student-history-list">
-                {attendanceHistory.length ? attendanceHistory.map((record) => (
+                {loadStates.attendance?.loading || loadStates.attendance?.error ? <DataStatus state={loadStates.attendance} /> : attendanceHistory.length ? attendanceHistory.map((record) => (
                   <div className="student-history-row" key={record._id}>
                     <span>{new Date(record.date).toLocaleDateString()}</span>
                     <strong>{record.status}</strong>
@@ -248,7 +251,7 @@ const PlayerProfilePage = () => {
             </div>
           </div>
         ) : (
-          <p>{t('loadingPlayer')}</p>
+          <DataStatus state={loadStates.player} retry={() => loadSection('player', () => getPlayer(id), setPlayer)} />
         )}
         {showSubscriptionModal && (
           <div className="student-modal-backdrop" role="presentation">

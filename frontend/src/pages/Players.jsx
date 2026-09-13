@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
+import DataStatus from '../components/DataStatus.jsx';
+import { useSectionLoader, canShowEmpty } from '../hooks/useSectionLoader.js';
 import { fetchPlayers, deletePlayer, createPlayer } from '../services/players.js';
 import { fetchGroups } from '../services/groups.js';
 import { createParent, fetchParents } from '../services/parents.js';
@@ -43,6 +45,7 @@ const initialMovePlayerForm = {
 };
 
 const PlayersPage = () => {
+  const { states: loadStates, load: loadSection } = useSectionLoader(["players","groups","parents","packages","waiting"]);
   const [players, setPlayers] = useState([]);
   const [parents, setParents] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -69,11 +72,11 @@ const PlayersPage = () => {
   const { t } = useLanguage();
 
   useEffect(() => {
-    fetchPlayers().then(setPlayers).catch(console.error);
-    fetchGroups().then(setGroups).catch(console.error);
-    fetchParents().then(setParents).catch(console.error);
-    fetchPackageOptions().then(setPackageOptions).catch(console.error);
-    fetchWaitingList().then(setWaitingList).catch(console.error);
+    loadSection('players', fetchPlayers, setPlayers);
+    loadSection('groups', fetchGroups, setGroups);
+    loadSection('parents', fetchParents, setParents);
+    loadSection('packages', fetchPackageOptions, setPackageOptions);
+    loadSection('waiting', fetchWaitingList, setWaitingList);
   }, []);
 
   const handleDelete = async (id) => {
@@ -471,7 +474,7 @@ const PlayersPage = () => {
           <div className="table-toolbar">
             <div>
               <h2>{statusTabs.find((tab) => tab.key === statusView)?.label || t('players')}</h2>
-              <p className="table-filter-count">{filteredPlayers.length} of {players.length}</p>
+              <p className="table-filter-count">{loadStates.players.ready ? `${filteredPlayers.length} of ${players.length}` : '...'}</p>
             </div>
             <div className="player-filter-bar">
               <label className="table-search">
@@ -480,6 +483,7 @@ const PlayersPage = () => {
               </label>
               <label className="table-filter-field">
                 <span>Group</span>
+                <DataStatus state={loadStates.groups} />
                 <select value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}>
                   <option value="all">All groups</option>
                   {groups.map((group) => (
@@ -513,7 +517,8 @@ const PlayersPage = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredPlayers.length === 0 && <tr><td colSpan="5">{t('noPlayersYet')}</td></tr>}
+              {(loadStates.players.loading || loadStates.players.error) && <tr><td colSpan="5"><DataStatus state={loadStates.players} retry={() => loadSection('players', fetchPlayers, setPlayers)} /></td></tr>}
+              {canShowEmpty(loadStates.players) && filteredPlayers.length === 0 && <tr><td colSpan="5">{t('noPlayersYet')}</td></tr>}
               {filteredPlayers.map((player) => (
                 <tr key={player._id}>
                   <td>{player.fullName}</td>
@@ -651,7 +656,7 @@ const PlayersPage = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredWaitingList.length ? filteredWaitingList.map((entry) => (
+                    {loadStates.waiting?.loading || loadStates.waiting?.error ? <tr><td colSpan="6"><DataStatus state={loadStates.waiting} /></td></tr> : filteredWaitingList.length ? filteredWaitingList.map((entry) => (
                       <tr key={entry._id}>
                         <td>{entry.playerName || '-'}</td>
                         <td>{entry.playerAge ?? '-'}</td>

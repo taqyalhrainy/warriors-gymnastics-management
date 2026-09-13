@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
+import DataStatus from '../components/DataStatus.jsx';
+import { useSectionLoader } from '../hooks/useSectionLoader.js';
 import { updateTodayAttendance, cancelTodayAttendance, fetchAttendanceByPlayer, fetchTodayAttendance } from '../services/attendance.js';
 import { fetchGroups, fetchAttendanceBoard, reorderGroups as reorderGroupsRequest } from '../services/groups.js';
 import { fetchHistorySnapshot, fetchPlayerHistory } from '../services/history.js';
@@ -408,6 +410,9 @@ const AttendancePage = () => {
   const [selectedSummaryGroup, setSelectedSummaryGroup] = useState(null);
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [marksLoading, setMarksLoading] = useState(false);
+  const [boardLoadError, setBoardLoadError] = useState('');
+  const { states: loadStates, load: loadSection } = useSectionLoader();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [hoveredSummaryGroup, setHoveredSummaryGroup] = useState(null);
   const [search, setSearch] = useState('');
@@ -761,6 +766,8 @@ const AttendancePage = () => {
     const currentCacheVersion = getCacheVersion();
     const hasCachedBoardForDate = attendanceBoardCache && attendanceBoardCacheDate === date && attendanceBoardCacheVersion === currentCacheVersion && (Date.now() - attendanceBoardCacheTimestamp) < ATTENDANCE_BOARD_CACHE_TTL_MS;
     if (!force && hasCachedBoardForDate) {
+      setBoardLoadError('');
+      setMarksLoading(false);
       const cachedBoardWithOverrides = applyLocalPlayerOverridesToGroups(attendanceBoardCache);
       attendanceBoardCache = cachedBoardWithOverrides;
       attendanceBoardCacheTimestamp = Date.now();
@@ -780,10 +787,12 @@ const AttendancePage = () => {
           setIsRefreshing(true);
         }
       }
-      const [groups, todayRecords] = await Promise.all([
-        fetchAttendanceBoard({ force }),
-        fetchTodayAttendance({ date }, { force })
-      ]);
+      setBoardLoadError('');
+      setMarksLoading(true);
+      // Show players early; attendance actions remain disabled until their marks arrive.
+      const recordsRequest = fetchTodayAttendance({ date }, { force })
+        .then((records) => ({ records }), (error) => ({ error }));
+      const groups = await fetchAttendanceBoard({ force });
       const playerSnapshotResult = viewingToday
         ? null
         : await fetchHistorySnapshot({
@@ -804,6 +813,15 @@ const AttendancePage = () => {
         ? currentGroupsWithPlayers
         : buildHistoricalGroups(groups, playerSnapshotResult?.rows || [], date, currentGroupsWithPlayers);
       const groupsWithLocalPlayers = applyLocalPlayerOverridesToGroups(groupsWithPlayers);
+      if (requestId === attendanceLoadRequestIdRef.current && loadedDateAtStart !== date
+        && attendanceBoardRevisionRef.current === startedBoardRevision) {
+        groupColumnsRef.current = groupsWithLocalPlayers;
+        setGroupColumns(groupsWithLocalPlayers);
+        setIsLoading(false);
+      }
+      const recordsResult = await recordsRequest;
+      if (recordsResult.error) throw recordsResult.error;
+      const todayRecords = recordsResult.records;
       const groupsWithTodayAttendance = applyTodayRecordsToGroups(groupsWithLocalPlayers, applyLocalAttendanceOverrides(todayRecords, date));
       if (requestId !== attendanceLoadRequestIdRef.current) {
         return groupColumnsRef.current;
@@ -824,9 +842,11 @@ const AttendancePage = () => {
     } catch (err) {
       if (requestId === attendanceLoadRequestIdRef.current) {
         setMessage(err.response?.data?.message || 'Unable to load attendance board');
+        setBoardLoadError('Unable to load attendance board');
       }
       return groupColumnsRef.current;
     } finally {
+      if (requestId === attendanceLoadRequestIdRef.current) setMarksLoading(false);
       if (!silent && requestId === attendanceLoadRequestIdRef.current) {
         setIsLoading(false);
         setIsRefreshing(false);
@@ -859,6 +879,8 @@ const AttendancePage = () => {
       setIsLoading(false);
       setIsRefreshing(false);
       setMessage('Out of range (maximum range is 3 months)');
+      setMarksLoading(false);
+      setBoardLoadError('');
       return;
     }
 
@@ -1718,12 +1740,25 @@ const AttendancePage = () => {
       setIsEditingSelectedPlayer(false);
 
       const [latestPlayerResponse, attendanceResponse, playerHistory] = await Promise.all([
-        getPlayer(player._id, { force: true }),
-        fetchAttendanceByPlayer(player._id),
-        fetchPlayerHistory(player._id)
+        loadSection('selectedPlayer', () => getPlayer(player._id, { force: true }), (data) => {
+          if (requestId !== selectedPlayerLoadRequestIdRef.current) return;
+          const latest = mergeStablePlayerFields(data, stableInitialPlayer);
+          setSelectedPlayer(latest);
+          if (!selectedPlayerFormDirtyRef.current) setSelectedPlayerForm(createSelectedPlayerForm(latest));
+        }),
+        loadSection('selectedAttendance', () => fetchAttendanceByPlayer(player._id), (records) => {
+          if (requestId === selectedPlayerLoadRequestIdRef.current) {
+            setSelectedPlayerAttendanceHistory(getRecentAttendanceRecords(applyLocalPlayerAttendanceOverrides(records, player._id)));
+          }
+        }),
+        loadSection('selectedHistory', () => fetchPlayerHistory(player._id), (history) => {
+          if (requestId === selectedPlayerLoadRequestIdRef.current) {
+            setSelectedPlayerSubscriptionHistory(buildSubscriptionHistory(history.entries || [], stableInitialPlayer));
+          }
+        })
       ]);
 
-      if (requestId !== selectedPlayerLoadRequestIdRef.current) {
+      if (requestId !== selectedPlayerLoadRequestIdRef.current || !latestPlayerResponse || !attendanceResponse || !playerHistory) {
         return;
       }
       const latestPlayer = mergeStablePlayerFields(latestPlayerResponse, stableInitialPlayer);
@@ -3180,6 +3215,7 @@ const AttendancePage = () => {
           </div>
         )}
 
+        <DataStatus state={{ loading: marksLoading && !isLoading, error: boardLoadError }} retry={() => loadAttendanceBoard({ force: true })} />
         {isAttendanceBoardTransitioning ? (
           <div className="attendance-board-loading" role="status" aria-live="polite">
             <span className="loading-spinner" />
@@ -3257,7 +3293,7 @@ const AttendancePage = () => {
                             type="button"
                             className={`btn-present ${player.todayAttendance?.status === 'present' ? 'active' : ''}`}
                             onClick={() => handleAction(player, group._id, 'present')}
-                            disabled={isAttendanceActionPending(player._id, group._id)}
+                            disabled={marksLoading || Boolean(boardLoadError) || isAttendanceActionPending(player._id, group._id)}
                           >
                             {t('present')}
                           </button>
@@ -3265,7 +3301,7 @@ const AttendancePage = () => {
                             type="button"
                             className={`btn-absent ${player.todayAttendance?.status === 'absent' ? 'active' : ''}`}
                             onClick={() => handleAction(player, group._id, 'absent')}
-                            disabled={isAttendanceActionPending(player._id, group._id)}
+                            disabled={marksLoading || Boolean(boardLoadError) || isAttendanceActionPending(player._id, group._id)}
                           >
                             {t('absent')}
                           </button>
@@ -3274,7 +3310,7 @@ const AttendancePage = () => {
                               type="button"
                               className="btn-cancel-attendance"
                               onClick={() => handleCancelAttendance(player, group._id)}
-                              disabled={isAttendanceActionPending(player._id, group._id)}
+                              disabled={marksLoading || Boolean(boardLoadError) || isAttendanceActionPending(player._id, group._id)}
                             >
                               {isAttendanceActionPending(player._id, group._id) ? 'Saving...' : 'Cancel'}
                             </button>
@@ -3310,6 +3346,7 @@ const AttendancePage = () => {
                 </div>
               </div>
 
+              <DataStatus state={loadStates.selectedPlayer} />
               {isEditingSelectedPlayer && selectedPlayerForm ? (
                 <form className="student-modal-edit-form" onSubmit={handleSaveSelectedPlayerEdit}>
                   <div className="student-modal-edit-grid">
@@ -3567,7 +3604,9 @@ const AttendancePage = () => {
                     </div>
                     {showSelectedPlayerAttendanceHistory && (
                       <div className="student-history-list">
-                        {selectedPlayerSubscriptionHistory.length ? selectedPlayerSubscriptionHistory.map((cycle) => {
+                        <DataStatus state={loadStates.selectedAttendance} />
+                        <DataStatus state={loadStates.selectedHistory} />
+                        {loadStates.selectedHistory?.loading || loadStates.selectedHistory?.error ? null : selectedPlayerSubscriptionHistory.length ? selectedPlayerSubscriptionHistory.map((cycle) => {
                           const records = getAttendanceRecordsForSubscription(selectedPlayerAttendanceHistory, cycle, selectedPlayerSubscriptionHistory);
                           const isOpen = openSubscriptionHistoryKey === cycle.key;
                           const isCurrentCycle = cycle.key === getCurrentSubscriptionCycleStartValue();

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
+import DataStatus from '../components/DataStatus.jsx';
 import { fetchParentDashboard, getCachedParentDashboard } from '../services/parents.js';
 import { formatCurrency } from '../utils/format.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
@@ -54,6 +55,7 @@ const ParentSubscriptionSummaryPage = () => {
   const [previewProfileImage, setPreviewProfileImage] = useState('');
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const [loadError, setLoadError] = useState('');
   const children = getUniqueChildren(dashboard?.children || []).filter((child) => child.status !== 'left');
 
   useEffect(() => {
@@ -62,7 +64,7 @@ const ParentSubscriptionSummaryPage = () => {
       .then((data) => {
         if (isMounted) setDashboard(data);
       })
-      .catch(console.error)
+      .catch(() => { if (isMounted) setLoadError('Unable to load data.'); })
       .finally(() => {
         if (isMounted) setIsLoading(false);
       });
@@ -111,7 +113,7 @@ const ParentSubscriptionSummaryPage = () => {
             <h1>{t('subscriptionSummary')}</h1>
           </div>
         </section>
-        {isLoading ? (
+        {loadError && !children.length ? <DataStatus state={{ error: loadError }} /> : isLoading ? (
           <div className="parent-loading-panel"><span className="parent-loading-spinner" /><strong>Loading subscriptions...</strong></div>
         ) : (
           <div className="table-card parent-panel">

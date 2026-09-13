@@ -6594,6 +6594,15 @@ body.rtl .payment-table-wrap {
   line-height: 1.5;
 }
 
+.data-load-status {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 14px;
+}
+
 .loading-spinner {
   width: 44px;
   height: 44px;

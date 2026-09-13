@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
+import DataStatus from '../components/DataStatus.jsx';
+import { useSectionLoader, canShowEmpty } from '../hooks/useSectionLoader.js';
 import { fetchGroups, createGroup, updateGroup, deleteGroup } from '../services/groups.js';
 import { fetchPackageOptions, createPackageOption, updatePackageOption, deletePackageOption } from '../services/packageOptions.js';
 import { confirmAction } from '../utils/confirmAction.js';
@@ -10,6 +12,7 @@ const initialForm = { name: '', days: '', startTime: '', endTime: '', maxCapacit
 const initialPackageForm = { name: '', classes: '', hours: '' };
 
 const GroupsPage = () => {
+  const { states: loadStates, load: loadSection } = useSectionLoader(["groups","packages"]);
   const [groups, setGroups] = useState([]);
   const [packages, setPackages] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState(null);
@@ -23,19 +26,11 @@ const GroupsPage = () => {
   const { t } = useLanguage();
 
   const loadGroups = async () => {
-    try {
-      setGroups(await fetchGroups());
-    } catch (error) {
-      console.error(error);
-    }
+    return loadSection('groups', fetchGroups, setGroups);
   };
 
   const loadPackages = async () => {
-    try {
-      setPackages(await fetchPackageOptions());
-    } catch (error) {
-      console.error(error);
-    }
+    return loadSection('packages', fetchPackageOptions, setPackages);
   };
 
   useEffect(() => {
@@ -237,7 +232,8 @@ const GroupsPage = () => {
                     </td>
                   </tr>
                 ))}
-                {filteredGroups.length === 0 && <tr><td colSpan="6">{t('noGroupsFound')}</td></tr>}
+                {(loadStates.groups.loading || loadStates.groups.error) && <tr><td colSpan="6"><DataStatus state={loadStates.groups} retry={loadGroups} /></td></tr>}
+                {canShowEmpty(loadStates.groups) && filteredGroups.length === 0 && <tr><td colSpan="6">{t('noGroupsFound')}</td></tr>}
               </tbody>
             </table>
           </div>
@@ -280,7 +276,7 @@ const GroupsPage = () => {
             <table className="data-table">
               <thead><tr><th>{t('name')}</th><th>{t('classes')}</th><th>{t('hours')}</th><th>{t('actions')}</th></tr></thead>
               <tbody>
-                {filteredPackages.length ? filteredPackages.map((pkg) => (
+                {loadStates.packages?.loading || loadStates.packages?.error ? <tr><td colSpan="4"><DataStatus state={loadStates.packages} retry={loadPackages} /></td></tr> : filteredPackages.length ? filteredPackages.map((pkg) => (
                   <tr key={pkg._id}>
                     <td>{pkg.name}</td>
                     <td>{pkg.classes ?? 0}</td>
