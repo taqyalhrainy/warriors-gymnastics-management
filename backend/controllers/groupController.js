@@ -287,7 +287,7 @@ const deleteGroup = async (req, res, next) => {
   }
 };
 
-const loadGroupPlayers = async (id) => {
+const loadGroupPlayers = async (id, compact = false) => {
     const players = await Player.find({
       isDeleted: { $ne: true },
       status: { $ne: 'left' },
@@ -301,6 +301,7 @@ const loadGroupPlayers = async (id) => {
       ],
       ...(id ? { $or: [{ groupId: id }, { groupIds: id }] } : {})
     })
+      .select(compact ? { profileImage: 0 } : {})
       .sort({ createdAt: -1, _id: -1 })
       .populate('parentId', 'name email')
       .populate('programId', 'name')
@@ -377,7 +378,7 @@ const getAttendanceBoard = async (req, res, next) => {
     scheduleGroupMaintenance();
     const [groups, players] = await Promise.all([
       TrainingGroup.find().sort({ displayOrder: 1, _id: -1 }).populate('coachId', 'name'),
-      loadGroupPlayers()
+      loadGroupPlayers(undefined, req.query?.compact === 'true')
     ]);
     res.json({ groups: groups.map(formatGroupResponse), players });
   } catch (error) {

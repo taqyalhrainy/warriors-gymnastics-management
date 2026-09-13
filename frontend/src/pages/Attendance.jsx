@@ -442,6 +442,7 @@ const AttendancePage = () => {
   const didRunInitialAttendanceLoadRef = useRef(false);
   const selectedPlayerRef = useRef(null);
   const selectedPlayerFormDirtyRef = useRef(false);
+  const selectedPlayerImageDirtyRef = useRef(false);
   const selectedPlayerLoadRequestIdRef = useRef(0);
   const selectedPlayerEditRequestIdRef = useRef(0);
   const selectedPlayerMutationSequenceRef = useRef(0);
@@ -1695,6 +1696,7 @@ const AttendancePage = () => {
   };
 
   const handleSelectPlayer = async (player) => {
+    selectedPlayerImageDirtyRef.current = false;
     const requestId = ++selectedPlayerLoadRequestIdRef.current;
     selectedPlayerFormDirtyRef.current = false;
     selectedPlayerEditRequestIdRef.current += 1;
@@ -1780,6 +1782,7 @@ const AttendancePage = () => {
 
     const requestId = ++selectedPlayerEditRequestIdRef.current;
     const editingPlayerId = selectedPlayer._id;
+    selectedPlayerImageDirtyRef.current = false;
     selectedPlayerFormDirtyRef.current = false;
 
     try {
@@ -1855,6 +1858,7 @@ const AttendancePage = () => {
     selectedPlayerFormDirtyRef.current = true;
     try {
       const profileImage = await compressProfileImage(file);
+      selectedPlayerImageDirtyRef.current = true;
       setSelectedPlayerForm((current) => ({ ...current, profileImage }));
       setMessage('');
     } catch (error) {
@@ -2733,6 +2737,8 @@ const AttendancePage = () => {
       freezeNote: selectedPlayerForm.status === 'frozen' ? selectedPlayerForm.freezeNote : '',
       showInAttendanceWhenFrozen
     };
+    // A compact board has no image yet; only an explicit image edit may replace it.
+    if (!selectedPlayerImageDirtyRef.current) delete updatePayload.profileImage;
     const optimisticPlayer = {
       ...selectedPlayer,
       ...updatePayload,
@@ -3331,6 +3337,7 @@ const AttendancePage = () => {
                           className="btn-secondary"
                           onClick={() => {
                             selectedPlayerFormDirtyRef.current = true;
+                            selectedPlayerImageDirtyRef.current = true;
                             setSelectedPlayerForm((current) => ({ ...current, profileImage: '' }));
                           }}
                         >

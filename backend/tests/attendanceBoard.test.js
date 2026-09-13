@@ -7,6 +7,7 @@ const path = require('node:path');
 test('batch board preserves group counters with one player query and one attendance query', async () => {
   let playerQueries = 0;
   let attendanceQueries = 0;
+  const projections = [];
   const group = (id) => ({ _id: id, name: id, days: ['Monday'], toObject() { return { _id: id, name: id, days: ['Monday'] }; } });
   const groups = [group('a'), group('b')];
   const player = (id, primary, secondary) => ({
@@ -34,7 +35,9 @@ test('batch board preserves group counters with one player query and one attenda
         assert.equal(filter.isDeleted.$ne, true);
         assert.equal(filter.status.$ne, 'left');
         const id = filter.$or?.[0]?.groupId;
-        return query(id ? players.filter((p) => p.groupId === id || p.groupIds.includes(id)) : players);
+        const result = query(id ? players.filter((p) => p.groupId === id || p.groupIds.includes(id)) : players);
+        result.select = function (projection) { projections.push(projection); return this; };
+        return result;
       } };
       if (name === '../models/Attendance') return { find: () => { attendanceQueries += 1; return query(records); } };
       if (name === '../middleware/validate') return { decodeText: (value) => value, validateObjectId: () => true };
@@ -43,16 +46,18 @@ test('batch board preserves group counters with one player query and one attenda
   });
   const invoke = async (handler, params = {}) => {
     let result;
-    await handler({ params }, { json: (data) => { result = data; } }, (error) => { throw error; });
+    await handler({ params, query: { compact: 'true' } }, { json: (data) => { result = data; } }, (error) => { throw error; });
     return result;
   };
   const board = await invoke(module.exports.getAttendanceBoard);
   assert.equal(playerQueries, 1);
+  assert.equal(projections[0].profileImage, 0);
   assert.equal(attendanceQueries, 1);
   assert.equal(board.players[0].attendancePresentCount, 2);
   assert.equal(board.players[0].paymentRemainingAmount, 75);
   for (const g of groups) {
     const oldRows = await invoke(module.exports.getGroupPlayers, { id: g._id });
+    assert.equal(projections.at(-1).profileImage, undefined);
     const newRows = board.players.filter((p) => p.groupId === g._id || p.groupIds.includes(g._id)).map((p) => ({ ...p, attendanceGroupId: g._id }));
     assert.equal(JSON.stringify(newRows), JSON.stringify(oldRows));
   }

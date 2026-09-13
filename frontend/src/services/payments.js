@@ -2,15 +2,13 @@ import api from './api.js';
 import { fetchCached, invalidateCache } from './cache.js';
 
 export const fetchPayments = async (params = {}) => {
-  if (Object.keys(params).length) {
-    const response = await api.get('/payments', { params });
+  const { fresh, ...query } = params;
+  const entries = Object.entries(query).sort(([a], [b]) => a.localeCompare(b));
+  const key = entries.length ? `payments:list:${JSON.stringify(entries)}` : 'payments:list';
+  return fetchCached(key, async () => {
+    const response = await api.get('/payments', { params: query });
     return response.data;
-  }
-
-  return fetchCached('payments:list', async () => {
-    const response = await api.get('/payments');
-    return response.data;
-  });
+  }, { force: Boolean(fresh) });
 };
 
 export const createPayment = async (data) => {

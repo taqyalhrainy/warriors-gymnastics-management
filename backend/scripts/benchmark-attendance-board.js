@@ -18,7 +18,7 @@ const run = async () => {
     });
     const invoke = async (handler, params = {}) => {
       let data;
-      await handler({ params }, { json: (value) => { data = value; } }, (error) => { throw error; });
+      await handler({ params, query: { compact: 'true' } }, { json: (value) => { data = value; } }, (error) => { throw error; });
       return data;
     };
     let start = performance.now();
@@ -38,6 +38,9 @@ const run = async () => {
     console.log(JSON.stringify({ beforeRequests: groups.length + 1, afterRequests: 1, beforeMs, afterMs,
       beforeBytes: Buffer.byteLength(JSON.stringify(groups)) + oldPlayers.reduce((sum, rows) => sum + Buffer.byteLength(JSON.stringify(rows)), 0),
       afterBytes: Buffer.byteLength(JSON.stringify(board)), countersMatch: true }));
+    const { gzipSync } = require('node:zlib');
+    const candidates = await mongoose.connection.collection('players').find({ isDeleted: { $ne: true }, status: 'active', endDate: { $ne: null } }, { projection: { _id: 1, status: 1, endDate: 1 } }).toArray();
+    console.log(JSON.stringify({ boardRawBytes: Buffer.byteLength(JSON.stringify(board)), boardGzipBytes: gzipSync(JSON.stringify(board), { level: 1 }).length, alertCandidateBytes: Buffer.byteLength(JSON.stringify(candidates)) }));
   } finally {
     await mongoose.disconnect();
   }

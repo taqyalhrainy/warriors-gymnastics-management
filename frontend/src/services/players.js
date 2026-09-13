@@ -1,6 +1,11 @@
 import api from './api.js';
 import { fetchCached, invalidateCache, setCached, touchCacheVersion, updateCached } from './cache.js';
 
+export const fetchPlayerAlertCandidates = () => fetchCached('players:alerts', async () => {
+  const { data } = await api.get('/players/alert-candidates');
+  return data;
+});
+
 export const fetchPlayers = async (params) => {
   if (params && Object.keys(params).length) {
     const paramKeys = Object.keys(params);
@@ -80,7 +85,7 @@ const patchCreatedPlayerIntoCache = (player) => {
     updateCached(`groups:players:${groupId}`, (players) => upsertPlayer(players, player));
   });
 
-  invalidateCache(['reports:', 'parent:']);
+  invalidateCache(['reports:', 'parent:', 'players:alerts', 'groups:attendance-board']);
   touchCacheVersion();
 };
 
@@ -100,6 +105,7 @@ export const updatePlayer = async (id, data) => {
   const response = await api.put(`/players/${id}`, data);
   invalidateCache([
     'players:list',
+    'players:alerts',
     'groups:',
     'payments:',
     'attendance:',

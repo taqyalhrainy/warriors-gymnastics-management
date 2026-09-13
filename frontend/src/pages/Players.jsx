@@ -69,19 +69,10 @@ const PlayersPage = () => {
   const { t } = useLanguage();
 
   useEffect(() => {
-    Promise.all([
-      fetchPlayers(),
-      fetchGroups(),
-      fetchParents(),
-      fetchPackageOptions()
-    ])
-      .then(([playersData, groupsData, parentData, packageData]) => {
-        setPlayers(playersData);
-        setGroups(groupsData);
-        setParents(parentData);
-        setPackageOptions(packageData);
-      })
-      .catch(console.error);
+    fetchPlayers().then(setPlayers).catch(console.error);
+    fetchGroups().then(setGroups).catch(console.error);
+    fetchParents().then(setParents).catch(console.error);
+    fetchPackageOptions().then(setPackageOptions).catch(console.error);
     fetchWaitingList().then(setWaitingList).catch(console.error);
   }, []);
 

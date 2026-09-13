@@ -1,6 +1,7 @@
 const express = require('express');
 const {
   getPlayers,
+  getPlayerAlertCandidates,
   createPlayer,
   getPlayerById,
   updatePlayer,
@@ -11,6 +12,7 @@ const { protect, authorize } = require('../middleware/auth');
 const router = express.Router();
 
 router.use(protect);
+router.get('/alert-candidates', authorize('admin', 'coach', 'receptionist'), getPlayerAlertCandidates);
 router.get('/', authorize('admin', 'coach', 'receptionist', 'parent'), getPlayers);
 router.post('/', authorize('admin', 'coach', 'receptionist'), createPlayer);
 router.get('/:id', authorize('admin', 'coach', 'receptionist', 'parent'), getPlayerById);

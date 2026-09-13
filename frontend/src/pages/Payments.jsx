@@ -174,18 +174,12 @@ const PaymentsPage = () => {
   };
 
   useEffect(() => {
-    fetchPlayers({ fresh: Date.now() }).then(setPlayers).catch(console.error);
-    loadPayments();
+    fetchPlayers().then(setPlayers).catch(console.error);
   }, []);
 
   useEffect(() => {
     loadPayments({ forceAll: isPaymentUnlocked });
-  }, [isPaymentUnlocked]);
-
-  useEffect(() => {
-    if (isPaymentUnlocked || activeView !== 'day') return;
-    loadPayments();
-  }, [selectedDay, activeView, isPaymentUnlocked]);
+  }, [selectedDay, isPaymentUnlocked]);
 
   const handlePaymentUnlock = async (event) => {
     event.preventDefault();

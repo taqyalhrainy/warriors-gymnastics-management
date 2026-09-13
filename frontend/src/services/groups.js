@@ -3,7 +3,7 @@ import { fetchCached, invalidateCache } from './cache.js';
 import { groupBoardPlayers } from '../utils/groupBoardPlayers.js';
 
 export const fetchAttendanceBoard = async (options = {}) => fetchCached('groups:attendance-board', async () => {
-  const { data } = await api.get('/groups/attendance-board');
+  const { data } = await api.get('/groups/attendance-board', { params: { compact: true } });
   return groupBoardPlayers(data);
 }, options);
 

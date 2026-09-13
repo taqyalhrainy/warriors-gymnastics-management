@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { fetchUnreadCount } from '../services/notifications.js';
-import { fetchPlayers } from '../services/players.js';
+import { fetchPlayerAlertCandidates } from '../services/players.js';
 import warriorsLogo from '../assets/warriors-logo.png';
 
 const EXPIRED_ALERT_READ_KEY = 'warriors-expired-alert-read-ids';
@@ -67,7 +67,7 @@ const Sidebar = () => {
 
     let isMounted = true;
     const loadExpiredAlertCount = () => {
-      fetchPlayers({ sidebar: 'expired-alert-count' })
+      fetchPlayerAlertCandidates()
         .then((players) => {
           if (isMounted) setExpiredAlertCount(getUnreadExpiredAlertCount(players));
         })

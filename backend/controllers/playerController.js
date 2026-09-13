@@ -460,4 +460,14 @@ const deletePlayer = async (req, res, next) => {
   }
 };
 
-module.exports = { getPlayers, createPlayer, getPlayerById, updatePlayer, deletePlayer };
+const getPlayerAlertCandidates = async (req, res, next) => {
+  try {
+    const players = await Player.find({ isDeleted: { $ne: true }, status: 'active', endDate: { $ne: null } })
+      .select('_id status endDate').lean();
+    res.json(players);
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { getPlayers, createPlayer, getPlayerById, updatePlayer, deletePlayer, getPlayerAlertCandidates };

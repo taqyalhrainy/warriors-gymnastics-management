@@ -4,6 +4,7 @@ dotenv.config();
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
+const compression = require('compression');
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
 const adminAppHtml = require('./utils/adminAppHtml');
@@ -71,6 +72,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
+app.use('/api', compression({ level: 1 }));
 app.use(
   helmet({
     crossOriginResourcePolicy: false,
