@@ -43,6 +43,12 @@ const decryptOptional = (value) => {
 };
 
 const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
+const getPlayerSubscriptionAmount = (player) => Math.max(0, Number(player?.payment || 0));
+const getPlayerDisplayRemainingAmount = (player, subscriptionRemainingAmount = 0) => Math.max(
+  0,
+  Number(subscriptionRemainingAmount || 0)
+    + (player?.attendanceDueManual ? Number(player.previousDueBalance || 0) - Number(player.dueAdjustment || 0) : 0)
+);
 const getPaginationOptions = (query) => {
   const limit = Math.min(Math.max(parseInt(query.limit, 10) || 0, 0), 100);
   const page = Math.max(parseInt(query.page, 10) || 1, 1);
@@ -97,9 +103,7 @@ const recalculatePlayerPayments = async (playerId) => {
   if (!player) return;
 
   const payments = await Payment.find({ playerId }).sort({ paymentDate: 1, _id: 1 });
-  const totalAmount = Number(player.previousDueBalance || 0)
-    + Number(player.payment || 0)
-    - Number(player.dueAdjustment || 0);
+  const totalAmount = getPlayerSubscriptionAmount(player);
   let runningPaid = 0;
 
   for (const payment of payments) {
@@ -110,6 +114,7 @@ const recalculatePlayerPayments = async (playerId) => {
       runningPaid += Number(payment.paidAmount || 0);
       payment.totalAmount = totalAmount;
       payment.remainingAmount = totalAmount ? Math.max(0, totalAmount - runningPaid) : 0;
+      payment.transactionType = getSubscriptionTransactionType(payment.remainingAmount);
     } else {
       payment.totalAmount = 0;
       payment.remainingAmount = 0;
@@ -133,6 +138,9 @@ const getTransactionType = (value, remainingAmount) => {
   if (value) return String(value).trim();
   return Number(remainingAmount || 0) <= 0 ? 'Full payment' : 'Partial payment';
 };
+const getSubscriptionTransactionType = (remainingAmount) => (
+  Number(remainingAmount || 0) <= 0 ? 'Full payment' : 'Partial payment'
+);
 
 const getDateOnly = (value) => {
   const date = value ? new Date(value) : new Date(0);
@@ -167,10 +175,14 @@ const getCurrentPaymentSummaryMap = async (players) => {
   }).select('playerId paidAmount paymentDate createdAt transactionType').lean();
 
   const summaryMap = new Map(players.map((player) => {
-    const totalAmount = Number(player.previousDueBalance || 0)
-      + Number(player.payment || 0)
-      - Number(player.dueAdjustment || 0);
-    return [String(player._id), { totalAmount, paidAmount: 0, remainingAmount: Math.max(0, totalAmount) }];
+    const totalAmount = getPlayerSubscriptionAmount(player);
+    const remainingAmount = Math.max(0, totalAmount);
+    return [String(player._id), {
+      totalAmount,
+      paidAmount: 0,
+      remainingAmount,
+      displayRemainingAmount: getPlayerDisplayRemainingAmount(player, remainingAmount)
+    }];
   }));
 
   paymentRows.forEach((payment) => {
@@ -180,6 +192,7 @@ const getCurrentPaymentSummaryMap = async (players) => {
     if (!player || !summary || !isPaymentInPlayerCurrentSubscription(payment, player)) return;
     summary.paidAmount += Number(payment.paidAmount || 0);
     summary.remainingAmount = Math.max(0, Number(summary.totalAmount || 0) - summary.paidAmount);
+    summary.displayRemainingAmount = getPlayerDisplayRemainingAmount(player, summary.remainingAmount);
   });
 
   return summaryMap;
@@ -246,7 +259,7 @@ const formatPaymentsWithAttendanceCounts = async (payments) => {
       row.playerId.currentSubscriptionPaidAmount = paymentSummary?.paidAmount || 0;
       if (isSubscriptionPaymentType(row.transactionType) && paymentSummary) {
         row.totalAmount = paymentSummary.totalAmount;
-        row.remainingAmount = paymentSummary.remainingAmount;
+        row.remainingAmount = paymentSummary.displayRemainingAmount ?? paymentSummary.remainingAmount;
       }
     }
     return row;
@@ -357,10 +370,11 @@ const createPayment = async (req, res, next) => {
       { $match: { transactionType: { $in: ['Full payment', 'Partial payment'] } } },
       { $group: { _id: '$playerId', totalPaid: { $sum: '$paidAmount' } } }
     ]) : [];
-    const playerTotalAmount = Number(player.previousDueBalance || 0) + Number(player.payment || 0) - Number(player.dueAdjustment || 0);
+    const playerTotalAmount = getPlayerSubscriptionAmount(player);
     const totalPaidBefore = previousPaid[0]?.totalPaid || 0;
     const totalPaidAfter = totalPaidBefore + parseLocalizedNumber(paidAmount);
     const remainingAmount = subscriptionPayment && playerTotalAmount ? Math.max(0, playerTotalAmount - totalPaidAfter) : 0;
+    const displayRemainingAmount = subscriptionPayment ? getPlayerDisplayRemainingAmount(player, remainingAmount) : 0;
     const parentRecord = await Parent.findById(player.parentId).populate('userId');
     const payment = await Payment.create({
       playerId,
@@ -372,8 +386,8 @@ const createPayment = async (req, res, next) => {
       packageHoursSnapshot: parseLocalizedNumber(player.packageHours),
       totalAmount: subscriptionPayment ? playerTotalAmount : 0,
       paidAmount: parseLocalizedNumber(paidAmount),
-      remainingAmount,
-      transactionType: getTransactionType(transactionType, remainingAmount),
+      remainingAmount: displayRemainingAmount,
+      transactionType: subscriptionPayment ? getSubscriptionTransactionType(remainingAmount) : getTransactionType(transactionType, 0),
       paymentMethod,
       paymentDate: parsePaymentDate(paymentDate),
       receiptImage: receiptImage || '',

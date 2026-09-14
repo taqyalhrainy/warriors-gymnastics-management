@@ -214,7 +214,7 @@ const getPlayers = async (req, res, next) => {
     const query = Player.find(filter)
       .sort({ createdAt: -1, _id: -1 })
       .select(compact
-        ? '_id fullName status parentId parentPhoneEncrypted groupId groupIds packageName subscriptionId'
+        ? '_id fullName status parentId parentPhoneEncrypted groupId groupIds packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual startDate currentSubscriptionStartedAt subscriptionId'
         : undefined)
       .populate('parentId', compact ? 'name phoneEncrypted' : 'name email userId phoneEncrypted')
       .populate('programId', compact ? 'name' : 'name level')

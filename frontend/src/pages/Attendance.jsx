@@ -2047,6 +2047,12 @@ const AttendancePage = () => {
     ));
   }, [showSubscriptionModal, subscriptionForm.startDate, subscriptionForm.groupIds, subscriptionForm.scheduleMode, subscriptionForm.customDays, subscriptionForm.customClasses, selectedPlayer, groupColumns]);
 
+  const closeSubscriptionModal = () => {
+    if (isSavingSubscription) return;
+    const confirmed = window.confirm('Exit without saving this subscription?');
+    if (confirmed) setShowSubscriptionModal(false);
+  };
+
   const handleSubscriptionSave = async (event, keepWarning = false) => {
     event.preventDefault();
     if (!selectedPlayer?._id || isSavingSubscription) {
@@ -3742,14 +3748,14 @@ const AttendancePage = () => {
         )}
 
         {showSubscriptionModal && selectedPlayer && (
-          <div className="student-modal-backdrop" role="presentation" onClick={() => setShowSubscriptionModal(false)}>
+          <div className="student-modal-backdrop" role="presentation" onClick={closeSubscriptionModal}>
             <div className="student-modal new-subscription-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
               <div className="student-modal-header">
                 <div>
                   <h2>New Subscription</h2>
                   <p>{selectedPlayer.fullName} - choose the new subscription dates.</p>
                 </div>
-                <button className="btn-secondary" type="button" onClick={() => setShowSubscriptionModal(false)}>Close</button>
+                <button className="btn-secondary" type="button" onClick={closeSubscriptionModal}>Close</button>
               </div>
               <p className="new-subscription-warning">Warning: this starts a fresh subscription counter for this player.</p>
               {subscriptionMessage && <p className="alert-error">{subscriptionMessage}</p>}
@@ -3878,7 +3884,7 @@ const AttendancePage = () => {
                   >
                     <span>{isSavingSubscription ? 'Saving...' : 'Start and keep warning'}</span>
                   </button>
-                  <button className="btn-secondary" type="button" onClick={() => setShowSubscriptionModal(false)}>Cancel</button>
+                  <button className="btn-secondary" type="button" onClick={closeSubscriptionModal}>Cancel</button>
                 </div>
               </form>
             </div>

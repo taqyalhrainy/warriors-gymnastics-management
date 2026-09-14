@@ -87,9 +87,12 @@ const isPaymentInCurrentSubscription = (payment, player) => {
   return new Date(payment.paymentDate || 0) >= new Date(player.startDate);
 };
 const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
-const getPlayerSubscriptionTotal = (player) => Math.max(0, Number(player?.previousDueBalance || 0)
-  + Number(player?.payment || 0)
-  - Number(player?.dueAdjustment || 0));
+const getPlayerSubscriptionTotal = (player) => Math.max(0, Number(player?.payment || 0));
+const getPlayerDueDisplayAmount = (player) => (
+  player?.attendanceDueManual
+    ? Math.max(0, Number(player?.previousDueBalance || 0) - Number(player?.dueAdjustment || 0))
+    : 0
+);
 const getPackageName = (payment) => {
   const classes = payment.playerId?.packageClasses || payment.packageClassesSnapshot;
   const hours = payment.playerId?.packageHours || payment.packageHoursSnapshot;
@@ -141,7 +144,6 @@ const PaymentsPage = () => {
   const [pendingPaymentView, setPendingPaymentView] = useState('');
   const [paymentAccessPassword, setPaymentAccessPassword] = useState('');
   const [isUnlockingPayment, setIsUnlockingPayment] = useState(false);
-  const [isTransactionTouched, setIsTransactionTouched] = useState(false);
   const [editingPaymentId, setEditingPaymentId] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -237,6 +239,8 @@ const PaymentsPage = () => {
     const player = players.find((item) => item._id === playerId);
     if (!player) return 'Partial payment';
     const totalAmount = getPlayerSubscriptionTotal(player);
+    const currentPaidAmount = parseLocalizedNumber(paidAmount);
+    if (totalAmount && currentPaidAmount >= totalAmount) return 'Full payment';
     const paidBefore = payments
       .filter((payment) => (
         String(payment.playerId?._id || payment.playerId) === String(playerId)
@@ -246,7 +250,7 @@ const PaymentsPage = () => {
       ))
       .reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
     const remainingBefore = totalAmount ? Math.max(0, totalAmount - paidBefore) : 0;
-    return remainingBefore && parseLocalizedNumber(paidAmount) < remainingBefore ? 'Partial payment' : 'Full payment';
+    return remainingBefore && currentPaidAmount < remainingBefore ? 'Partial payment' : 'Full payment';
   };
 
   const buildOptimisticPayment = (payload, id) => {
@@ -263,7 +267,10 @@ const PaymentsPage = () => {
     const paidAmount = Number(payload.paidAmount || 0);
     const subscriptionPayment = isSubscriptionPaymentType(payload.transactionType);
     const isCustomPayer = payload.payerMode === 'custom';
-    const remainingAmount = !isCustomPayer && subscriptionPayment ? Math.max(0, subscriptionTotal - paidBefore - paidAmount) : 0;
+    const subscriptionRemainingAmount = !isCustomPayer && subscriptionPayment ? Math.max(0, subscriptionTotal - paidBefore - paidAmount) : 0;
+    const remainingAmount = !isCustomPayer && subscriptionPayment
+      ? subscriptionRemainingAmount + getPlayerDueDisplayAmount(player)
+      : 0;
 
     return {
       ...(editingPaymentId ? payments.find((payment) => payment._id === editingPaymentId) : {}),
@@ -287,13 +294,12 @@ const PaymentsPage = () => {
   };
 
   useEffect(() => {
-    if (isTransactionTouched) return;
     if (form.payerMode === 'custom') return;
     setForm((current) => ({
       ...current,
       transactionType: getAutoTransactionType(current.playerId, current.paidAmount)
     }));
-  }, [form.payerMode, form.playerId, form.paidAmount, players, payments, editingPaymentId, isTransactionTouched]);
+  }, [form.payerMode, form.playerId, form.paidAmount, players, payments, editingPaymentId]);
 
   const totals = useMemo(() => {
     const paid = payments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
@@ -322,7 +328,7 @@ const PaymentsPage = () => {
           && isSubscriptionPaymentType(getTransactionLabel(payment))
         ))
         .reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
-      const remainingAmount = Math.max(0, currentTotalAmount - paidAmount);
+      const remainingAmount = Math.max(0, currentTotalAmount - paidAmount) + getPlayerDueDisplayAmount(player);
       if (!remainingAmount) return null;
       return {
         _id: `pending-${player._id}`,
@@ -441,7 +447,6 @@ const PaymentsPage = () => {
           : [optimisticPayment, ...current]
       ));
       setForm({ ...initialPaymentForm, paymentDate: getDateInputValue() });
-      setIsTransactionTouched(false);
       setEditingPaymentId('');
       setPlayerSearch('');
       setIsSubmitting(true);
@@ -485,7 +490,6 @@ const PaymentsPage = () => {
       paymentDate: getDateInputValue(payment.paymentDate),
       notes: payment.notes || ''
     });
-    setIsTransactionTouched(false);
     setPlayerSearch(payment.playerId?.fullName || '');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -493,7 +497,6 @@ const PaymentsPage = () => {
   const handleCancelEdit = () => {
     setEditingPaymentId('');
     setForm({ ...initialPaymentForm, paymentDate: getDateInputValue() });
-    setIsTransactionTouched(false);
     setPlayerSearch('');
   };
 
@@ -588,7 +591,6 @@ const PaymentsPage = () => {
                       <select
                         value={form.payerMode}
                         onChange={(event) => {
-                          setIsTransactionTouched(false);
                           setForm({
                             ...form,
                             payerMode: event.target.value,
@@ -622,7 +624,6 @@ const PaymentsPage = () => {
                         <select
                           value={form.playerId}
                           onChange={(e) => {
-                            setIsTransactionTouched(false);
                             setForm({ ...form, playerId: e.target.value });
                           }}
                           required
@@ -641,7 +642,9 @@ const PaymentsPage = () => {
                       type="text"
                       inputMode="decimal"
                       value={form.paidAmount}
-                      onChange={(e) => setForm({ ...form, paidAmount: normalizeDigits(e.target.value) })}
+                      onChange={(e) => {
+                        setForm({ ...form, paidAmount: normalizeDigits(e.target.value) });
+                      }}
                       required
                     />
                   </label>
@@ -651,7 +654,6 @@ const PaymentsPage = () => {
                     <select
                       value={form.transactionType}
                       onChange={(e) => {
-                        setIsTransactionTouched(true);
                         setForm({ ...form, transactionType: e.target.value, customTransactionType: e.target.value === 'custom' ? form.customTransactionType : '' });
                       }}
                     >
