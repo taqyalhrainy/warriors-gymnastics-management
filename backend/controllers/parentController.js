@@ -17,6 +17,13 @@ const { createAuditLog } = require('../utils/audit');
 const { encrypt, decrypt } = require('../utils/encryption');
 
 const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
+const escapeRegex = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const getPaginationOptions = (query) => {
+  const limit = Math.min(Math.max(parseInt(query.limit, 10) || 0, 0), 100);
+  const page = Math.max(parseInt(query.page, 10) || 1, 1);
+  return { limit, page, skip: limit ? (page - 1) * limit : 0 };
+};
 
 const isOnOrAfter = (value, date) => {
   if (!value || !date) return false;
@@ -332,19 +339,40 @@ const getCurrentParent = async (user) => {
 
 const getParents = async (req, res, next) => {
   try {
-    const parents = await Parent.find()
+    const filter = {};
+    if (req.query.search) {
+      filter.name = new RegExp(escapeRegex(req.query.search), 'i');
+    }
+    const { limit, page, skip } = getPaginationOptions(req.query);
+    const query = Parent.find(filter)
       .sort({ _id: -1 })
       .populate('userId', 'name email role isActive')
       .populate('children', 'fullName status programId groupId groupIds subscriptionId');
+    if (limit) query.skip(skip).limit(limit);
+    const [parents, total] = await Promise.all([
+      query,
+      limit ? Parent.countDocuments(filter) : Promise.resolve(null)
+    ]);
+    const parentIds = parents.map((parent) => parent._id);
     const childCounts = await Player.aggregate([
-      { $match: { isDeleted: { $ne: true } } },
+      { $match: { parentId: { $in: parentIds }, isDeleted: { $ne: true } } },
       { $group: { _id: '$parentId', count: { $sum: 1 } } }
     ]);
     const countMap = new Map(childCounts.map((item) => [String(item._id), item.count]));
-    res.json(parents.map((parent) => ({
+    const items = parents.map((parent) => ({
       ...formatParentResponse(parent),
       childrenCount: countMap.get(String(parent._id)) || 0
-    })));
+    }));
+    if (limit) {
+      return res.json({
+        items,
+        total,
+        page,
+        limit,
+        hasMore: skip + parents.length < total
+      });
+    }
+    res.json(items);
   } catch (error) {
     next(error);
   }

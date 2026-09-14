@@ -51,6 +51,15 @@ export const fetchParents = async () => {
   });
 };
 
+export const fetchParentsPage = async (params = {}) => {
+  const entries = Object.entries(params).sort(([a], [b]) => a.localeCompare(b));
+  const key = `parents:page:${JSON.stringify(entries)}`;
+  return fetchCached(key, async () => {
+    const response = await api.get('/parents', { params });
+    return response.data;
+  });
+};
+
 export const createParent = async (data) => {
   const response = await api.post('/parents', data);
   invalidateCache(['parents:', 'players:', 'reports:', 'parent:']);

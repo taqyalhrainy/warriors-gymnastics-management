@@ -49,6 +49,12 @@ const normalizeGroupIds = (payload) => {
 
 const escapeRegex = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+const getPaginationOptions = (query) => {
+  const limit = Math.min(Math.max(parseInt(query.limit, 10) || 0, 0), 100);
+  const page = Math.max(parseInt(query.page, 10) || 1, 1);
+  return { limit, page, skip: limit ? (page - 1) * limit : 0 };
+};
+
 const getPlayerGroupIds = (player) => {
   if (player.groupIds?.length) {
     return normalizeGroupIds({ groupIds: player.groupIds.map(String) });
@@ -183,13 +189,49 @@ const getPlayers = async (req, res, next) => {
     if (req.query.parentId && validateObjectId(req.query.parentId)) {
       filter.parentId = req.query.parentId;
     }
-    const players = await Player.find(filter)
+    if (req.query.status && req.query.status !== 'all') {
+      filter.status = req.query.status;
+    }
+    if (req.query.groupId && req.query.groupId !== 'all' && validateObjectId(req.query.groupId)) {
+      filter.$or = [{ groupId: req.query.groupId }, { groupIds: req.query.groupId }];
+    }
+    if (req.query.subscription && req.query.subscription !== 'all') {
+      if (req.query.subscription === 'none') {
+        filter.$and = [
+          ...(filter.$and || []),
+          { $or: [{ packageName: { $in: ['', null] } }, { packageName: { $exists: false } }] }
+        ];
+      } else {
+        filter.packageName = req.query.subscription;
+      }
+    }
+    if (req.query.search) {
+      filter.fullName = new RegExp(escapeRegex(req.query.search), 'i');
+    }
+
+    const { limit, page, skip } = getPaginationOptions(req.query);
+    const query = Player.find(filter)
       .sort({ createdAt: -1, _id: -1 })
       .populate('parentId', 'name email userId phoneEncrypted')
       .populate('programId', 'name level')
       .populate('groupId', 'name days startTime endTime')
       .populate('groupIds', 'name days startTime endTime')
       .populate('coachId', 'name');
+
+    if (limit) query.skip(skip).limit(limit);
+    const [players, total] = await Promise.all([
+      query,
+      limit ? Player.countDocuments(filter) : Promise.resolve(null)
+    ]);
+    if (limit) {
+      return res.json({
+        items: players.map(formatPlayerResponse),
+        total,
+        page,
+        limit,
+        hasMore: skip + players.length < total
+      });
+    }
     res.json(players.map(formatPlayerResponse));
   } catch (error) {
     next(error);

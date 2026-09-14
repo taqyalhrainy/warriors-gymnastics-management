@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import DataStatus from '../components/DataStatus.jsx';
 import { useSectionLoader, canShowEmpty, isSectionBlocking } from '../hooks/useSectionLoader.js';
-import { fetchPlayers, deletePlayer, createPlayer } from '../services/players.js';
+import { fetchPlayers, fetchPlayersPage, deletePlayer, createPlayer } from '../services/players.js';
 import { fetchGroups } from '../services/groups.js';
 import { createParent, fetchParents } from '../services/parents.js';
 import { fetchPackageOptions } from '../services/packageOptions.js';
@@ -44,6 +44,8 @@ const initialMovePlayerForm = {
   parentSearch: ''
 };
 
+const PLAYER_PAGE_SIZE = 20;
+
 const PlayersPage = () => {
   const { states: loadStates, load: loadSection } = useSectionLoader(["players","groups","parents","packages","waiting"]);
   const [players, setPlayers] = useState([]);
@@ -66,13 +68,52 @@ const PlayersPage = () => {
   const [waitingDayFilter, setWaitingDayFilter] = useState('all');
   const [waitingAgeFilter, setWaitingAgeFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [playersTotal, setPlayersTotal] = useState(0);
+  const [playersPage, setPlayersPage] = useState(1);
+  const [playersHasMore, setPlayersHasMore] = useState(false);
   const [statusView, setStatusView] = useState('all');
   const [groupFilter, setGroupFilter] = useState('all');
   const [subscriptionFilter, setSubscriptionFilter] = useState('all');
   const { t } = useLanguage();
 
+  const normalizePhoneForMatch = (value) => normalizeDigits(value).replace(/\D/g, '');
+  const searchText = search.trim().toLowerCase();
+  const searchPhone = normalizePhoneForMatch(search);
+
+  const loadPlayersPage = async (page = 1, append = false) => {
+    const loader = searchPhone
+      ? fetchPlayers
+      : () => fetchPlayersPage({
+        page,
+        limit: PLAYER_PAGE_SIZE,
+        status: statusView,
+        groupId: groupFilter,
+        subscription: subscriptionFilter,
+        search: search.trim()
+      });
+
+    return loadSection('players', loader, (data) => {
+      if (Array.isArray(data)) {
+        setPlayers(data);
+        setPlayersTotal(data.length);
+        setPlayersPage(1);
+        setPlayersHasMore(false);
+        return;
+      }
+
+      const rows = data?.items || [];
+      setPlayers((current) => (append ? [...current, ...rows] : rows));
+      setPlayersTotal(data?.total || rows.length);
+      setPlayersPage(data?.page || page);
+      setPlayersHasMore(Boolean(data?.hasMore));
+    });
+  };
+
   useEffect(() => {
-    loadSection('players', fetchPlayers, setPlayers);
+    loadPlayersPage(1, false);
+  }, [statusView, groupFilter, subscriptionFilter, search]);
+
+  useEffect(() => {
     loadSection('groups', fetchGroups, setGroups);
   }, []);
 
@@ -127,18 +168,7 @@ const PlayersPage = () => {
     .filter(Boolean))]
     .sort((first, second) => first.localeCompare(second));
 
-  const normalizePhoneForMatch = (value) => normalizeDigits(value).replace(/\D/g, '');
-  const searchText = search.trim().toLowerCase();
-  const searchPhone = normalizePhoneForMatch(search);
-
   const filteredPlayers = players
-    .filter((player) => statusView === 'all' || (player.status || 'active') === statusView)
-    .filter((player) => groupFilter === 'all' || getPlayerGroupIds(player).includes(groupFilter))
-    .filter((player) => (
-      subscriptionFilter === 'all'
-      || (subscriptionFilter === 'none' && !getPlayerSubscriptionName(player))
-      || getPlayerSubscriptionName(player) === subscriptionFilter
-    ))
     .filter((player) => [
       player.fullName,
       getPlayerGroups(player),
@@ -481,7 +511,7 @@ const PlayersPage = () => {
           <div className="table-toolbar">
             <div>
               <h2>{statusTabs.find((tab) => tab.key === statusView)?.label || t('players')}</h2>
-              <p className="table-filter-count">{loadStates.players.ready ? `${filteredPlayers.length} of ${players.length}` : '...'}</p>
+              <p className="table-filter-count">{loadStates.players.ready ? `${filteredPlayers.length} of ${playersTotal || players.length}` : '...'}</p>
             </div>
             <div className="player-filter-bar">
               <label className="table-search">
@@ -524,7 +554,7 @@ const PlayersPage = () => {
               </tr>
             </thead>
             <tbody>
-              {(loadStates.players.loading || loadStates.players.error) && <tr><td colSpan="5"><DataStatus state={loadStates.players} retry={() => loadSection('players', fetchPlayers, setPlayers)} /></td></tr>}
+              {(loadStates.players.loading || loadStates.players.error) && <tr><td colSpan="5"><DataStatus state={loadStates.players} retry={() => loadPlayersPage(1, false)} /></td></tr>}
               {canShowEmpty(loadStates.players) && filteredPlayers.length === 0 && <tr><td colSpan="5">{t('noPlayersYet')}</td></tr>}
               {filteredPlayers.map((player) => (
                 <tr key={player._id}>
@@ -541,6 +571,18 @@ const PlayersPage = () => {
               ))}
             </tbody>
           </table>
+          {playersHasMore && (
+            <div className="show-more-row">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={loadStates.players.loading}
+                onClick={() => loadPlayersPage(playersPage + 1, true)}
+              >
+                Show more
+              </button>
+            </div>
+          )}
         </div>
         {isWaitingFormOpen && (
           <div className="student-modal-backdrop" role="presentation" onClick={closeWaitingListModal}>

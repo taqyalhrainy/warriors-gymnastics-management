@@ -27,6 +27,15 @@ export const fetchPlayers = async (params) => {
   });
 };
 
+export const fetchPlayersPage = async (params = {}) => {
+  const entries = Object.entries(params).sort(([a], [b]) => a.localeCompare(b));
+  const key = `players:page:${JSON.stringify(entries)}`;
+  return fetchCached(key, async () => {
+    const response = await api.get('/players', { params });
+    return response.data;
+  });
+};
+
 const invalidatePlayerRelatedCache = (playerId) => {
   invalidateCache([
     'players:',

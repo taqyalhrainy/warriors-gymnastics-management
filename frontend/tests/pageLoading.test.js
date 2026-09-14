@@ -113,7 +113,12 @@ test('players table renders rows while unrelated group options are pending', asy
   const optional = async () => { optionalRequests++; return []; };
   const unused = () => {};
   const render = await mount('../src/pages/Players.jsx', {
-    '../services/players.js': { fetchPlayers: () => players.promise, deletePlayer: unused, createPlayer: unused },
+    '../services/players.js': {
+      fetchPlayers: () => players.promise,
+      fetchPlayersPage: () => players.promise.then((items) => ({ items, total: items.length, page: 1, hasMore: false })),
+      deletePlayer: unused,
+      createPlayer: unused
+    },
     '../services/groups.js': { fetchGroups: () => groups.promise },
     '../services/parents.js': { fetchParents: optional, createParent: unused },
     '../services/packageOptions.js': { fetchPackageOptions: optional },

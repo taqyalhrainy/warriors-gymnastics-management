@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
 import DataStatus from '../components/DataStatus.jsx';
 import { useSectionLoader, canShowEmpty } from '../hooks/useSectionLoader.js';
-import { fetchParents, createParent, updateParent, deleteParent } from '../services/parents';
+import { fetchParentsPage, createParent, updateParent, deleteParent } from '../services/parents';
 import { confirmAction } from '../utils/confirmAction.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
 const initialForm = { name: '', phone: '', password: '', isActive: true };
+const PARENT_PAGE_SIZE = 20;
 
 const Parents = () => {
   const { states: loadStates, load: loadSection } = useSectionLoader(["parents"]);
@@ -16,16 +17,29 @@ const Parents = () => {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [parentsTotal, setParentsTotal] = useState(0);
+  const [parentsPage, setParentsPage] = useState(1);
+  const [parentsHasMore, setParentsHasMore] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const { t } = useLanguage();
 
-  const loadParents = async () => {
-    return loadSection('parents', fetchParents, setParents);
+  const loadParents = async (page = 1, append = false) => {
+    return loadSection('parents', () => fetchParentsPage({
+      page,
+      limit: PARENT_PAGE_SIZE,
+      search: search.trim()
+    }), (data) => {
+      const rows = data?.items || [];
+      setParents((current) => (append ? [...current, ...rows] : rows));
+      setParentsTotal(data?.total || rows.length);
+      setParentsPage(data?.page || page);
+      setParentsHasMore(Boolean(data?.hasMore));
+    });
   };
 
   useEffect(() => {
-    loadParents();
-  }, []);
+    loadParents(1, false);
+  }, [search]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -48,7 +62,7 @@ const Parents = () => {
       setForm(initialForm);
       setSelectedParent(null);
       setShowPassword(false);
-      loadParents();
+      loadParents(1, false);
     } catch (err) {
       setError(err.response?.data?.message || 'Unable to save parent.');
     }
@@ -85,7 +99,7 @@ const Parents = () => {
       await deleteParent(id);
       setMessage('Parent removed successfully.');
       if (selectedParent?._id === id) resetForm();
-      loadParents();
+      loadParents(1, false);
     } catch (err) {
       setError(err.response?.data?.message || 'Could not delete parent.');
     }
@@ -154,12 +168,13 @@ const Parents = () => {
           <div className="table-card">
             <div className="table-toolbar">
               <h2>{t('parentList')}</h2>
+              <p className="table-filter-count">{loadStates.parents.ready ? `${filteredParents.length} of ${parentsTotal || parents.length}` : '...'}</p>
               <label className="table-search">
                 <span>Search</span>
                 <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search parents..." />
               </label>
             </div>
-            <DataStatus state={loadStates.parents} retry={loadParents} />
+            <DataStatus state={loadStates.parents} retry={() => loadParents(1, false)} />
             {filteredParents.length === 0 ? (
               canShowEmpty(loadStates.parents) && <p>{t('noParentsAvailable')}</p>
             ) : (
@@ -188,6 +203,18 @@ const Parents = () => {
                   ))}
                 </tbody>
               </table>
+            )}
+            {parentsHasMore && (
+              <div className="show-more-row">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={loadStates.parents.loading}
+                  onClick={() => loadParents(parentsPage + 1, true)}
+                >
+                  Show more
+                </button>
+              </div>
             )}
           </div>
         </div>
