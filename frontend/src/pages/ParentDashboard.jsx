@@ -65,11 +65,13 @@ const getUniqueParentChildren = (children = []) => {
 
 const getVisibleRemaining = (child) => Number(child?.visibleRemainingAmount ?? (child?.attendanceDueManual ? child.remainingAmount : 0) ?? 0);
 const getVisiblePaid = (child) => Number(child?.paidTotal ?? child?.currentSubscriptionPaidAmount ?? 0);
+const CHILDREN_PAGE_SIZE = 6;
 
 const ParentDashboard = () => {
   const [dashboard, setDashboard] = useState(() => getCachedParentDashboard() || null);
   const [isLoading, setIsLoading] = useState(() => !getCachedParentDashboard());
   const [previewProfileImage, setPreviewProfileImage] = useState('');
+  const [visibleChildrenCount, setVisibleChildrenCount] = useState(CHILDREN_PAGE_SIZE);
   const { t } = useLanguage();
   const [loadError, setLoadError] = useState('');
   const { user } = useAuth();
@@ -90,6 +92,7 @@ const ParentDashboard = () => {
   }, []);
 
   const children = getUniqueParentChildren(dashboard?.children || []).filter((child) => child.status !== 'left');
+  const visibleChildren = children.slice(0, visibleChildrenCount);
   const notifications = dashboard?.notifications || [];
   const totalRemaining = children.reduce((sum, child) => sum + getVisibleRemaining(child), 0);
   const activeChildren = children.filter((child) => child.status === 'active').length;
@@ -174,7 +177,7 @@ const ParentDashboard = () => {
           </div>
         </section>
         <section className="parent-child-grid parent-dashboard-grid">
-          {children.length ? children.map((child) => (
+          {children.length ? visibleChildren.map((child) => (
             <Link className="parent-child-card" to="/parent/children" key={child._id}>
               <div className="parent-child-head">
                 {renderChildName(child)}
@@ -191,6 +194,13 @@ const ParentDashboard = () => {
             <section className="parent-panel"><p className="empty-state">{t('noChildRecords')}</p></section>
           )}
         </section>
+        {visibleChildren.length < children.length && (
+          <div className="show-more-row">
+            <button type="button" className="btn-secondary" onClick={() => setVisibleChildrenCount((count) => count + CHILDREN_PAGE_SIZE)}>
+              Show more
+            </button>
+          </div>
+        )}
         </>
         )}
         {previewProfileImage && (

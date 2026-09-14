@@ -52,17 +52,20 @@ const getChildGroups = (child) => {
 
 const getVisibleRemaining = (child) => Number(child?.visibleRemainingAmount ?? (child?.attendanceDueManual ? child.remainingAmount : 0) ?? 0);
 const getVisiblePaid = (child) => Number(child?.paidTotal ?? child?.currentSubscriptionPaidAmount ?? 0);
+const CHILDREN_PAGE_SIZE = 8;
 
 const ParentChildrenPage = () => {
   const cached = getCachedParentDashboard();
   const [dashboard, setDashboard] = useState(() => cached || null);
   const [isLoading, setIsLoading] = useState(() => !cached);
   const [selectedChildId, setSelectedChildId] = useState('');
+  const [visibleChildrenCount, setVisibleChildrenCount] = useState(CHILDREN_PAGE_SIZE);
   const [previewProfileImage, setPreviewProfileImage] = useState('');
   const navigate = useNavigate();
   const { t } = useLanguage();
   const [loadError, setLoadError] = useState('');
   const children = getUniqueChildren(dashboard?.children || []).filter((child) => child.status !== 'left');
+  const visibleChildren = children.slice(0, visibleChildrenCount);
 
   useEffect(() => {
     let isMounted = true;
@@ -123,7 +126,7 @@ const ParentChildrenPage = () => {
           <div className="parent-loading-panel"><span className="parent-loading-spinner" /><strong>Loading children...</strong></div>
         ) : (
           <section className="parent-children-list">
-            {children.length ? children.map((child) => {
+            {children.length ? visibleChildren.map((child) => {
               const isSelected = selectedChildId === child._id;
               return (
                 <div className="parent-child-summary-wrap" key={child._id}>
@@ -148,6 +151,13 @@ const ParentChildrenPage = () => {
                 </div>
               );
             }) : <div className="parent-panel"><p className="empty-state">{t('noChildRecords')}</p></div>}
+            {visibleChildren.length < children.length && (
+              <div className="show-more-row">
+                <button type="button" className="btn-secondary" onClick={() => setVisibleChildrenCount((count) => count + CHILDREN_PAGE_SIZE)}>
+                  Show more
+                </button>
+              </div>
+            )}
           </section>
         )}
         {previewProfileImage && (

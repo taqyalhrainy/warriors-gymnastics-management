@@ -101,6 +101,7 @@ const isCurrentRecord = (record, child) => {
 };
 
 const getCurrentSubscriptionCycleKey = (child) => getDateInputValue(child.currentSubscriptionStartedAt || child.startDate || child.subscriptionId?.startDate);
+const CHILDREN_PAGE_SIZE = 8;
 
 const getAttendanceRecordsForSubscription = (records, child, cycle, cycles) => {
   const sortedAsc = [...cycles].sort((first, second) => new Date(first.startDate) - new Date(second.startDate));
@@ -130,6 +131,7 @@ const ParentAttendancePage = () => {
   const [isLoading, setIsLoading] = useState(() => !cachedAttendance);
   const [previewProfileImage, setPreviewProfileImage] = useState('');
   const [historyByChildId, setHistoryByChildId] = useState({});
+  const [visibleChildrenCount, setVisibleChildrenCount] = useState(CHILDREN_PAGE_SIZE);
   const { states: loadStates, load: loadSection } = useSectionLoader();
   const [loadError, setLoadError] = useState('');
   const navigate = useNavigate();
@@ -232,6 +234,7 @@ const ParentAttendancePage = () => {
   const totalUsed = [...packagesByChild.values()]
     .flat()
     .reduce((sum, item) => sum + Number(item.used || 0), 0);
+  const visibleChildren = children.slice(0, visibleChildrenCount);
 
   return (
     <div className="dashboard-layout parent-app-layout">
@@ -258,7 +261,7 @@ const ParentAttendancePage = () => {
           </div>
         ) : (
         <div className="parent-attendance-player-list">
-          {children.length ? children.map((child) => {
+          {children.length ? visibleChildren.map((child) => {
             const childPackages = packagesByChild.get(String(child._id)) || [];
             const isChildOpen = openChildId === String(child._id);
             return (
@@ -310,6 +313,13 @@ const ParentAttendancePage = () => {
             );
           }) : (
             <div className="table-card"><p className="empty-state">{t('noAttendanceRecords')}</p></div>
+          )}
+          {visibleChildren.length < children.length && (
+            <div className="show-more-row">
+              <button type="button" className="btn-secondary" onClick={() => setVisibleChildrenCount((count) => count + CHILDREN_PAGE_SIZE)}>
+                Show more
+              </button>
+            </div>
           )}
         </div>
         )}
