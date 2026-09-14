@@ -1948,7 +1948,7 @@ const AttendancePage = () => {
   };
 
   const closeSelectedPlayer = ({ force = false } = {}) => {
-    if (!force && hasUnsavedSelectedPlayerChanges()) {
+    if (!force && isEditingSelectedPlayer) {
       setShowUnsavedExitConfirm(true);
       return;
     }
@@ -3685,8 +3685,8 @@ const AttendancePage = () => {
           <div className="student-modal-backdrop unsaved-exit-backdrop" role="presentation" onClick={() => setShowUnsavedExitConfirm(false)}>
             <section className="unsaved-exit-dialog" role="dialog" aria-modal="true" aria-label="Unsaved changes" onClick={(event) => event.stopPropagation()}>
               <div>
-                <h2>Unsaved changes</h2>
-                <p>You have edits that have not been saved yet. Choose how you would like to continue.</p>
+                <h2>Edit in progress</h2>
+                <p>You are editing this player. Choose how you would like to continue.</p>
               </div>
               <div className="unsaved-exit-actions">
                 <button type="button" className="btn-secondary" onClick={() => setShowUnsavedExitConfirm(false)}>Keep editing</button>
