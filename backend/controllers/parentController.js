@@ -353,14 +353,17 @@ const getCurrentParent = async (user) => {
 const getParents = async (req, res, next) => {
   try {
     const filter = {};
+    const compact = req.query.compact === 'true';
     if (req.query.search) {
       filter.name = new RegExp(escapeRegex(req.query.search), 'i');
     }
     const { limit, page, skip } = getPaginationOptions(req.query);
     const query = Parent.find(filter)
       .sort({ _id: -1 })
-      .populate('userId', 'name email role isActive')
-      .populate('children', 'fullName status programId groupId groupIds subscriptionId');
+      .populate('userId', 'name email role isActive');
+    if (!compact) {
+      query.populate('children', 'fullName status programId groupId groupIds subscriptionId');
+    }
     if (limit) query.skip(skip).limit(limit);
     const [parents, total] = await Promise.all([
       query,

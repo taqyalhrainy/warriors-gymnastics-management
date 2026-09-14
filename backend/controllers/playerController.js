@@ -180,6 +180,7 @@ const getDateAtStartOfDay = (value) => {
 const getPlayers = async (req, res, next) => {
   try {
     const filter = { isDeleted: { $ne: true } };
+    const compact = req.query.compact === 'true';
     if (req.user.role === 'parent') {
       const parent = await Parent.findOne({ userId: req.user._id });
       if (parent) {
@@ -212,10 +213,13 @@ const getPlayers = async (req, res, next) => {
     const { limit, page, skip } = getPaginationOptions(req.query);
     const query = Player.find(filter)
       .sort({ createdAt: -1, _id: -1 })
-      .populate('parentId', 'name email userId phoneEncrypted')
-      .populate('programId', 'name level')
-      .populate('groupId', 'name days startTime endTime')
-      .populate('groupIds', 'name days startTime endTime')
+      .select(compact
+        ? '_id fullName status parentId parentPhoneEncrypted groupId groupIds packageName subscriptionId'
+        : undefined)
+      .populate('parentId', compact ? 'name phoneEncrypted' : 'name email userId phoneEncrypted')
+      .populate('programId', compact ? 'name' : 'name level')
+      .populate('groupId', compact ? 'name' : 'name days startTime endTime')
+      .populate('groupIds', compact ? 'name' : 'name days startTime endTime')
       .populate('coachId', 'name');
 
     if (limit) query.skip(skip).limit(limit);

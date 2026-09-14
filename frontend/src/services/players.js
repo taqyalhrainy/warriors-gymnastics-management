@@ -144,3 +144,5 @@ export const getPlayer = async (id, options = {}) => {
     return response.data;
   }, options);
 };
+
+export const getCachedPlayer = (id) => getCachedValue(`players:item:${id}`);

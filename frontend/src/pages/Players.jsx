@@ -48,6 +48,7 @@ const PLAYER_PAGE_SIZE = 20;
 const DEFAULT_PLAYER_PAGE_PARAMS = {
   page: 1,
   limit: PLAYER_PAGE_SIZE,
+  compact: true,
   status: 'all',
   groupId: 'all',
   subscription: 'all',
@@ -97,6 +98,7 @@ const PlayersPage = () => {
       : () => fetchPlayersPage({
         page,
         limit: PLAYER_PAGE_SIZE,
+        compact: true,
         status: statusView,
         groupId: groupFilter,
         subscription: subscriptionFilter,

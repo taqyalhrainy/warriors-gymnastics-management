@@ -8,7 +8,7 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 
 const initialForm = { name: '', phone: '', password: '', isActive: true };
 const PARENT_PAGE_SIZE = 20;
-const DEFAULT_PARENT_PAGE_PARAMS = { page: 1, limit: PARENT_PAGE_SIZE, search: '' };
+const DEFAULT_PARENT_PAGE_PARAMS = { page: 1, limit: PARENT_PAGE_SIZE, compact: true, search: '' };
 
 const Parents = () => {
   const cachedInitialParentsPage = getCachedParentsPage(DEFAULT_PARENT_PAGE_PARAMS);
@@ -31,6 +31,7 @@ const Parents = () => {
     return loadSection('parents', () => fetchParentsPage({
       page,
       limit: PARENT_PAGE_SIZE,
+      compact: true,
       search: search.trim()
     }), (data) => {
       const rows = data?.items || [];

@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import DataStatus from '../components/DataStatus.jsx';
-import { useSectionLoader, canShowEmpty } from '../hooks/useSectionLoader.js';
-import { getPlayer, updatePlayer } from '../services/players.js';
-import { fetchAttendanceByPlayer } from '../services/attendance.js';
-import { fetchPaymentsByPlayer } from '../services/payments.js';
+import { useSectionLoader } from '../hooks/useSectionLoader.js';
+import { getPlayer, getCachedPlayer, updatePlayer } from '../services/players.js';
+import { fetchAttendanceByPlayer, getCachedAttendanceByPlayer } from '../services/attendance.js';
+import { fetchPaymentsByPlayer, getCachedPaymentsByPlayer } from '../services/payments.js';
 import { formatCurrency } from '../utils/format.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
@@ -109,11 +109,22 @@ const getPlayerAge = (dateOfBirth) => {
 };
 
 const PlayerProfilePage = () => {
-  const { states: loadStates, load: loadSection } = useSectionLoader(["player","attendance","payments"]);
   const { id } = useParams();
-  const [player, setPlayer] = useState(null);
-  const [attendanceHistory, setAttendanceHistory] = useState([]);
-  const [paymentHistory, setPaymentHistory] = useState([]);
+  const cachedPlayer = getCachedPlayer(id);
+  const cachedAttendance = getCachedAttendanceByPlayer(id);
+  const cachedPayments = getCachedPaymentsByPlayer(id);
+  const { states: loadStates, load: loadSection } = useSectionLoader(["player","attendance","payments"], {
+    player: Boolean(cachedPlayer),
+    attendance: Boolean(cachedAttendance),
+    payments: Boolean(cachedPayments)
+  });
+  const [player, setPlayer] = useState(() => cachedPlayer || null);
+  const [attendanceHistory, setAttendanceHistory] = useState(() => {
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    return (cachedAttendance || []).filter((record) => new Date(record.date) >= threeMonthsAgo);
+  });
+  const [paymentHistory, setPaymentHistory] = useState(() => cachedPayments || []);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [subscriptionForm, setSubscriptionForm] = useState({ startDate: '', endDate: '' });
   const [subscriptionMessage, setSubscriptionMessage] = useState('');
@@ -121,9 +132,16 @@ const PlayerProfilePage = () => {
   const { t } = useLanguage();
 
   useEffect(() => {
-    setPlayer(null);
-    setAttendanceHistory([]);
-    setPaymentHistory([]);
+    const nextCachedPlayer = getCachedPlayer(id);
+    const nextCachedAttendance = getCachedAttendanceByPlayer(id);
+    const nextCachedPayments = getCachedPaymentsByPlayer(id);
+    if (nextCachedPlayer) setPlayer(nextCachedPlayer);
+    if (nextCachedPayments) setPaymentHistory(nextCachedPayments);
+    if (nextCachedAttendance) {
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+      setAttendanceHistory(nextCachedAttendance.filter((record) => new Date(record.date) >= threeMonthsAgo));
+    }
     loadSection('player', () => getPlayer(id), setPlayer);
     loadSection('attendance', () => fetchAttendanceByPlayer(id), (attendanceData) => {
         const threeMonthsAgo = new Date();
@@ -234,13 +252,13 @@ const PlayerProfilePage = () => {
             <div><strong>{t('classes')}:</strong> {player.packageClasses || t('notSet')}</div>
             <div><strong>{t('hours')}:</strong> {player.packageHours || t('notSet')}</div>
             <div><strong>{t('payment')}:</strong> {formatCurrency(player.payment || 0)}</div>
-            <div><strong>Total Paid:</strong> {canShowEmpty(loadStates.payments) ? formatCurrency(totalPaid) : <DataStatus state={loadStates.payments} retry={() => loadSection('payments', () => fetchPaymentsByPlayer(id), setPaymentHistory)} />}</div>
+            <div><strong>Total Paid:</strong> {loadStates.payments?.ready ? formatCurrency(totalPaid) : <DataStatus state={loadStates.payments} retry={() => loadSection('payments', () => fetchPaymentsByPlayer(id), setPaymentHistory)} />}</div>
             <div><strong>{t('note')}:</strong> {player.note || t('notSet')}</div>
             <div><strong>{t('makeupClasses')}:</strong> {player.makeupClassesNote || t('notSet')}</div>
             <div className="profile-attendance-history">
               <h2>Attendance History</h2>
               <div className="student-history-list">
-                {loadStates.attendance?.loading || loadStates.attendance?.error ? <DataStatus state={loadStates.attendance} /> : attendanceHistory.length ? attendanceHistory.map((record) => (
+                {(!loadStates.attendance?.ready && (loadStates.attendance?.loading || loadStates.attendance?.error)) ? <DataStatus state={loadStates.attendance} /> : attendanceHistory.length ? attendanceHistory.map((record) => (
                   <div className="student-history-row" key={record._id}>
                     <span>{new Date(record.date).toLocaleDateString()}</span>
                     <strong>{record.status}</strong>

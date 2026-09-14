@@ -72,9 +72,9 @@ async function mount(file, services) {
 test('player profile appears before payment/history requests and never shows a fake zero', async () => {
   const player = deferred(), payments = deferred(), attendance = deferred();
   const render = await mount('../src/pages/PlayerProfile.jsx', {
-    '../services/players.js': { getPlayer: () => player.promise, updatePlayer: () => {} },
-    '../services/payments.js': { fetchPaymentsByPlayer: () => payments.promise },
-    '../services/attendance.js': { fetchAttendanceByPlayer: () => attendance.promise }
+    '../services/players.js': { getPlayer: () => player.promise, getCachedPlayer: () => undefined, updatePlayer: () => {} },
+    '../services/payments.js': { fetchPaymentsByPlayer: () => payments.promise, getCachedPaymentsByPlayer: () => undefined },
+    '../services/attendance.js': { fetchAttendanceByPlayer: () => attendance.promise, getCachedAttendanceByPlayer: () => undefined }
   });
   assert.match(render(), /Loading/);
   player.resolve({ _id: 'player1', fullName: 'Ready Player', payment: 100 });
@@ -94,9 +94,9 @@ test('player profile appears before payment/history requests and never shows a f
 test('failed history does not remove a loaded player or display no records', async () => {
   const attendance = deferred();
   const render = await mount('../src/pages/PlayerProfile.jsx', {
-    '../services/players.js': { getPlayer: async () => ({ fullName: 'Visible Player' }), updatePlayer: () => {} },
-    '../services/payments.js': { fetchPaymentsByPlayer: async () => [] },
-    '../services/attendance.js': { fetchAttendanceByPlayer: () => attendance.promise }
+    '../services/players.js': { getPlayer: async () => ({ fullName: 'Visible Player' }), getCachedPlayer: () => undefined, updatePlayer: () => {} },
+    '../services/payments.js': { fetchPaymentsByPlayer: async () => [], getCachedPaymentsByPlayer: () => undefined },
+    '../services/attendance.js': { fetchAttendanceByPlayer: () => attendance.promise, getCachedAttendanceByPlayer: () => undefined }
   });
   render();
   attendance.reject(new Error('timeout'));

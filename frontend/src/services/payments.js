@@ -1,5 +1,5 @@
 import api from './api.js';
-import { fetchCached, invalidateCache } from './cache.js';
+import { fetchCached, getCachedValue, invalidateCache } from './cache.js';
 
 export const fetchPayments = async (params = {}) => {
   const { fresh, ...query } = params;
@@ -38,3 +38,5 @@ export const fetchPaymentsByPlayer = async (playerId) => {
     return response.data;
   });
 };
+
+export const getCachedPaymentsByPlayer = (playerId) => getCachedValue(`payments:player:${playerId}`);

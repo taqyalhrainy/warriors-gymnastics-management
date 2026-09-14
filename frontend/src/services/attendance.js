@@ -1,5 +1,5 @@
 import api from './api.js';
-import { fetchCached, invalidateCache } from './cache.js';
+import { fetchCached, getCachedValue, invalidateCache } from './cache.js';
 
 const invalidateAttendanceRelatedCache = () => {
   invalidateCache(['attendance:', 'players:', 'groups:', 'reports:', 'notifications:', 'parent:']);
@@ -30,9 +30,13 @@ export const cancelTodayAttendance = async (data) => {
 };
 
 export const fetchAttendanceByPlayer = async (playerId) => {
-  const response = await api.get(`/attendance/player/${playerId}`);
-  return response.data;
+  return fetchCached(`attendance:player:${playerId}`, async () => {
+    const response = await api.get(`/attendance/player/${playerId}`);
+    return response.data;
+  });
 };
+
+export const getCachedAttendanceByPlayer = (playerId) => getCachedValue(`attendance:player:${playerId}`);
 
 export const fetchTodayAttendance = async (params, options = {}) => {
   const cacheKey = `attendance:today:${params?.date || 'current'}`;
