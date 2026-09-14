@@ -117,10 +117,6 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
 
   const handleInstall = async () => {
     const platform = getPlatform();
-    if (!isAdminInstall && platform.isAndroid) {
-      window.location.assign(parentDownloadUrl);
-      return;
-    }
     if (platform.isStandalone) {
       setIsInstalled(true);
       return;
