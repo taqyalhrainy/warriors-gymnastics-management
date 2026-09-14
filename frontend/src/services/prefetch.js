@@ -92,8 +92,8 @@ export const warmParentAppCache = async (user = {}) => {
     () => fetchParentDashboard(),
     () => fetchParentChildren(),
     () => fetchParentAttendance(),
-    () => fetchParentPayments(),
-    () => fetchNotifications(),
+    () => fetchParentPayments({ page: 1, limit: 20 }),
+    () => fetchNotifications({ page: 1, limit: 20 }),
     () => preloadParentPages()
   ]);
 };

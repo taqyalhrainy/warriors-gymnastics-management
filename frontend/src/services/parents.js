@@ -128,12 +128,14 @@ export const fetchParentDashboard = async (params = {}) => {
 };
 
 export const fetchParentPayments = async (params = {}) => {
-  const cacheKey = getParentCacheKey(PARENT_PAYMENTS_CACHE_KEY);
+  const { force, ...query } = params;
+  const entries = Object.entries(query).sort(([a], [b]) => a.localeCompare(b));
+  const cacheKey = getParentCacheKey(entries.length ? `${PARENT_PAYMENTS_CACHE_KEY}:${JSON.stringify(entries)}` : PARENT_PAYMENTS_CACHE_KEY);
   return fetchCached(cacheKey, async () => {
-    const response = await api.get('/parents/me/payments', PARENT_REQUEST_OPTIONS);
+    const response = await api.get('/parents/me/payments', { ...PARENT_REQUEST_OPTIONS, params: query });
     writePersistentCache(cacheKey, response.data);
     return response.data;
-  }, { ttlMs: PARENT_CACHE_TTL_MS, force: params.force });
+  }, { ttlMs: PARENT_CACHE_TTL_MS, force });
 };
 
 export const getCachedParentDashboard = () => {
@@ -148,5 +150,11 @@ export const getCachedParentAttendance = () => {
 
 export const getCachedParentPayments = () => {
   const cacheKey = getParentCacheKey(PARENT_PAYMENTS_CACHE_KEY);
+  return getCachedValue(cacheKey, { ttlMs: PARENT_CACHE_TTL_MS }) || readPersistentCache(cacheKey);
+};
+
+export const getCachedParentPaymentsPage = (params = {}) => {
+  const entries = Object.entries(params).sort(([a], [b]) => a.localeCompare(b));
+  const cacheKey = getParentCacheKey(`${PARENT_PAYMENTS_CACHE_KEY}:${JSON.stringify(entries)}`);
   return getCachedValue(cacheKey, { ttlMs: PARENT_CACHE_TTL_MS }) || readPersistentCache(cacheKey);
 };

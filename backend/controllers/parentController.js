@@ -25,6 +25,19 @@ const getPaginationOptions = (query) => {
   return { limit, page, skip: limit ? (page - 1) * limit : 0 };
 };
 
+const paginateRows = (rows, query) => {
+  const { limit, page, skip } = getPaginationOptions(query);
+  if (!limit) return null;
+  const items = rows.slice(skip, skip + limit);
+  return {
+    items,
+    total: rows.length,
+    page,
+    limit,
+    hasMore: skip + items.length < rows.length
+  };
+};
+
 const isOnOrAfter = (value, date) => {
   if (!value || !date) return false;
   const parsed = new Date(value);
@@ -688,6 +701,10 @@ const getParentPayments = async (req, res, next) => {
       });
     });
 
+    const pagedRows = paginateRows(paymentRows, req.query);
+    if (pagedRows) {
+      return res.json(pagedRows);
+    }
     res.json(paymentRows);
   } catch (error) {
     next(error);

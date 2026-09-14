@@ -8,15 +8,21 @@ const NOTIFICATIONS_CACHE_KEY = 'notifications:list';
 const NOTIFICATIONS_CACHE_TTL_MS = 2 * 60 * 1000;
 
 export const fetchNotifications = async (params = {}) => {
-  const query = params.date ? `?date=${encodeURIComponent(params.date)}` : '';
-  const cacheKey = params.date ? `${NOTIFICATIONS_CACHE_KEY}:${params.date}` : NOTIFICATIONS_CACHE_KEY;
+  const { force, ...query } = params;
+  const entries = Object.entries(query).sort(([a], [b]) => a.localeCompare(b));
+  const cacheKey = entries.length ? `${NOTIFICATIONS_CACHE_KEY}:${JSON.stringify(entries)}` : NOTIFICATIONS_CACHE_KEY;
   return fetchCached(cacheKey, async () => {
-    const response = await api.get(`/notifications${query}`);
+    const response = await api.get('/notifications', { params: query });
     return response.data;
-  }, { ttlMs: NOTIFICATIONS_CACHE_TTL_MS, force: params.force });
+  }, { ttlMs: NOTIFICATIONS_CACHE_TTL_MS, force });
 };
 
 export const getCachedNotifications = () => getCachedValue(NOTIFICATIONS_CACHE_KEY, { ttlMs: NOTIFICATIONS_CACHE_TTL_MS });
+
+export const getCachedNotificationsPage = (params = {}) => {
+  const entries = Object.entries(params).sort(([a], [b]) => a.localeCompare(b));
+  return getCachedValue(`${NOTIFICATIONS_CACHE_KEY}:${JSON.stringify(entries)}`, { ttlMs: NOTIFICATIONS_CACHE_TTL_MS });
+};
 
 export const fetchNotificationById = async (id) => {
   const response = await api.get(`/notifications/${id}`);

@@ -2,22 +2,41 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import DataStatus from '../components/DataStatus.jsx';
-import { fetchNotifications, getCachedNotifications } from '../services/notifications.js';
+import { fetchNotifications, getCachedNotificationsPage } from '../services/notifications.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import warriorsLogo from '../assets/warriors-logo.png';
 
 const ParentNotificationsPage = () => {
-  const [notifications, setNotifications] = useState(() => getCachedNotifications() || []);
-  const [isLoading, setIsLoading] = useState(() => !getCachedNotifications());
+  const pageSize = 20;
+  const firstPageParams = { page: 1, limit: pageSize };
+  const cachedFirstPage = getCachedNotificationsPage(firstPageParams);
+  const [notifications, setNotifications] = useState(() => cachedFirstPage?.items || []);
+  const [isLoading, setIsLoading] = useState(() => !cachedFirstPage);
+  const [page, setPage] = useState(() => cachedFirstPage?.page || 1);
+  const [total, setTotal] = useState(() => cachedFirstPage?.total || 0);
+  const [hasMore, setHasMore] = useState(() => Boolean(cachedFirstPage?.hasMore));
   const navigate = useNavigate();
   const { t } = useLanguage();
   const [loadError, setLoadError] = useState('');
 
-  useEffect(() => {
+  const loadNotifications = (nextPage = 1, append = false) => {
     let isMounted = true;
-    fetchNotifications()
+    setIsLoading(!append && !notifications.length);
+    fetchNotifications({ page: nextPage, limit: pageSize })
       .then((data) => {
-        if (isMounted) setNotifications(data);
+        if (!isMounted) return;
+        if (Array.isArray(data)) {
+          setNotifications(data);
+          setPage(1);
+          setTotal(data.length);
+          setHasMore(false);
+          return;
+        }
+        const rows = data?.items || [];
+        setNotifications((current) => (append ? [...current, ...rows] : rows));
+        setPage(data?.page || nextPage);
+        setTotal(data?.total || rows.length);
+        setHasMore(Boolean(data?.hasMore));
       })
       .catch(() => { if (isMounted) setLoadError('Unable to load data.'); })
       .finally(() => {
@@ -25,6 +44,13 @@ const ParentNotificationsPage = () => {
       });
     return () => {
       isMounted = false;
+    };
+  };
+
+  useEffect(() => {
+    const cleanup = loadNotifications(1, false);
+    return () => {
+      cleanup?.();
     };
   }, []);
 
@@ -41,7 +67,7 @@ const ParentNotificationsPage = () => {
             <h1>{t('notifications')}</h1>
           </div>
           <div className="parent-hero-stats">
-            <div><span>{t('messages')}</span><strong>{isLoading || (loadError && !notifications.length) ? '...' : notifications.length}</strong></div>
+            <div><span>{t('messages')}</span><strong>{isLoading || (loadError && !notifications.length) ? '...' : `${notifications.length}/${total || notifications.length}`}</strong></div>
             <div><span>New</span><strong>{isLoading || (loadError && !notifications.length) ? '...' : notifications.filter((note) => !note.isRead).length}</strong></div>
           </div>
         </section>
@@ -52,6 +78,7 @@ const ParentNotificationsPage = () => {
             <strong>Loading notifications...</strong>
           </div>
         ) : (
+        <>
         <div className="table-card parent-panel parent-notifications-card">
           <table className="data-table">
             <thead><tr><th></th><th>{t('title')}</th><th>{t('receivedStatus')}</th><th>{t('action')}</th></tr></thead>
@@ -67,6 +94,14 @@ const ParentNotificationsPage = () => {
             </tbody>
           </table>
         </div>
+        {hasMore && (
+          <div className="show-more-row">
+            <button type="button" className="btn-secondary" disabled={isLoading} onClick={() => loadNotifications(page + 1, true)}>
+              Show more
+            </button>
+          </div>
+        )}
+        </>
         )}
       </main>
     </div>

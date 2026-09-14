@@ -11,6 +11,11 @@ const { isNativePushConfigured, sendNativePushToUser } = require('../utils/nativ
 const { createNotification: createAndPushNotification, createNotifications } = require('../utils/notificationDelivery');
 
 const adminNotificationRoles = ['admin', 'coach', 'receptionist'];
+const getPaginationOptions = (query) => {
+  const limit = Math.min(Math.max(parseInt(query.limit, 10) || 0, 0), 100);
+  const page = Math.max(parseInt(query.page, 10) || 1, 1);
+  return { limit, page, skip: limit ? (page - 1) * limit : 0 };
+};
 
 const getPushPublicKey = (req, res) => {
   res.json({ publicKey: getVapidPublicKey(), configured: isPushConfigured() });
@@ -299,7 +304,22 @@ const getNotifications = async (req, res, next) => {
         filter.createdAt = { $gte: start, $lt: end };
       }
     }
-    const notifications = await Notification.find(filter).sort({ createdAt: -1 }).populate('recipientUserId', 'name email');
+    const { limit, page, skip } = getPaginationOptions(req.query);
+    const query = Notification.find(filter).sort({ createdAt: -1 }).populate('recipientUserId', 'name email');
+    if (limit) query.skip(skip).limit(limit);
+    const [notifications, total] = await Promise.all([
+      query,
+      limit ? Notification.countDocuments(filter) : Promise.resolve(null)
+    ]);
+    if (limit) {
+      return res.json({
+        items: notifications,
+        total,
+        page,
+        limit,
+        hasMore: skip + notifications.length < total
+      });
+    }
     res.json(notifications);
   } catch (error) {
     next(error);

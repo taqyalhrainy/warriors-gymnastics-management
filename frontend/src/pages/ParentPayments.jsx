@@ -2,27 +2,46 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import DataStatus from '../components/DataStatus.jsx';
-import { fetchParentPayments, getCachedParentPayments } from '../services/parents.js';
+import { fetchParentPayments, getCachedParentPaymentsPage } from '../services/parents.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import warriorsLogo from '../assets/warriors-logo.png';
 
 const formatMoney = (value) => Number(value || 0).toLocaleString('en-US');
 const getVisiblePaid = (payment) => Number(payment?.visiblePaidAmount ?? payment?.playerId?.currentSubscriptionPaidAmount ?? 0);
 const getVisibleRemaining = (payment) => Number(payment?.visibleRemainingAmount ?? (payment?.playerId?.attendanceDueManual ? payment.remainingAmount : 0) ?? 0);
+const PAGE_SIZE = 20;
+const FIRST_PAGE_PARAMS = { page: 1, limit: PAGE_SIZE };
 
 const ParentPaymentsPage = () => {
-  const [payments, setPayments] = useState(() => getCachedParentPayments() || []);
-  const [isLoading, setIsLoading] = useState(() => !getCachedParentPayments());
+  const cachedFirstPage = getCachedParentPaymentsPage(FIRST_PAGE_PARAMS);
+  const [payments, setPayments] = useState(() => cachedFirstPage?.items || []);
+  const [isLoading, setIsLoading] = useState(() => !cachedFirstPage);
+  const [page, setPage] = useState(() => cachedFirstPage?.page || 1);
+  const [total, setTotal] = useState(() => cachedFirstPage?.total || 0);
+  const [hasMore, setHasMore] = useState(() => Boolean(cachedFirstPage?.hasMore));
   const [previewProfileImage, setPreviewProfileImage] = useState('');
   const navigate = useNavigate();
   const { t } = useLanguage();
   const [loadError, setLoadError] = useState('');
 
-  useEffect(() => {
+  const loadPayments = (nextPage = 1, append = false) => {
     let isMounted = true;
-    fetchParentPayments()
+    setIsLoading(!append && !payments.length);
+    fetchParentPayments({ page: nextPage, limit: PAGE_SIZE })
       .then((data) => {
-        if (isMounted) setPayments(data);
+        if (!isMounted) return;
+        if (Array.isArray(data)) {
+          setPayments(data);
+          setTotal(data.length);
+          setHasMore(false);
+          setPage(1);
+          return;
+        }
+        const rows = data?.items || [];
+        setPayments((current) => (append ? [...current, ...rows] : rows));
+        setTotal(data?.total || rows.length);
+        setPage(data?.page || nextPage);
+        setHasMore(Boolean(data?.hasMore));
       })
       .catch(() => { if (isMounted) setLoadError('Unable to load data.'); })
       .finally(() => {
@@ -30,6 +49,13 @@ const ParentPaymentsPage = () => {
       });
     return () => {
       isMounted = false;
+    };
+  };
+
+  useEffect(() => {
+    const cleanup = loadPayments(1, false);
+    return () => {
+      cleanup?.();
     };
   }, []);
 
@@ -83,7 +109,7 @@ const ParentPaymentsPage = () => {
           <div className="parent-hero-stats">
             <div><span>{t('paid')}</span><strong>{isLoading || (loadError && !payments.length) ? '...' : formatMoney(totalPaid)}</strong></div>
             <div><span>{t('remaining')}</span><strong>{isLoading || (loadError && !payments.length) ? '...' : formatMoney(totalRemaining)}</strong></div>
-            <div><span>Records</span><strong>{isLoading || (loadError && !payments.length) ? '...' : payments.length}</strong></div>
+            <div><span>Records</span><strong>{isLoading || (loadError && !payments.length) ? '...' : `${payments.length}/${total || payments.length}`}</strong></div>
           </div>
         </section>
         {loadError && !payments.length ? <DataStatus state={{ error: loadError }} /> : isLoading ? (
@@ -93,6 +119,7 @@ const ParentPaymentsPage = () => {
             <strong>Loading payments...</strong>
           </div>
         ) : (
+        <>
         <div className="table-card parent-payment-card">
           <table className="data-table">
             <thead><tr><th>{t('child')}</th><th>{t('date')}</th><th>{t('paid')}</th><th>{t('remaining')}</th><th>{t('method')}</th></tr></thead>
@@ -113,6 +140,14 @@ const ParentPaymentsPage = () => {
             </tbody>
           </table>
         </div>
+        {hasMore && (
+          <div className="show-more-row">
+            <button type="button" className="btn-secondary" disabled={isLoading} onClick={() => loadPayments(page + 1, true)}>
+              Show more
+            </button>
+          </div>
+        )}
+        </>
         )}
         {previewProfileImage && (
           <div className="profile-image-preview-backdrop" role="presentation" onClick={() => setPreviewProfileImage('')}>
