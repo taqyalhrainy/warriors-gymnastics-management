@@ -3,7 +3,7 @@ const Notification = require('../models/Notification');
 
 const getAttendanceRetentionCutoff = () => {
   const cutoff = new Date();
-  cutoff.setMonth(cutoff.getMonth() - 3);
+  cutoff.setFullYear(cutoff.getFullYear() - 1);
   cutoff.setHours(0, 0, 0, 0);
   return cutoff;
 };
