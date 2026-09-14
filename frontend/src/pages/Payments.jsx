@@ -27,6 +27,7 @@ const formatTime = (date) => {
 };
 
 const formatMoney = (value) => Number(value || 0).toLocaleString('en-US');
+const PAYMENT_PAGE_SIZE = 20;
 
 const getDateInputValue = (date = new Date()) => {
   const value = new Date(date);
@@ -150,6 +151,9 @@ const PaymentsPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [playerSearch, setPlayerSearch] = useState('');
   const [viewingPayment, setViewingPayment] = useState(null);
+  const [paymentsPage, setPaymentsPage] = useState(1);
+  const [paymentsTotal, setPaymentsTotal] = useState(0);
+  const [paymentsHasMore, setPaymentsHasMore] = useState(false);
   const paymentsLoadRequestIdRef = useRef(0);
   const paymentsRevisionRef = useRef(0);
   const { t } = useLanguage();
@@ -160,14 +164,25 @@ const PaymentsPage = () => {
     const startedRevision = paymentsRevisionRef.current;
     try {
       const forceAll = Boolean(options.forceAll);
-      const params = isPaymentUnlocked || forceAll
-        ? { fresh: Date.now() }
-        : { day: selectedDay || getDateInputValue(), fresh: Date.now() };
-      await loadSection('payments', () => fetchPayments(params), (rows) => {
-      const paymentRows = sortPaymentsNewestFirst(rows);
-      if (requestId === paymentsLoadRequestIdRef.current && startedRevision === paymentsRevisionRef.current) {
-        setPayments(paymentRows);
+      const page = options.page || 1;
+      const append = Boolean(options.append);
+      let params = { day: selectedDay || getDateInputValue(), fresh: Date.now(), page, limit: PAYMENT_PAGE_SIZE };
+      if ((isPaymentUnlocked || forceAll) && activeView === 'thisMonth') {
+        params = { month: getPaymentMonthKey(new Date()), fresh: Date.now(), page, limit: PAYMENT_PAGE_SIZE };
+      } else if ((isPaymentUnlocked || forceAll) && activeView === 'month') {
+        params = { month: selectedMonth, fresh: Date.now(), page, limit: PAYMENT_PAGE_SIZE };
+      } else if ((isPaymentUnlocked || forceAll) && activeView === 'pending') {
+        params = { fresh: Date.now() };
       }
+      await loadSection('payments', () => fetchPayments(params), (data) => {
+        const rows = Array.isArray(data) ? data : (data?.items || []);
+        const paymentRows = sortPaymentsNewestFirst(rows);
+        if (requestId === paymentsLoadRequestIdRef.current && startedRevision === paymentsRevisionRef.current) {
+          setPayments((current) => (append ? sortPaymentsNewestFirst([...current, ...paymentRows]) : paymentRows));
+          setPaymentsPage(Array.isArray(data) ? 1 : (data?.page || page));
+          setPaymentsTotal(Array.isArray(data) ? rows.length : (data?.total || rows.length));
+          setPaymentsHasMore(!Array.isArray(data) && Boolean(data?.hasMore));
+        }
       });
     } catch (err) {
       console.error(err);
@@ -179,12 +194,12 @@ const PaymentsPage = () => {
   };
 
   useEffect(() => {
-    loadSection('players', fetchPlayers, setPlayers);
+    loadSection('players', () => fetchPlayers({ compact: true }), setPlayers);
   }, []);
 
   useEffect(() => {
-    loadPayments({ forceAll: isPaymentUnlocked });
-  }, [selectedDay, isPaymentUnlocked]);
+    loadPayments({ forceAll: isPaymentUnlocked, page: 1 });
+  }, [selectedDay, selectedMonth, activeView, isPaymentUnlocked]);
 
   const handlePaymentUnlock = async (event) => {
     event.preventDefault();
@@ -698,7 +713,7 @@ const PaymentsPage = () => {
             <div className="payment-table-tools">
               <div className="payment-tool-icons">
                 <span>{activeViewLabel}</span>
-                <span>{activeRecordCount} records</span>
+                <span>{activeRecordCount} of {paymentsTotal || activeRecordCount} records</span>
                 <label className="payment-search">
                   <span>Search</span>
                   <input
@@ -810,6 +825,18 @@ const PaymentsPage = () => {
                 </tbody>
               </table>
             </div>
+            {paymentsHasMore && activeView !== 'pending' && (
+              <div className="show-more-row">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={loadStates.payments?.loading}
+                  onClick={() => loadPayments({ forceAll: isPaymentUnlocked, page: paymentsPage + 1, append: true })}
+                >
+                  Show more
+                </button>
+              </div>
+            )}
           </div>
         </section>
         {showPaymentUnlock && (

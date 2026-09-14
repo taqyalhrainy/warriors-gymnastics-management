@@ -51,6 +51,13 @@ export const fetchParents = async () => {
   });
 };
 
+export const fetchParentsCompact = async () => {
+  return fetchCached('parents:list:compact', async () => {
+    const response = await api.get('/parents', { params: { compact: true } });
+    return response.data;
+  });
+};
+
 export const fetchParentsPage = async (params = {}) => {
   const entries = Object.entries(params).sort(([a], [b]) => a.localeCompare(b));
   const key = `parents:page:${JSON.stringify(entries)}`;

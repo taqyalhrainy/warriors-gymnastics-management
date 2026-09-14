@@ -43,6 +43,11 @@ const decryptOptional = (value) => {
 };
 
 const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
+const getPaginationOptions = (query) => {
+  const limit = Math.min(Math.max(parseInt(query.limit, 10) || 0, 0), 100);
+  const page = Math.max(parseInt(query.page, 10) || 1, 1);
+  return { limit, page, skip: limit ? (page - 1) * limit : 0 };
+};
 
 const isOnOrAfter = (value, date) => {
   if (!value || !date) return false;
@@ -279,8 +284,24 @@ const getPayments = async (req, res, next) => {
       const end = new Date(year, month, 0, 23, 59, 59, 999);
       filter.paymentDate = { $gte: start, $lte: end };
     }
-    const payments = await populatePaymentQuery(Payment.find(filter).sort({ paymentDate: -1, _id: -1 }));
-    res.json(await formatPaymentsWithAttendanceCounts(payments));
+    const { limit, page, skip } = getPaginationOptions(req.query);
+    const query = populatePaymentQuery(Payment.find(filter).sort({ paymentDate: -1, _id: -1 }));
+    if (limit) query.skip(skip).limit(limit);
+    const [payments, total] = await Promise.all([
+      query,
+      limit ? Payment.countDocuments(filter) : Promise.resolve(null)
+    ]);
+    const items = await formatPaymentsWithAttendanceCounts(payments);
+    if (limit) {
+      return res.json({
+        items,
+        total,
+        page,
+        limit,
+        hasMore: skip + payments.length < total
+      });
+    }
+    res.json(items);
   } catch (error) {
     next(error);
   }

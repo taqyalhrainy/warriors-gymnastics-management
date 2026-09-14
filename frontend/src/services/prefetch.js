@@ -1,6 +1,6 @@
 import { fetchAttendanceBoard, fetchGroups } from './groups.js';
-import { fetchPlayersPage, fetchPlayerAlertCandidates } from './players.js';
-import { fetchParentsPage } from './parents.js';
+import { fetchPlayers, fetchPlayersPage, fetchPlayerAlertCandidates } from './players.js';
+import { fetchParentsCompact, fetchParentsPage } from './parents.js';
 import { fetchPackageOptions } from './packageOptions.js';
 import { fetchCoaches } from './coaches.js';
 import { fetchWaitingList } from './waitingList.js';
@@ -67,7 +67,7 @@ export const warmAdminAppCache = async (user = {}) => {
     () => fetchCoaches(),
     () => fetchDashboard(),
     () => fetchPlayerAlertCandidates(),
-    () => fetchNotifications({ date: todayKey() }),
+    () => fetchNotifications({ date: todayKey(), page: 1, limit: 20 }),
     () => fetchAttendanceBoard(),
     () => fetchWaitingList(),
     () => fetchPayments(),
@@ -79,6 +79,8 @@ export const warmAdminAppCache = async (user = {}) => {
     () => fetchAttendanceReport(),
     () => fetchPlayersPage({ page: 2, limit: 20, compact: true, status: 'all', groupId: 'all', subscription: 'all', search: '' }),
     () => fetchParentsPage({ page: 2, limit: 20, compact: true, search: '' }),
+    () => fetchPlayers({ compact: true }),
+    () => fetchParentsCompact(),
     () => preloadAdminPages()
   ]);
 };

@@ -13,12 +13,13 @@ import {
   updateSavedNotificationMessage,
   deleteSavedNotificationMessage
 } from '../services/notifications.js';
-import { fetchParents } from '../services/parents.js';
+import { fetchParentsCompact } from '../services/parents.js';
 import { fetchGroups } from '../services/groups.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
 const SAVED_MESSAGES_KEY = 'warriors-saved-notification-messages';
 const todayInputValue = () => new Date().toISOString().split('T')[0];
+const MESSAGE_PAGE_SIZE = 20;
 
 const readSavedMessages = () => {
   try {
@@ -44,6 +45,9 @@ const NotificationsPage = () => {
   const [message, setMessage] = useState('');
   const [form, setForm] = useState({ recipientUserId: '', groupId: '', title: '', message: '', type: 'announcement' });
   const [search, setSearch] = useState('');
+  const [messagesPage, setMessagesPage] = useState(1);
+  const [messagesTotal, setMessagesTotal] = useState(0);
+  const [messagesHasMore, setMessagesHasMore] = useState(false);
   const [parentSearch, setParentSearch] = useState('');
   const [groupSearch, setGroupSearch] = useState('');
   const { t } = useLanguage();
@@ -51,7 +55,22 @@ const NotificationsPage = () => {
   const prefillNotification = location.state?.prefillNotification || null;
 
   const loadNotifications = useCallback((options = {}) => {
-    return loadSection('messages', () => fetchNotifications({ date: historyDate, ...options }), setNotifications);
+    const page = options.page || 1;
+    const append = Boolean(options.append);
+    return loadSection('messages', () => fetchNotifications({ date: historyDate, page, limit: MESSAGE_PAGE_SIZE, ...options }), (data) => {
+      if (Array.isArray(data)) {
+        setNotifications(data);
+        setMessagesPage(1);
+        setMessagesTotal(data.length);
+        setMessagesHasMore(false);
+        return;
+      }
+      const rows = data?.items || [];
+      setNotifications((current) => (append ? [...current, ...rows] : rows));
+      setMessagesPage(data?.page || page);
+      setMessagesTotal(data?.total || rows.length);
+      setMessagesHasMore(Boolean(data?.hasMore));
+    });
   }, [historyDate]);
 
   const loadSavedMessages = useCallback((options = {}) => {
@@ -77,7 +96,7 @@ const NotificationsPage = () => {
   }, [loadNotifications]);
 
   useEffect(() => {
-    loadSection('parents', fetchParents, setParents);
+    loadSection('parents', fetchParentsCompact, setParents);
     loadSection('groups', fetchGroups, setGroups);
   }, []);
 
@@ -308,7 +327,10 @@ const NotificationsPage = () => {
           </div>
           <div className="table-card">
             <div className="table-toolbar">
-              <h2>{t('messages')}</h2>
+              <div>
+                <h2>{t('messages')}</h2>
+                <p className="table-filter-count">{loadStates.messages?.ready ? `${filteredNotifications.length} of ${messagesTotal || notifications.length}` : '...'}</p>
+              </div>
               <label className="table-search">
                 <span>Date</span>
                 <input type="date" value={historyDate} onChange={(event) => setHistoryDate(event.target.value || todayInputValue())} />
@@ -334,6 +356,18 @@ const NotificationsPage = () => {
                 )) : canShowEmpty(loadStates.messages) && <tr><td colSpan="6">{t('noNotifications')}</td></tr>}
               </tbody>
             </table>
+            {messagesHasMore && (
+              <div className="show-more-row">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={loadStates.messages?.loading}
+                  onClick={() => loadNotifications({ page: messagesPage + 1, append: true })}
+                >
+                  Show more
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </main>

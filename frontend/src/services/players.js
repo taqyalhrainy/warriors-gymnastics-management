@@ -16,6 +16,12 @@ export const fetchPlayers = async (params) => {
         return response.data;
       });
     }
+    if (params.compact === true && paramKeys.every((key) => ['compact'].includes(key))) {
+      return fetchCached('players:list:compact', async () => {
+        const response = await api.get('/players', { params });
+        return response.data;
+      });
+    }
 
     const response = await api.get('/players', { params });
     return response.data;
