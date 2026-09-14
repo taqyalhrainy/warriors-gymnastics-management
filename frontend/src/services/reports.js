@@ -9,13 +9,17 @@ export const fetchDashboard = async () => {
 };
 
 export const fetchRevenue = async () => {
-  const response = await api.get('/reports/revenue');
-  return response.data;
+  return fetchCached('reports:revenue', async () => {
+    const response = await api.get('/reports/revenue');
+    return response.data;
+  }, { ttlMs: 60 * 1000 });
 };
 
 export const fetchAttendanceReport = async () => {
-  const response = await api.get('/reports/attendance');
-  return response.data;
+  return fetchCached('reports:attendance', async () => {
+    const response = await api.get('/reports/attendance');
+    return response.data;
+  }, { ttlMs: 60 * 1000 });
 };
 
 export const downloadPlayersBackup = async () => {

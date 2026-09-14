@@ -1,5 +1,5 @@
 import api from './api.js';
-import { fetchCached, invalidateCache, setCached, touchCacheVersion, updateCached } from './cache.js';
+import { fetchCached, getCachedValue, invalidateCache, setCached, touchCacheVersion, updateCached } from './cache.js';
 
 export const fetchPlayerAlertCandidates = () => fetchCached('players:alerts', async () => {
   const { data } = await api.get('/players/alert-candidates');
@@ -34,6 +34,11 @@ export const fetchPlayersPage = async (params = {}) => {
     const response = await api.get('/players', { params });
     return response.data;
   });
+};
+
+export const getCachedPlayersPage = (params = {}) => {
+  const entries = Object.entries(params).sort(([a], [b]) => a.localeCompare(b));
+  return getCachedValue(`players:page:${JSON.stringify(entries)}`);
 };
 
 const invalidatePlayerRelatedCache = (playerId) => {

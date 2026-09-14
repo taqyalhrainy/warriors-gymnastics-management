@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import DataStatus from '../components/DataStatus.jsx';
 import { useSectionLoader, canShowEmpty, isSectionBlocking } from '../hooks/useSectionLoader.js';
-import { fetchPlayers, fetchPlayersPage, deletePlayer, createPlayer } from '../services/players.js';
+import { fetchPlayers, fetchPlayersPage, getCachedPlayersPage, deletePlayer, createPlayer } from '../services/players.js';
 import { fetchGroups } from '../services/groups.js';
 import { createParent, fetchParents } from '../services/parents.js';
 import { fetchPackageOptions } from '../services/packageOptions.js';
@@ -45,10 +45,21 @@ const initialMovePlayerForm = {
 };
 
 const PLAYER_PAGE_SIZE = 20;
+const DEFAULT_PLAYER_PAGE_PARAMS = {
+  page: 1,
+  limit: PLAYER_PAGE_SIZE,
+  status: 'all',
+  groupId: 'all',
+  subscription: 'all',
+  search: ''
+};
 
 const PlayersPage = () => {
-  const { states: loadStates, load: loadSection } = useSectionLoader(["players","groups","parents","packages","waiting"]);
-  const [players, setPlayers] = useState([]);
+  const cachedInitialPlayersPage = getCachedPlayersPage(DEFAULT_PLAYER_PAGE_PARAMS);
+  const { states: loadStates, load: loadSection } = useSectionLoader(["players","groups","parents","packages","waiting"], {
+    players: Boolean(cachedInitialPlayersPage)
+  });
+  const [players, setPlayers] = useState(() => cachedInitialPlayersPage?.items || []);
   const [parents, setParents] = useState([]);
   const [groups, setGroups] = useState([]);
   const [packageOptions, setPackageOptions] = useState([]);
@@ -68,9 +79,9 @@ const PlayersPage = () => {
   const [waitingDayFilter, setWaitingDayFilter] = useState('all');
   const [waitingAgeFilter, setWaitingAgeFilter] = useState('');
   const [search, setSearch] = useState('');
-  const [playersTotal, setPlayersTotal] = useState(0);
-  const [playersPage, setPlayersPage] = useState(1);
-  const [playersHasMore, setPlayersHasMore] = useState(false);
+  const [playersTotal, setPlayersTotal] = useState(() => cachedInitialPlayersPage?.total || 0);
+  const [playersPage, setPlayersPage] = useState(() => cachedInitialPlayersPage?.page || 1);
+  const [playersHasMore, setPlayersHasMore] = useState(() => Boolean(cachedInitialPlayersPage?.hasMore));
   const [statusView, setStatusView] = useState('all');
   const [groupFilter, setGroupFilter] = useState('all');
   const [subscriptionFilter, setSubscriptionFilter] = useState('all');

@@ -2,24 +2,28 @@ import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
 import DataStatus from '../components/DataStatus.jsx';
 import { useSectionLoader, canShowEmpty } from '../hooks/useSectionLoader.js';
-import { fetchParentsPage, createParent, updateParent, deleteParent } from '../services/parents';
+import { fetchParentsPage, getCachedParentsPage, createParent, updateParent, deleteParent } from '../services/parents';
 import { confirmAction } from '../utils/confirmAction.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 
 const initialForm = { name: '', phone: '', password: '', isActive: true };
 const PARENT_PAGE_SIZE = 20;
+const DEFAULT_PARENT_PAGE_PARAMS = { page: 1, limit: PARENT_PAGE_SIZE, search: '' };
 
 const Parents = () => {
-  const { states: loadStates, load: loadSection } = useSectionLoader(["parents"]);
-  const [parents, setParents] = useState([]);
+  const cachedInitialParentsPage = getCachedParentsPage(DEFAULT_PARENT_PAGE_PARAMS);
+  const { states: loadStates, load: loadSection } = useSectionLoader(["parents"], {
+    parents: Boolean(cachedInitialParentsPage)
+  });
+  const [parents, setParents] = useState(() => cachedInitialParentsPage?.items || []);
   const [form, setForm] = useState(initialForm);
   const [selectedParent, setSelectedParent] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
-  const [parentsTotal, setParentsTotal] = useState(0);
-  const [parentsPage, setParentsPage] = useState(1);
-  const [parentsHasMore, setParentsHasMore] = useState(false);
+  const [parentsTotal, setParentsTotal] = useState(() => cachedInitialParentsPage?.total || 0);
+  const [parentsPage, setParentsPage] = useState(() => cachedInitialParentsPage?.page || 1);
+  const [parentsHasMore, setParentsHasMore] = useState(() => Boolean(cachedInitialParentsPage?.hasMore));
   const [showPassword, setShowPassword] = useState(false);
   const { t } = useLanguage();
 

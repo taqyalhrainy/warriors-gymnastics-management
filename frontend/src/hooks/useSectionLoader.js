@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-export const useSectionLoader = (keys = []) => {
-  const [states, setStates] = useState(() => Object.fromEntries(keys.map((key) => [key, { loading: true, error: '', ready: false }])));
+export const useSectionLoader = (keys = [], readyKeys = {}) => {
+  const [states, setStates] = useState(() => Object.fromEntries(keys.map((key) => [
+    key,
+    readyKeys[key] ? { loading: false, error: '', ready: true } : { loading: true, error: '', ready: false }
+  ])));
   const versions = useRef({});
   const mounted = useRef(true);
   useEffect(() => {

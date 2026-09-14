@@ -1,11 +1,15 @@
 import { fetchAttendanceBoard, fetchGroups } from './groups.js';
-import { fetchPlayersPage, fetchPlayerAlertCandidates } from './players.js';
-import { fetchParentsPage } from './parents.js';
+import { fetchPlayers, fetchPlayersPage, fetchPlayerAlertCandidates } from './players.js';
+import { fetchParents, fetchParentsPage } from './parents.js';
 import { fetchPackageOptions } from './packageOptions.js';
 import { fetchCoaches } from './coaches.js';
 import { fetchWaitingList } from './waitingList.js';
-import { fetchDashboard } from './reports.js';
-import { fetchNotifications } from './notifications.js';
+import { fetchPayments } from './payments.js';
+import { fetchSubscriptions } from './subscriptions.js';
+import { fetchPrograms } from './programs.js';
+import { fetchAdminClubMedia } from './clubMedia.js';
+import { fetchAttendanceReport, fetchDashboard, fetchRevenue } from './reports.js';
+import { fetchNotifications, fetchSavedNotificationMessages } from './notifications.js';
 import {
   fetchParentAttendance,
   fetchParentChildren,
@@ -24,6 +28,32 @@ const runQuietly = async (tasks) => {
   }
 };
 
+const preloadAdminPages = () => runQuietly([
+  () => import('../pages/AdminDashboard.jsx'),
+  () => import('../pages/Players.jsx'),
+  () => import('../pages/PlayerForm.jsx'),
+  () => import('../pages/Groups.jsx'),
+  () => import('../pages/Attendance.jsx'),
+  () => import('../pages/Coaches.jsx'),
+  () => import('../pages/Payments.jsx'),
+  () => import('../pages/Notifications.jsx'),
+  () => import('../pages/Parents.jsx'),
+  () => import('../pages/Reports.jsx'),
+  () => import('../pages/History.jsx'),
+  () => import('../pages/AuditLogs.jsx'),
+  () => import('../pages/ClubMedia.jsx')
+]);
+
+const preloadParentPages = () => runQuietly([
+  () => import('../pages/ParentDashboard.jsx'),
+  () => import('../pages/ParentAttendance.jsx'),
+  () => import('../pages/ParentPayments.jsx'),
+  () => import('../pages/ParentNotifications.jsx'),
+  () => import('../pages/ParentSettings.jsx'),
+  () => import('../pages/ParentChildren.jsx'),
+  () => import('../pages/ParentSubscriptionSummary.jsx')
+]);
+
 export const warmAdminAppCache = async (user = {}) => {
   const key = `admin:${user.id || user._id || 'session'}:${todayKey()}`;
   if (warmed.has(key)) return;
@@ -39,7 +69,17 @@ export const warmAdminAppCache = async (user = {}) => {
     () => fetchPlayerAlertCandidates(),
     () => fetchNotifications({ date: todayKey() }),
     () => fetchAttendanceBoard(),
-    () => fetchWaitingList()
+    () => fetchWaitingList(),
+    () => fetchPayments(),
+    () => fetchSubscriptions(),
+    () => fetchPrograms(),
+    () => fetchSavedNotificationMessages(),
+    () => fetchAdminClubMedia(),
+    () => fetchRevenue(),
+    () => fetchAttendanceReport(),
+    () => fetchPlayers(),
+    () => fetchParents(),
+    () => preloadAdminPages()
   ]);
 };
 
@@ -53,7 +93,8 @@ export const warmParentAppCache = async (user = {}) => {
     () => fetchParentChildren(),
     () => fetchParentAttendance(),
     () => fetchParentPayments(),
-    () => fetchNotifications()
+    () => fetchNotifications(),
+    () => preloadParentPages()
   ]);
 };
 

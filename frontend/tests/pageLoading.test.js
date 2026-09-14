@@ -116,6 +116,7 @@ test('players table renders rows while unrelated group options are pending', asy
     '../services/players.js': {
       fetchPlayers: () => players.promise,
       fetchPlayersPage: () => players.promise.then((items) => ({ items, total: items.length, page: 1, hasMore: false })),
+      getCachedPlayersPage: () => undefined,
       deletePlayer: unused,
       createPlayer: unused
     },

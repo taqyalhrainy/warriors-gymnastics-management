@@ -60,6 +60,11 @@ export const fetchParentsPage = async (params = {}) => {
   });
 };
 
+export const getCachedParentsPage = (params = {}) => {
+  const entries = Object.entries(params).sort(([a], [b]) => a.localeCompare(b));
+  return getCachedValue(`parents:page:${JSON.stringify(entries)}`);
+};
+
 export const createParent = async (data) => {
   const response = await api.post('/parents', data);
   invalidateCache(['parents:', 'players:', 'reports:', 'parent:']);
