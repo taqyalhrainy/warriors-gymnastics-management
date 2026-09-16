@@ -176,7 +176,7 @@ const updateCoachAttendance = async (req, res, next) => {
 
     const body = sanitizeObject(req.body);
     const action = String(body.action || '').trim().toLowerCase();
-    if (!['arrived', 'left', 'absent'].includes(action)) {
+    if (!['arrived', 'left', 'absent', 'clear'].includes(action)) {
       return res.status(400).json({ message: 'Invalid coach attendance action.' });
     }
 
@@ -187,6 +187,15 @@ const updateCoachAttendance = async (req, res, next) => {
 
     const now = new Date();
     const date = getDateOnly(body.date || now);
+
+    if (action === 'clear') {
+      const attendance = await CoachAttendance.findOneAndDelete({ coachId: coach._id, date }).lean();
+      if (attendance) {
+        await createAuditLog({ userId: req.user._id, action: 'coach attendance clear', entity: 'CoachAttendance', entityId: attendance._id, req });
+      }
+      return res.json(null);
+    }
+
     const setFields = {
       coachId: coach._id,
       date,

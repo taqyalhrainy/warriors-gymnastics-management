@@ -101,6 +101,11 @@ const CoachesPage = () => {
   const handleAttendanceAction = async (coach, action) => {
     const actionKey = `${coach._id}:${action}`;
     if (pendingCoachAction) return;
+    if (coach.todayAttendance && action !== 'clear') {
+      const nextLabel = action === 'arrived' ? 'Came' : action === 'left' ? 'Left' : 'Absent';
+      if (!window.confirm(`Change ${coach.name} attendance to ${nextLabel}?`)) return;
+    }
+    if (action === 'clear' && !window.confirm(`Clear ${coach.name} attendance for this date?`)) return;
     setMessage('');
     setPendingCoachAction(actionKey);
     try {
@@ -247,6 +252,11 @@ const CoachesPage = () => {
                       <button type="button" className="btn-absent" disabled={Boolean(pendingCoachAction)} onClick={() => handleAttendanceAction(coach, 'absent')}>
                         {pendingCoachAction === `${coach._id}:absent` ? 'Saving...' : 'Absent'}
                       </button>
+                      {attendance && (
+                        <button type="button" className="btn-secondary" disabled={Boolean(pendingCoachAction)} onClick={() => handleAttendanceAction(coach, 'clear')}>
+                          {pendingCoachAction === `${coach._id}:clear` ? 'Saving...' : 'Clear'}
+                        </button>
+                      )}
                     </div>
                     <div className="coach-admin-actions">
                       <Link to={`/coaches/${coach._id}`}>View</Link>
