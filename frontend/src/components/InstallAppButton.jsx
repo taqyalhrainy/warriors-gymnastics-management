@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { isNativeAndroidApp } from '../utils/nativePushNotifications.js';
-import { getInstallPlatform, withInstallTimeout } from '../utils/installPlatform.js';
+import { getInstallPlatform, withInstallTimeout, isParentApkInstalled } from '../utils/installPlatform.js';
 
 const parentDownloadUrl = 'https://warriors-gymnastics-management.onrender.com/open-parent';
 const parentApkUrl = 'https://warriors-gymnastics-management.onrender.com/downloads/Warriors-Parent-2.0.apk';
@@ -104,6 +104,13 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
     if (installBusy) return;
     const platform = getPlatform();
     if (!isAdminInstall && platform.isAndroid) {
+      setInstallBusy(true);
+      const installed = await isParentApkInstalled(navigator);
+      setInstallBusy(false);
+      if (installed) {
+        setModalMode('installed');
+        return;
+      }
       window.location.assign(parentApkUrl);
       return;
     }
@@ -146,7 +153,13 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
     <div className={`install-modal-backdrop ${modalMode.startsWith('ios') ? 'is-bottom-sheet' : ''}`} role="presentation" onClick={() => setModalMode('')}>
       <section className="install-modal" role="dialog" aria-modal="true" aria-label={`Install ${appName}`} onClick={(event) => event.stopPropagation()}>
         <button type="button" className="install-modal-close" onClick={() => setModalMode('')} aria-label="Close">x</button>
-        {modalMode === 'ios' ? (
+        {modalMode === 'installed' ? (
+          <div role="status" dir="rtl">
+            <span aria-hidden="true" style={{ fontSize: '40px', color: '#d70b19', fontWeight: 800 }}>!</span>
+            <h2>التطبيق مثبت مسبقًا</h2>
+            <button type="button" className="btn-primary" onClick={() => setModalMode('')}>حسنًا</button>
+          </div>
+        ) : modalMode === 'ios' ? (
           <>
             <span className="landing-kicker">Install {appName} on iPhone</span>
             <h2>Add to Home Screen</h2>

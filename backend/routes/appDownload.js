@@ -23,7 +23,7 @@ module.exports = ({ getFrontendOrigin }) => {
 
   router.get(`/downloads/${apkName}`, (req, res, next) => {
     res.type('application/vnd.android.package-archive');
-    res.set('Cache-Control', 'public, max-age=3600');
+    res.set('Cache-Control', 'no-cache');
     res.download(apkPath, apkName, (error) => {
       if (error) next(error);
     });

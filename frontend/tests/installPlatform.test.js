@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getInstallPlatform, withInstallTimeout } from '../src/utils/installPlatform.js';
+import { getInstallPlatform, withInstallTimeout, isParentApkInstalled } from '../src/utils/installPlatform.js';
+
+test('installed warning requires the exact Android app, never just a PWA or a download', async () => {
+  assert.equal(await isParentApkInstalled({}), false);
+  assert.equal(await isParentApkInstalled({ getInstalledRelatedApps: async () => [{ platform: 'webapp', id: '/parent-pwa-v3' }] }), false);
+  assert.equal(await isParentApkInstalled({ getInstalledRelatedApps: async () => [{ platform: 'play', id: 'other.app' }] }), false);
+  assert.equal(await isParentApkInstalled({ getInstalledRelatedApps: async () => [{ platform: 'play', id: 'com.warriorsgymnastics.app' }] }), true);
+  assert.equal(await isParentApkInstalled({ getInstalledRelatedApps: async () => { throw new Error('unsupported'); } }), false);
+});
 
 test('Android detection handles normal, desktop-mode and client-hint user agents', () => {
   for (const navigator of [

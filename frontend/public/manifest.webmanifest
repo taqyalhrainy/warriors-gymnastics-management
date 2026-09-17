@@ -5,6 +5,8 @@
   "description": "Warriors Gymnastics Academy portal for parents and staff.",
   "start_url": "/parent/login?source=parent-pwa",
   "scope": "/",
+  "related_applications": [{ "platform": "play", "id": "com.warriorsgymnastics.app" }],
+  "prefer_related_applications": false,
   "display": "standalone",
   "orientation": "portrait-primary",
   "theme_color": "#d70b19",

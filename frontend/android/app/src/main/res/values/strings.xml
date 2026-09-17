@@ -4,4 +4,5 @@
     <string name="title_activity_main">Warriors Gymnastics</string>
     <string name="package_name">com.warriorsgymnastics.app</string>
     <string name="custom_url_scheme">com.warriorsgymnastics.app</string>
+    <string name="asset_statements" translatable="false">[{\"relation\":[\"delegate_permission/common.handle_all_urls\"],\"target\":{\"namespace\":\"web\",\"site\":\"https://warriors-gymnastics-frontend.onrender.com\"}},{\"relation\":[\"delegate_permission/common.handle_all_urls\"],\"target\":{\"namespace\":\"web\",\"site\":\"https://warriors-gymnastics-management.onrender.com\"}}]</string>
 </resources>

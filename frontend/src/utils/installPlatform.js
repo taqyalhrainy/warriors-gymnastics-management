@@ -14,3 +14,11 @@ export const withInstallTimeout = (promise, milliseconds = 8000) => new Promise(
   const timer = setTimeout(() => reject(new Error('Install preparation timed out')), milliseconds);
   Promise.resolve(promise).then(resolve, reject).finally(() => clearTimeout(timer));
 });
+
+export const isParentApkInstalled = async (nav) => {
+  if (typeof nav.getInstalledRelatedApps !== 'function') return false;
+  try {
+    const apps = await withInstallTimeout(nav.getInstalledRelatedApps(), 1500);
+    return apps.some((app) => app.platform === 'play' && app.id === 'com.warriorsgymnastics.app');
+  } catch { return false; }
+};
