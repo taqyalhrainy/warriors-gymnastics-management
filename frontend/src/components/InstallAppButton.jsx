@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { isNativeAndroidApp } from '../utils/nativePushNotifications.js';
+import { getInstallPlatform, withInstallTimeout } from '../utils/installPlatform.js';
 
 const parentDownloadUrl = 'https://warriors-gymnastics-management.onrender.com/open-parent';
 
@@ -9,18 +10,7 @@ const isStandalone = () => (
   || window.navigator.standalone === true
 );
 
-const getPlatform = () => {
-  const userAgent = window.navigator.userAgent || '';
-  const isIOS = /iphone|ipad|ipod/i.test(userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const isAndroid = /android/i.test(userAgent);
-  const isSafari = /^((?!chrome|android|crios|fxios|edgios).)*safari/i.test(userAgent);
-  return {
-    isAndroid,
-    isIOS,
-    isSafari,
-    isStandalone: isStandalone()
-  };
-};
+const getPlatform = () => getInstallPlatform(window.navigator, isStandalone());
 
 const InstallAppButton = ({ className = '', label = 'Install App', installPath = '', appName = 'Warriors app' }) => {
   const isAdminInstall = installPath.startsWith('/admin/login') || installPath.startsWith('/admin-login');
@@ -28,7 +18,7 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
   const [isInstalled, setIsInstalled] = useState(() => typeof window !== 'undefined' && isStandalone());
   const [modalMode, setModalMode] = useState('');
   const [installMessage, setInstallMessage] = useState('');
-  const [platform, setPlatform] = useState(() => typeof window === 'undefined' ? {} : getPlatform());
+  const [installBusy, setInstallBusy] = useState(false);
   const appUrl = useMemo(() => `${window.location.origin}${installPath}`, [installPath]);
   const qrTargetUrl = !isAdminInstall
     ? parentDownloadUrl
@@ -38,7 +28,6 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrTargetUrl)}`;
 
   useEffect(() => {
-    setPlatform(getPlatform());
     const handleBeforeInstallPrompt = (event) => {
       event.preventDefault();
       window.__warriorsInstallPrompt = event;
@@ -89,33 +78,30 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
   if (isInstalled && isAdminInstall) return null;
 
   const prepareAndroidInstall = async () => {
+    setModalMode('android-wait');
+    setInstallMessage('Preparing installation...');
+    setInstallBusy(true);
     if (!('serviceWorker' in navigator) || !window.isSecureContext) {
-      setModalMode('android-wait');
-      setInstallMessage('Open this site with HTTPS in Chrome, then tap Install App again.');
+      setModalMode('manual');
+      setInstallBusy(false);
       return;
     }
 
     try {
-      const registration = await navigator.serviceWorker.getRegistration('/')
-        || await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-      await registration.update?.().catch(() => undefined);
-      await navigator.serviceWorker.ready;
-      setModalMode('android-wait');
-      setInstallMessage('Chrome is preparing the real app install. Close this message and tap Install App again in a few seconds.');
-      window.setTimeout(() => {
-        const promptEvent = window.__warriorsInstallPrompt;
-        if (promptEvent) {
-          setInstallPrompt(promptEvent);
-          setModalMode('');
-        }
-      }, 2500);
+      await withInstallTimeout((async () => {
+        const registration = await navigator.serviceWorker.getRegistration('/')
+          || await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+        await registration.update?.();
+        await navigator.serviceWorker.ready;
+      })());
+      setModalMode('manual');
     } catch {
-      setModalMode('android-wait');
-      setInstallMessage('Chrome could not prepare the real app install yet. Please open this page in Chrome and try again.');
-    }
+      setModalMode('manual');
+    } finally { setInstallBusy(false); }
   };
 
   const handleInstall = async () => {
+    if (installBusy) return;
     const platform = getPlatform();
     if (platform.isStandalone) {
       setIsInstalled(true);
@@ -123,16 +109,21 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
     }
     const promptEvent = installPrompt || window.__warriorsInstallPrompt;
     if (promptEvent) {
-      setModalMode('');
+      setInstallPrompt(null);
+      window.__warriorsInstallPrompt = null;
+      setInstallBusy(true);
+      setModalMode('android-wait');
+      setInstallMessage('Opening installation...');
       try {
-        await promptEvent.prompt();
-        const choice = await promptEvent.userChoice;
-        if (choice?.outcome === 'accepted') setIsInstalled(true);
+        await withInstallTimeout(promptEvent.prompt());
+        const choice = await withInstallTimeout(promptEvent.userChoice, 60000);
+        setModalMode(choice?.outcome === 'accepted' ? '' : 'manual');
       } catch {
         setModalMode('manual');
       } finally {
         setInstallPrompt(null);
         window.__warriorsInstallPrompt = null;
+        setInstallBusy(false);
       }
       return;
     }
@@ -140,7 +131,7 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
       setModalMode(platform.isSafari ? 'ios' : 'ios-browser');
       return;
     }
-    if (platform.isAndroid) {
+    if (platform.isMobile) {
       await prepareAndroidInstall();
       return;
     }
@@ -177,6 +168,9 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
           <>
             <h2>Install {appName}</h2>
             <p>Browser menu (&#8942;) &#8594; Add to Home screen &#8594; Install</p>
+            <p>If opened inside WhatsApp, Facebook or a scanner, open this page in Chrome first.</p>
+            {(installPrompt || window.__warriorsInstallPrompt) && <button type="button" className="btn-primary" onClick={handleInstall} disabled={installBusy}>Install {appName}</button>}
+            <a href={appUrl}>Open {appName}</a>
           </>
         ) : (
           <>
@@ -193,8 +187,8 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
 
   return (
     <>
-      <button type="button" className={`install-app-button ${className}`} onClick={handleInstall}>
-        {label}
+      <button type="button" className={`install-app-button ${className}`} onClick={handleInstall} disabled={installBusy}>
+        {installBusy ? 'Please wait...' : label}
       </button>
       {modal}
     </>
