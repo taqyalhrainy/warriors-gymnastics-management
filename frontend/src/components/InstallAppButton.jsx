@@ -4,6 +4,7 @@ import { isNativeAndroidApp } from '../utils/nativePushNotifications.js';
 import { getInstallPlatform, withInstallTimeout } from '../utils/installPlatform.js';
 
 const parentDownloadUrl = 'https://warriors-gymnastics-management.onrender.com/open-parent';
+const parentApkUrl = 'https://warriors-gymnastics-management.onrender.com/downloads/Warriors-Parent-2.0.apk';
 
 const isStandalone = () => (
   window.matchMedia?.('(display-mode: standalone)').matches
@@ -74,8 +75,7 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
   }, [isAdminInstall]);
 
   if (isNativeAndroidApp()) return null;
-  if (isInstalled && !isAdminInstall) return null;
-  if (isInstalled && isAdminInstall) return null;
+  if (isInstalled && (isAdminInstall || !getPlatform().isAndroid)) return null;
 
   const prepareAndroidInstall = async () => {
     setModalMode('android-wait');
@@ -103,6 +103,10 @@ const InstallAppButton = ({ className = '', label = 'Install App', installPath =
   const handleInstall = async () => {
     if (installBusy) return;
     const platform = getPlatform();
+    if (!isAdminInstall && platform.isAndroid) {
+      window.location.assign(parentApkUrl);
+      return;
+    }
     if (platform.isStandalone) {
       setIsInstalled(true);
       return;
