@@ -13,13 +13,28 @@ const setup = (network, initial = {}) => {
     self: { location: { origin: 'https://gym.example' }, addEventListener: (name, handler) => { handlers[name] = handler; } },
     URL, Response, fetch: network, caches: { open: async () => cache }
   });
-  return { stored, navigate(path) {
+  return { stored, navigate(path, mode = 'navigate') {
     let response, background;
-    handlers.fetch({ request: { url: `https://gym.example${path}`, method: 'GET', mode: 'navigate' },
+    handlers.fetch({ request: { url: new URL(path, 'https://gym.example').href, method: 'GET', mode },
       respondWith: (value) => { response = value; }, waitUntil: (value) => { background = value; } });
     return { response, background };
   } };
 };
+
+test('APK downloads and QR redirects bypass the app shell and cache entirely', () => {
+  const app = setup(() => { throw new Error('Worker must not fetch or replace downloads'); }, {
+    '/parent/login?source=parent-pwa': shell('Parent')
+  });
+  for (const path of ['/downloads/Warriors-Parent-2.0.apk?v=4', '/open-parent', '/open-admin?from=qr',
+    '/parent-download/index.html', '/parent-download/download.js', '/ota/android/latest.json',
+    '/another-app.apk', 'https://other.example/download']) {
+    for (const mode of ['navigate', 'cors']) {
+      const result = app.navigate(path, mode);
+      assert.equal(result.response, undefined, path);
+      assert.equal(result.background, undefined, path);
+    }
+  }
+});
 
 test('saved admin interface opens immediately while the server is still waking', async () => {
   let resolve;

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'warriors-shell-v17';
+const CACHE_NAME = 'warriors-shell-v18';
 const SHELL_ASSETS = ['/', '/login?source=pwa', '/parent/login?source=parent-pwa', '/admin/login?source=admin-pwa', '/manifest.webmanifest', '/admin-manifest.webmanifest', '/warriors-logo.png', '/warriors-icon-192.png', '/warriors-icon-512.png'];
 
 const isAppShell = async (response) => response?.ok
@@ -38,7 +38,13 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const requestUrl = new URL(event.request.url);
 
-  if (requestUrl.pathname.startsWith('/api') || event.request.method !== 'GET') {
+  // Downloads and server redirects must reach the network, never the SPA shell.
+  const networkOnly = /^\/(?:downloads|parent-download|ota)(?:\/|$)|^\/open-(?:parent|admin)\/?$/;
+  if (requestUrl.origin !== self.location.origin
+      || requestUrl.pathname.startsWith('/api')
+      || networkOnly.test(requestUrl.pathname)
+      || /\.apk$/i.test(requestUrl.pathname)
+      || event.request.method !== 'GET') {
     return;
   }
 
