@@ -2,6 +2,8 @@ const Player = require('../models/Player');
 const Payment = require('../models/Payment');
 const Attendance = require('../models/Attendance');
 const WaitingListEntry = require('../models/WaitingListEntry');
+const Coach = require('../models/Coach');
+const CoachAttendance = require('../models/CoachAttendance');
 const HistoryEntry = require('../models/HistoryEntry');
 const { decrypt } = require('./encryption');
 
@@ -132,6 +134,35 @@ const snapshotWaitingListDocument = (entryDocument) => {
   };
 };
 
+const snapshotCoachDocument = (coachDocument, attendanceRows = []) => {
+  const coach = coachDocument?.toObject ? coachDocument.toObject() : coachDocument;
+  return {
+    _id: normalizeId(coach?._id),
+    userId: normalizeId(coach?.userId),
+    name: coach?.name || '',
+    phone: coach?.phone || '',
+    phone2: coach?.phone2 || '',
+    specialization: coach?.specialization || '',
+    attendanceHistory: attendanceRows.map((rowDocument) => {
+      const row = rowDocument?.toObject ? rowDocument.toObject() : rowDocument;
+      return {
+        _id: normalizeId(row?._id),
+        coachId: normalizeId(row?.coachId),
+        date: row?.date || null,
+        status: row?.status || '',
+        arrivedAt: row?.arrivedAt || null,
+        leftAt: row?.leftAt || null,
+        absentAt: row?.absentAt || null,
+        dayNote: row?.dayNote || '',
+        createdBy: normalizeId(row?.createdBy),
+        updatedBy: normalizeId(row?.updatedBy),
+        createdAt: row?.createdAt || null,
+        updatedAt: row?.updatedAt || null
+      };
+    })
+  };
+};
+
 const diffChangedFields = (before = {}, after = {}) => {
   const keys = new Set([...Object.keys(before || {}), ...Object.keys(after || {})]);
   return [...keys].filter((key) => JSON.stringify(before?.[key] ?? null) !== JSON.stringify(after?.[key] ?? null));
@@ -204,6 +235,22 @@ const loadCurrentWaitingListSnapshots = async () => {
   return entries.map(snapshotWaitingListDocument);
 };
 
+const loadCurrentCoachSnapshots = async () => {
+  const coaches = await Coach.find({}).sort({ _id: -1 });
+  const attendanceRows = coaches.length
+    ? await CoachAttendance.find({ coachId: { $in: coaches.map((coach) => coach._id) } })
+      .sort({ date: -1, updatedAt: -1, _id: -1 })
+    : [];
+  const attendanceByCoachId = new Map();
+  attendanceRows.forEach((row) => {
+    const key = normalizeId(row.coachId);
+    if (!attendanceByCoachId.has(key)) attendanceByCoachId.set(key, []);
+    attendanceByCoachId.get(key).push(row);
+  });
+
+  return coaches.map((coach) => snapshotCoachDocument(coach, attendanceByCoachId.get(normalizeId(coach._id)) || []));
+};
+
 const ensureHistoryBaseline = async (entityType) => {
   const existingEntry = await HistoryEntry.findOne({ entityType }).sort({ changedAt: 1 }).lean();
   if (existingEntry) {
@@ -214,7 +261,9 @@ const ensureHistoryBaseline = async (entityType) => {
     ? await loadCurrentPlayerSnapshots()
     : entityType === 'payment'
       ? await loadCurrentPaymentSnapshots()
-      : await loadCurrentWaitingListSnapshots();
+      : entityType === 'coach'
+        ? await loadCurrentCoachSnapshots()
+        : await loadCurrentWaitingListSnapshots();
 
   return createBaselineEntries(entityType, snapshots);
 };
@@ -223,6 +272,7 @@ const ensureHistoryBaselines = async () => {
   await ensureHistoryBaseline('player');
   await ensureHistoryBaseline('payment');
   await ensureHistoryBaseline('waitingList');
+  await ensureHistoryBaseline('coach');
 };
 
 const getHistoryAvailableSince = async (entityType) => {
@@ -272,7 +322,9 @@ const restoreStateAt = async (entityType, asOf) => {
     ? await loadCurrentPlayerSnapshots()
     : entityType === 'payment'
       ? await loadCurrentPaymentSnapshots()
-      : await loadCurrentWaitingListSnapshots();
+      : entityType === 'coach'
+        ? await loadCurrentCoachSnapshots()
+        : await loadCurrentWaitingListSnapshots();
 
   const stateMap = new Map(baseState.map((item) => [String(item._id), item]));
   const futureEvents = await HistoryEntry.find({
@@ -326,6 +378,10 @@ const restoreStateAt = async (entityType, asOf) => {
     });
   }
 
+  if (entityType === 'coach') {
+    return rows.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+  }
+
   const paymentsByPlayer = new Map();
   rows.forEach((payment) => {
     const playerKey = String(payment.playerId || 'unknown');
@@ -358,6 +414,7 @@ module.exports = {
   snapshotPlayerDocument,
   snapshotPaymentDocument,
   snapshotWaitingListDocument,
+  snapshotCoachDocument,
   createHistoryEntry,
   restoreStateAt,
   loadAttendanceForDate,

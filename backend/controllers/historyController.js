@@ -3,6 +3,8 @@ const Payment = require('../models/Payment');
 const Parent = require('../models/Parent');
 const TrainingGroup = require('../models/TrainingGroup');
 const WaitingListEntry = require('../models/WaitingListEntry');
+const Coach = require('../models/Coach');
+const CoachAttendance = require('../models/CoachAttendance');
 const HistoryEntry = require('../models/HistoryEntry');
 const { validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
@@ -18,11 +20,12 @@ const {
 } = require('../utils/history');
 
 const snapshotRestoreJobs = new Map();
-const RESTORE_SCOPES = ['players', 'payments', 'waitingList'];
+const RESTORE_SCOPES = ['players', 'payments', 'waitingList', 'coaches'];
 const RESTORE_SCOPE_ENTITY_TYPES = {
   players: 'player',
   payments: 'payment',
-  waitingList: 'waitingList'
+  waitingList: 'waitingList',
+  coaches: 'coach'
 };
 
 const asObjectId = (value) => (validateObjectId(value) ? value : undefined);
@@ -113,6 +116,32 @@ const buildWaitingListRestorePayload = (snapshot, fallbackUserId) => ({
   createdAt: asDate(snapshot.createdAt) || new Date(),
   updatedAt: asDate(snapshot.updatedAt) || new Date()
 });
+
+const buildCoachRestorePayload = (snapshot) => ({
+  userId: asObjectId(snapshot.userId) || null,
+  name: snapshot.name || '',
+  phone: snapshot.phone || '',
+  phone2: snapshot.phone2 || '',
+  specialization: snapshot.specialization || ''
+});
+
+const buildCoachAttendanceRestorePayload = (row, coachId) => ({
+  coachId,
+  date: asDate(row.date) || new Date(),
+  status: ['present', 'left', 'absent'].includes(row.status) ? row.status : undefined,
+  arrivedAt: asDate(row.arrivedAt) || null,
+  leftAt: asDate(row.leftAt) || null,
+  absentAt: asDate(row.absentAt) || null,
+  dayNote: row.dayNote || '',
+  createdBy: asObjectId(row.createdBy) || null,
+  updatedBy: asObjectId(row.updatedBy) || null,
+  createdAt: asDate(row.createdAt) || new Date(),
+  updatedAt: asDate(row.updatedAt) || null
+});
+
+const removeUndefinedFields = (value) => Object.fromEntries(
+  Object.entries(value).filter(([, fieldValue]) => typeof fieldValue !== 'undefined')
+);
 
 const loadPlayerForSnapshot = (id) => Player.findById(id)
   .populate('parentId', 'name')
@@ -397,6 +426,66 @@ const restoreWaitingList = async (targetEntries, req) => {
   return { restored, removed, skipped };
 };
 
+const restoreCoaches = async (targetCoaches) => {
+  const targetById = new Map(targetCoaches.map((coach) => [String(coach._id), coach]));
+  const currentCoaches = await Coach.find({}).select('_id').lean();
+  const coachOperations = [];
+  let restored = 0;
+  let removed = 0;
+  let skipped = 0;
+
+  for (const coach of currentCoaches) {
+    const coachId = String(coach._id);
+    const target = targetById.get(coachId);
+
+    if (!target) {
+      coachOperations.push({ deleteOne: { filter: { _id: coach._id } } });
+      removed += 1;
+      continue;
+    }
+
+    const payload = buildCoachRestorePayload(target);
+    if (!payload.name) {
+      skipped += 1;
+      targetById.delete(coachId);
+      continue;
+    }
+    coachOperations.push({ updateOne: { filter: { _id: coach._id }, update: { $set: payload } } });
+    restored += 1;
+    targetById.delete(coachId);
+  }
+
+  for (const target of targetById.values()) {
+    if (!validateObjectId(target._id) || !target.name) {
+      skipped += 1;
+      continue;
+    }
+    coachOperations.push({ insertOne: { document: { _id: target._id, ...buildCoachRestorePayload(target) } } });
+    restored += 1;
+  }
+
+  if (coachOperations.length) {
+    await Coach.bulkWrite(coachOperations, { ordered: false });
+  }
+
+  const targetCoachIds = targetCoaches.map((coach) => asObjectId(coach._id)).filter(Boolean);
+  await CoachAttendance.deleteMany({ coachId: { $in: targetCoachIds } });
+  const attendanceDocuments = [];
+  targetCoaches.forEach((coach) => {
+    const coachId = asObjectId(coach._id);
+    if (!coachId) return;
+    (coach.attendanceHistory || []).forEach((row) => {
+      if (!validateObjectId(row._id)) return;
+      attendanceDocuments.push(removeUndefinedFields({ _id: row._id, ...buildCoachAttendanceRestorePayload(row, coachId) }));
+    });
+  });
+  if (attendanceDocuments.length) {
+    await CoachAttendance.insertMany(attendanceDocuments, { ordered: false });
+  }
+
+  return { restored, removed, skipped };
+};
+
 const getPlayerHistory = async (req, res, next) => {
   try {
     const { playerId } = req.params;
@@ -437,15 +526,18 @@ const runSnapshotRestore = async ({ jobId, asOf, scopes, reqMeta }) => {
     const shouldRestorePlayers = scopes.includes('players');
     const shouldRestorePayments = scopes.includes('payments');
     const shouldRestoreWaitingList = scopes.includes('waitingList');
-    const [players, payments, waitingList] = await Promise.all([
+    const shouldRestoreCoaches = scopes.includes('coaches');
+    const [players, payments, waitingList, coaches] = await Promise.all([
       shouldRestorePlayers ? restoreStateAt('player', asOf) : Promise.resolve([]),
       shouldRestorePayments ? restoreStateAt('payment', asOf) : Promise.resolve([]),
-      shouldRestoreWaitingList ? restoreStateAt('waitingList', asOf) : Promise.resolve([])
+      shouldRestoreWaitingList ? restoreStateAt('waitingList', asOf) : Promise.resolve([]),
+      shouldRestoreCoaches ? restoreStateAt('coach', asOf) : Promise.resolve([])
     ]);
 
     let playerResult = null;
     let paymentResult = null;
     let waitingListResult = null;
+    let coachResult = null;
     if (shouldRestorePlayers) {
       job.message = 'Restoring players...';
       playerResult = await restorePlayers(players, reqMeta);
@@ -457,6 +549,10 @@ const runSnapshotRestore = async ({ jobId, asOf, scopes, reqMeta }) => {
     if (shouldRestoreWaitingList) {
       job.message = 'Restoring waiting list...';
       waitingListResult = await restoreWaitingList(waitingList, reqMeta);
+    }
+    if (shouldRestoreCoaches) {
+      job.message = 'Restoring coaches...';
+      coachResult = await restoreCoaches(coaches);
     }
     job.message = 'Rebuilding links and counters...';
     await Promise.all([
@@ -474,7 +570,8 @@ const runSnapshotRestore = async ({ jobId, asOf, scopes, reqMeta }) => {
       skippedUnavailableScopes: job.skippedUnavailableScopes || [],
       players: playerResult,
       payments: paymentResult,
-      waitingList: waitingListResult
+      waitingList: waitingListResult,
+      coaches: coachResult
     };
     job.completedAt = new Date();
   } catch (error) {

@@ -30,9 +30,11 @@ const DASHBOARD_STATS_CACHE_KEY = 'warriors-dashboard-stats-cache';
 const SNAPSHOT_RESTORE_SCOPES = [
   { key: 'players', label: 'Players', description: 'Player profiles, subscriptions, status, due, groups.', restorable: true },
   { key: 'payments', label: 'Payments', description: 'Payment records and payment history.', restorable: true },
+  { key: 'coaches', label: 'Coaches', description: 'Coach profiles, attendance history, and day notes.', restorable: true },
   { key: 'waitingList', label: 'Waiting List', description: 'Waiting and Data list entries.', restorable: true },
 ];
 const RESTORABLE_SNAPSHOT_SCOPES = SNAPSHOT_RESTORE_SCOPES.filter((scope) => scope.restorable);
+const SNAPSHOT_SCOPE_LABELS = Object.fromEntries(SNAPSHOT_RESTORE_SCOPES.map((scope) => [scope.key, scope.label]));
 
 const readDashboardStatsCache = () => {
   try {
@@ -513,10 +515,10 @@ const AdminDashboard = () => {
       const completedScopes = result.scopes?.length ? result.scopes : selectedSnapshotScopes;
       const skipped = completedScopes.reduce((sum, scope) => sum + Number(result[scope]?.skipped || 0), 0);
       const restoredParts = completedScopes
-        .map((scope) => `${scope}: ${result[scope]?.restored || 0}`)
+        .map((scope) => `${SNAPSHOT_SCOPE_LABELS[scope] || scope}: ${result[scope]?.restored || 0}`)
         .join(', ');
       const skippedUnavailable = result.skippedUnavailableScopes?.length
-        ? ` Skipped unavailable sections: ${result.skippedUnavailableScopes.join(', ')}.`
+        ? ` Skipped unavailable sections: ${result.skippedUnavailableScopes.map((scope) => SNAPSHOT_SCOPE_LABELS[scope] || scope).join(', ')}.`
         : '';
       setSnapshotMessage(`Restored ${restoredParts}.${skipped ? ` Skipped ${skipped} incomplete records.` : ''}${skippedUnavailable}`);
     } catch (err) {

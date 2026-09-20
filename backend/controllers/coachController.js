@@ -4,6 +4,7 @@ const CoachAttendance = require('../models/CoachAttendance');
 const User = require('../models/User');
 const { sanitizeObject, validateEmail, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
+const { snapshotCoachDocument, createHistoryEntry } = require('../utils/history');
 
 const getDateOnly = (value = new Date()) => {
   const date = value ? new Date(value) : new Date();
@@ -31,6 +32,23 @@ const attachTodayAttendance = async (coaches, dateValue) => {
   const attendanceByCoachId = new Map(attendanceRows.map((row) => [String(row.coachId), row]));
   const formattedRows = rows.map((coach) => formatCoachResponse(coach, attendanceByCoachId));
   return Array.isArray(coaches) ? formattedRows : formattedRows[0];
+};
+
+const loadCoachSnapshot = async (coach) => {
+  const attendanceRows = coach?._id ? await CoachAttendance.find({ coachId: coach._id }).lean() : [];
+  return snapshotCoachDocument(coach, attendanceRows);
+};
+
+const recordCoachHistory = async ({ coach, action, before = null, userId, req }) => {
+  await createHistoryEntry({
+    entityType: 'coach',
+    entityId: coach._id,
+    action,
+    before,
+    after: action === 'delete' ? null : await loadCoachSnapshot(coach),
+    userId,
+    req
+  });
 };
 
 const getCoaches = async (req, res, next) => {
@@ -93,6 +111,7 @@ const createCoach = async (req, res, next) => {
     }
 
     const coach = await Coach.create({ userId, name, phone: phone || '', phone2: phone2 || '', specialization: specialization || '' });
+    await recordCoachHistory({ coach, action: 'create', userId: req.user._id, req });
     await createAuditLog({ userId: req.user._id, action: 'create coach', entity: 'Coach', entityId: coach._id, req });
     res.status(201).json(coach);
   } catch (error) {
@@ -112,6 +131,7 @@ const updateCoach = async (req, res, next) => {
     if (!coach) {
       return res.status(404).json({ message: 'Coach not found.' });
     }
+    const beforeSnapshot = await loadCoachSnapshot(coach);
     if (name) coach.name = name;
     if (typeof phone !== 'undefined') coach.phone = phone;
     if (typeof phone2 !== 'undefined') coach.phone2 = phone2;
@@ -142,6 +162,7 @@ const updateCoach = async (req, res, next) => {
       }
     }
     await coach.save();
+    await recordCoachHistory({ coach, action: 'update', before: beforeSnapshot, userId: req.user._id, req });
     await createAuditLog({ userId: req.user._id, action: 'update coach', entity: 'Coach', entityId: coach._id, req });
     res.json(coach);
   } catch (error) {
@@ -159,7 +180,10 @@ const deleteCoach = async (req, res, next) => {
     if (!coach) {
       return res.status(404).json({ message: 'Coach not found.' });
     }
+    const beforeSnapshot = await loadCoachSnapshot(coach);
+    await recordCoachHistory({ coach, action: 'delete', before: beforeSnapshot, userId: req.user._id, req });
     await coach.deleteOne();
+    await CoachAttendance.deleteMany({ coachId: coach._id });
     await createAuditLog({ userId: req.user._id, action: 'delete coach', entity: 'Coach', entityId: coach._id, req });
     res.json({ message: 'Coach deleted successfully.' });
   } catch (error) {
@@ -184,6 +208,7 @@ const updateCoachAttendance = async (req, res, next) => {
     if (!coach) {
       return res.status(404).json({ message: 'Coach not found.' });
     }
+    const beforeSnapshot = await loadCoachSnapshot(coach);
 
     const now = new Date();
     const date = getDateOnly(body.date || now);
@@ -192,6 +217,7 @@ const updateCoachAttendance = async (req, res, next) => {
     if (action === 'clear') {
       const attendance = await CoachAttendance.findOneAndDelete({ coachId: coach._id, date }).lean();
       if (attendance) {
+        await recordCoachHistory({ coach, action: 'update', before: beforeSnapshot, userId: req.user._id, req });
         await createAuditLog({ userId: req.user._id, action: 'coach attendance clear', entity: 'CoachAttendance', entityId: attendance._id, req });
       }
       return res.json(null);
@@ -214,6 +240,7 @@ const updateCoachAttendance = async (req, res, next) => {
       ).lean();
 
       await createAuditLog({ userId: req.user._id, action: 'coach day note', entity: 'CoachAttendance', entityId: attendance._id, req });
+      await recordCoachHistory({ coach, action: 'update', before: beforeSnapshot, userId: req.user._id, req });
       return res.json(attendance);
     }
 
@@ -252,6 +279,7 @@ const updateCoachAttendance = async (req, res, next) => {
     ).lean();
 
     await createAuditLog({ userId: req.user._id, action: `coach ${action}`, entity: 'CoachAttendance', entityId: attendance._id, req });
+    await recordCoachHistory({ coach, action: 'update', before: beforeSnapshot, userId: req.user._id, req });
     res.json(attendance);
   } catch (error) {
     next(error);
