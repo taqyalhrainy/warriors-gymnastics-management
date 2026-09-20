@@ -3,10 +3,11 @@ const mongoose = require('mongoose');
 const coachAttendanceSchema = new mongoose.Schema({
   coachId: { type: mongoose.Schema.Types.ObjectId, ref: 'Coach', required: true },
   date: { type: Date, required: true },
-  status: { type: String, enum: ['present', 'left', 'absent'], required: true },
+  status: { type: String, enum: ['present', 'left', 'absent'] },
   arrivedAt: { type: Date },
   leftAt: { type: Date },
   absentAt: { type: Date },
+  dayNote: { type: String, trim: true, maxlength: 1000, default: '' },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   createdAt: { type: Date, default: Date.now },

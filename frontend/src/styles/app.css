@@ -5155,6 +5155,34 @@ body.rtl .new-subscription-summary-card[type='button'] {
   border-radius: 8px;
 }
 
+.coach-day-note {
+  display: grid;
+  gap: 8px;
+}
+
+.coach-day-note span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.coach-day-note textarea {
+  width: 100%;
+  min-height: 64px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.coach-day-note button {
+  justify-self: flex-end;
+  min-height: 36px;
+  border-radius: 8px;
+}
+
 .coach-admin-actions {
   justify-content: flex-end;
   padding-top: 6px;
@@ -6065,6 +6093,15 @@ body.rtl .new-subscription-summary-card[type='button'] {
 .parent-payment-card .data-table tr:hover,
 .parent-notifications-card .data-table tr:hover {
   background: color-mix(in srgb, #14b8a6 7%, var(--row-hover));
+}
+
+.parent-notification-row {
+  cursor: pointer;
+}
+
+.parent-notification-row:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary) 55%, transparent);
+  outline-offset: -3px;
 }
 
 .parent-package-list {

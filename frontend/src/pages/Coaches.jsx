@@ -41,6 +41,7 @@ const CoachesPage = () => {
   const [search, setSearch] = useState('');
   const [selectedDate, setSelectedDate] = useState(getDateInputValue());
   const [pendingCoachAction, setPendingCoachAction] = useState('');
+  const [coachNoteDrafts, setCoachNoteDrafts] = useState({});
   const { t } = useLanguage();
 
   const loadCoaches = async () => {
@@ -50,6 +51,16 @@ const CoachesPage = () => {
   useEffect(() => {
     loadCoaches();
   }, [selectedDate]);
+
+  useEffect(() => {
+    setCoachNoteDrafts((current) => {
+      const next = {};
+      coaches.forEach((coach) => {
+        next[coach._id] = current[coach._id] ?? coach.todayAttendance?.dayNote ?? '';
+      });
+      return next;
+    });
+  }, [coaches]);
 
   const resetForm = () => {
     setSelectedCoach(null);
@@ -115,6 +126,28 @@ const CoachesPage = () => {
       )));
     } catch (error) {
       setMessage(error.response?.data?.message || 'Unable to update coach attendance.');
+    } finally {
+      setPendingCoachAction('');
+    }
+  };
+
+  const handleDayNoteSave = async (coach) => {
+    const actionKey = `${coach._id}:note`;
+    if (pendingCoachAction) return;
+    setMessage('');
+    setPendingCoachAction(actionKey);
+    try {
+      const attendance = await updateCoachAttendance(coach._id, {
+        action: 'note',
+        date: selectedDate,
+        dayNote: coachNoteDrafts[coach._id] || ''
+      });
+      setCoaches((current) => current.map((item) => (
+        item._id === coach._id ? { ...item, todayAttendance: attendance } : item
+      )));
+      setMessage('Coach day note saved.');
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Unable to save coach day note.');
     } finally {
       setPendingCoachAction('');
     }
@@ -258,6 +291,18 @@ const CoachesPage = () => {
                         </button>
                       )}
                     </div>
+                    <label className="coach-day-note">
+                      <span>Day note</span>
+                      <textarea
+                        value={coachNoteDrafts[coach._id] || ''}
+                        onChange={(event) => setCoachNoteDrafts((current) => ({ ...current, [coach._id]: event.target.value }))}
+                        placeholder="Only for this coach on this date"
+                        rows={2}
+                      />
+                      <button type="button" className="btn-secondary" disabled={Boolean(pendingCoachAction)} onClick={() => handleDayNoteSave(coach)}>
+                        {pendingCoachAction === `${coach._id}:note` ? 'Saving...' : 'Save note'}
+                      </button>
+                    </label>
                     <div className="coach-admin-actions">
                       <Link to={`/coaches/${coach._id}`}>View</Link>
                       <button type="button" onClick={() => handleEdit(coach)}>{t('edit')}</button>

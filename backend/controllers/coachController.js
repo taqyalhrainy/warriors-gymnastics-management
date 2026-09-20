@@ -176,7 +176,7 @@ const updateCoachAttendance = async (req, res, next) => {
 
     const body = sanitizeObject(req.body);
     const action = String(body.action || '').trim().toLowerCase();
-    if (!['arrived', 'left', 'absent', 'clear'].includes(action)) {
+    if (!['arrived', 'left', 'absent', 'clear', 'note'].includes(action)) {
       return res.status(400).json({ message: 'Invalid coach attendance action.' });
     }
 
@@ -187,6 +187,7 @@ const updateCoachAttendance = async (req, res, next) => {
 
     const now = new Date();
     const date = getDateOnly(body.date || now);
+    const dayNote = typeof body.dayNote === 'string' ? body.dayNote.trim().slice(0, 1000) : '';
 
     if (action === 'clear') {
       const attendance = await CoachAttendance.findOneAndDelete({ coachId: coach._id, date }).lean();
@@ -194,6 +195,26 @@ const updateCoachAttendance = async (req, res, next) => {
         await createAuditLog({ userId: req.user._id, action: 'coach attendance clear', entity: 'CoachAttendance', entityId: attendance._id, req });
       }
       return res.json(null);
+    }
+
+    if (action === 'note') {
+      const attendance = await CoachAttendance.findOneAndUpdate(
+        { coachId: coach._id, date },
+        {
+          $set: {
+            coachId: coach._id,
+            date,
+            dayNote,
+            updatedBy: req.user._id,
+            updatedAt: now
+          },
+          $setOnInsert: { createdBy: req.user._id, createdAt: now }
+        },
+        { new: true, upsert: true, setDefaultsOnInsert: true }
+      ).lean();
+
+      await createAuditLog({ userId: req.user._id, action: 'coach day note', entity: 'CoachAttendance', entityId: attendance._id, req });
+      return res.json(attendance);
     }
 
     const setFields = {

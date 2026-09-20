@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
 import DataStatus from '../components/DataStatus.jsx';
 import { fetchNotifications, getCachedNotificationsPage } from '../services/notifications.js';
@@ -81,16 +81,26 @@ const ParentNotificationsPage = () => {
         <>
         <div className="table-card parent-panel parent-notifications-card">
           <table className="data-table">
-            <thead><tr><th></th><th>{t('title')}</th><th>{t('receivedStatus')}</th><th>{t('action')}</th></tr></thead>
+            <thead><tr><th></th><th>{t('title')}</th><th>{t('receivedStatus')}</th></tr></thead>
             <tbody>
               {notifications.length ? notifications.map((note) => (
-                <tr key={note._id}>
+                <tr
+                  key={note._id}
+                  className="parent-notification-row"
+                  onClick={() => navigate(`/parent/notifications/${note._id}`)}
+                  tabIndex={0}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      navigate(`/parent/notifications/${note._id}`);
+                    }
+                  }}
+                >
                   <td>{!note.isRead && <span className="parent-notification-alert" aria-label="New message">!</span>}</td>
                   <td>{note.title}</td>
                   <td>{new Date(note.createdAt).toLocaleString()}</td>
-                  <td><Link className="parent-open-link" to={`/parent/notifications/${note._id}`}>{t('open')}</Link></td>
                 </tr>
-              )) : <tr><td colSpan="4">{t('noNotificationsFound')}</td></tr>}
+              )) : <tr><td colSpan="3">{t('noNotificationsFound')}</td></tr>}
             </tbody>
           </table>
         </div>
