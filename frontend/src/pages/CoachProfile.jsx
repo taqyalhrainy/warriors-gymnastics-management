@@ -101,6 +101,7 @@ const CoachProfilePage = () => {
                     <span>Came</span>
                     <span>Left</span>
                     <span>Absent</span>
+                    <span>Day note</span>
                   </div>
                   {history.map((row) => (
                     <div className={`coach-history-row status-${row.status}`} key={row._id}>
@@ -109,6 +110,7 @@ const CoachProfilePage = () => {
                       <span>{formatTime(row.arrivedAt)}</span>
                       <span>{formatTime(row.leftAt)}</span>
                       <span>{formatTime(row.absentAt)}</span>
+                      <span className="coach-history-note">{row.dayNote || '-'}</span>
                     </div>
                   ))}
                 </div>
