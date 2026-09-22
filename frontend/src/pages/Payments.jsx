@@ -158,6 +158,8 @@ const PaymentsPage = () => {
   const [paymentsHasMore, setPaymentsHasMore] = useState(false);
   const paymentsLoadRequestIdRef = useRef(0);
   const paymentsRevisionRef = useRef(0);
+  const submittingRef = useRef(false);
+  const [saveMessage, setSaveMessage] = useState('');
   const { t } = useLanguage();
 
   const loadPayments = async (options = {}) => {
@@ -417,13 +419,11 @@ const PaymentsPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setIsSubmitting(true);
     setError('');
-
-    const previousPayments = payments;
-    const previousForm = form;
-    const previousEditingPaymentId = editingPaymentId;
-    const previousPlayerSearch = playerSearch;
-    const optimisticId = editingPaymentId || `temp-payment-${Date.now()}`;
+    setSaveMessage('');
 
     try {
       const payload = {
@@ -438,41 +438,26 @@ const PaymentsPage = () => {
         payload.customPlayerName = '';
       }
       delete payload.customTransactionType;
-      const optimisticPayment = buildOptimisticPayment(payload, optimisticId);
-
+      const savedPayment = editingPaymentId
+        ? await updatePayment(editingPaymentId, payload)
+        : await createPayment(payload);
       paymentsRevisionRef.current += 1;
       setPayments((current) => sortPaymentsNewestFirst(
-        editingPaymentId
-          ? current.map((payment) => payment._id === editingPaymentId ? optimisticPayment : payment)
-          : [optimisticPayment, ...current]
+        [savedPayment, ...current.filter((payment) => payment._id !== savedPayment._id)]
       ));
       setForm({ ...initialPaymentForm, paymentDate: getDateInputValue() });
       setEditingPaymentId('');
       setPlayerSearch('');
-      setIsSubmitting(true);
-
-      if (editingPaymentId) {
-        const savedPayment = await updatePayment(editingPaymentId, payload);
-        paymentsRevisionRef.current += 1;
-        setPayments((current) => sortPaymentsNewestFirst(
-          current.map((payment) => payment._id === savedPayment._id ? savedPayment : payment)
-        ));
+      setSaveMessage('Payment saved');
+      if (activeView === 'day' && selectedDay !== payload.paymentDate) {
+        setSelectedDay(payload.paymentDate);
       } else {
-        const savedPayment = await createPayment(payload);
-        paymentsRevisionRef.current += 1;
-        setPayments((current) => sortPaymentsNewestFirst(
-          current.map((payment) => payment._id === optimisticId ? savedPayment : payment)
-        ));
+        refreshPaymentsInBackground();
       }
-      refreshPaymentsInBackground();
     } catch (err) {
-      paymentsRevisionRef.current += 1;
-      setPayments(previousPayments);
-      setForm(previousForm);
-      setEditingPaymentId(previousEditingPaymentId);
-      setPlayerSearch(previousPlayerSearch);
       setError(err.response?.data?.message || 'Unable to save payment.');
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -579,6 +564,7 @@ const PaymentsPage = () => {
           </div>
 
           <form className="payment-entry-panel" onSubmit={handleSubmit}>
+            <fieldset disabled={isSubmitting} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: 'grid', gap: 12 }}>
                 <div className="payment-entry-heading">
                   <h2>{editingPaymentId ? 'Edit Payment' : t('addPayment')}</h2>
                   <p>{editingPaymentId ? 'Update the selected payment record.' : 'Record a payment without leaving the table.'}</p>
@@ -704,9 +690,11 @@ const PaymentsPage = () => {
                       : 'Select a player to see the package.'}</span>
                   <div className="payment-entry-actions">
                     {editingPaymentId && <button className="btn-secondary" type="button" onClick={handleCancelEdit}>Cancel Edit</button>}
-                    <button className="btn-primary" type="submit">{isSubmitting ? 'Saving...' : (editingPaymentId ? 'Update Payment' : t('recordPayment'))}</button>
+                    <button className="btn-primary" type="submit" disabled={isSubmitting}>{isSubmitting ? 'Saving...' : (editingPaymentId ? 'Update Payment' : t('recordPayment'))}</button>
                   </div>
                 </div>
+            {saveMessage && <p role="status">{saveMessage}</p>}
+            </fieldset>
           </form>
 
           <DataStatus state={loadStates.players} />

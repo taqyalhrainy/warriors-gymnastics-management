@@ -599,6 +599,10 @@ const AttendancePage = () => {
         note: currentPlayer.note ?? player.note,
         makeupClassesNote: currentPlayer.makeupClassesNote ?? player.makeupClassesNote,
         freezeNote: currentPlayer.freezeNote ?? player.freezeNote,
+        previousDueBalance: currentPlayer.previousDueBalance,
+        dueAdjustment: currentPlayer.dueAdjustment,
+        attendanceDueManual: currentPlayer.attendanceDueManual,
+        paymentRemainingAmount: currentPlayer.paymentRemainingAmount,
         profileImage: currentPlayer.profileImage || player.profileImage,
         attendanceGroupId: groupId,
         attendancePresentCount: currentPlayer.attendancePresentCount ?? player.attendancePresentCount,
@@ -1425,6 +1429,9 @@ const AttendancePage = () => {
   };
 
   const beginSelectedPlayerMutation = (name) => {
+    // Discard card/editor reads that began before this mutation.
+    selectedPlayerLoadRequestIdRef.current += 1;
+    selectedPlayerEditRequestIdRef.current += 1;
     const mutation = {
       sequence: selectedPlayerMutationSequenceRef.current + 1,
       playerId: getEntityId(selectedPlayerRef.current?._id),
@@ -2311,44 +2318,27 @@ const AttendancePage = () => {
   };
 
   const handleSetAttendanceDue = async () => {
-    if (!selectedPlayer?._id) return;
+    if (!selectedPlayer?._id || pendingSelectedPlayerMutationRef.current) return;
+    const mutation = beginSelectedPlayerMutation('attendance-due');
     const targetDue = parseManualAttendanceDue(dueAdjustmentForm);
-    const optimisticPlayer = {
-      ...selectedPlayer,
-      previousDueBalance: targetDue,
-      dueAdjustment: 0,
-      paymentRemainingAmount: targetDue
-    };
-    const previousPlayer = selectedPlayer;
 
     try {
       setMessage('');
       setIsSavingDueAdjustment(true);
-      patchExistingPlayerInAttendanceBoard(optimisticPlayer);
-      setSelectedPlayerIfOpen(optimisticPlayer);
-      setDueAdjustmentForm('');
       const savedPlayer = await updatePlayer(selectedPlayer._id, {
         previousDueBalance: targetDue,
         dueAdjustment: 0
       });
-      const confirmedPlayer = {
-        ...mergeStablePlayerFields(savedPlayer, optimisticPlayer),
-        paymentRemainingAmount: optimisticPlayer.paymentRemainingAmount
-      };
+      const confirmedPlayer = mergeStablePlayerFields(savedPlayer, selectedPlayer);
       patchExistingPlayerInAttendanceBoard(confirmedPlayer);
       setSelectedPlayerIfOpen(confirmedPlayer);
-      try {
-        await refreshPlayerAttendanceCount(selectedPlayer._id, getPlayerAttendanceGroupId(selectedPlayer));
-      } catch (refreshError) {
-        console.error(refreshError);
-      }
+      setDueAdjustmentForm('');
       setMessage('Due updated');
     } catch (error) {
-      patchExistingPlayerInAttendanceBoard(previousPlayer);
-      setSelectedPlayerIfOpen(previousPlayer);
       setMessage(error.response?.data?.message || 'Unable to update due');
     } finally {
       setIsSavingDueAdjustment(false);
+      finishSelectedPlayerMutation(mutation);
     }
   };
 
@@ -3552,7 +3542,7 @@ const AttendancePage = () => {
                           type="button"
                           className="btn-secondary"
                           onClick={handleSetAttendanceDue}
-                          disabled={isSavingDueAdjustment || dueAdjustmentForm === ''}
+                          disabled={Boolean(pendingSelectedPlayerMutation) || isSavingDueAdjustment || dueAdjustmentForm === ''}
                         >
                           {isSavingDueAdjustment ? 'Saving...' : 'Edit due'}
                         </button>

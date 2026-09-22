@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { Capacitor } from '@capacitor/core';
+import { beginWrite, finishWrite } from './pendingWrites.js';
 
 const apiUrl = import.meta.env.VITE_API_URL?.trim();
 const normalizedApiUrl = apiUrl ? apiUrl.replace(/\/+$/, '') : '';
@@ -87,16 +88,23 @@ api.interceptors.request.use((config) => {
     return Promise.reject(new Error('Connection is offline or unstable.'));
   }
 
+  if (isWriteRequest) {
+    beginWrite(config);
+    // Allow database writes to finish during a server cold start; never retry them blindly.
+    if (config.timeout === 12000) config.timeout = 60000;
+  }
   return config;
 });
 
 api.interceptors.response.use(
   (response) => {
+    finishWrite(response.config);
     notifyNetworkStatus('online');
     return response;
   },
   async (error) => {
     const config = error.config || {};
+    finishWrite(config);
     const status = error.response?.status;
 
     if (isNetworkFailure(error) && !config.__skipNetworkStatus) {

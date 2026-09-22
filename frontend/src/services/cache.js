@@ -29,6 +29,10 @@ export const fetchCached = async (key, loader, options = {}) => {
   request = loader()
     .then((value) => {
       const activeRequest = pendingRequests.get(key);
+      // A read started before a confirmed write must not restore the old value.
+      if (startedAtVersion !== getKeyVersion(key) && cacheStore.has(key)) {
+        return cacheStore.get(key).value;
+      }
       if (activeRequest?.promise === request && startedAtVersion === getKeyVersion(key)) {
         cacheStore.set(key, {
           value,
@@ -58,6 +62,8 @@ export const getCachedValue = (key, options = {}) => {
 };
 
 export const setCached = (key, value) => {
+  bumpKeyVersion(key);
+  pendingRequests.delete(key);
   cacheStore.set(key, {
     value,
     timestamp: Date.now()
@@ -71,10 +77,7 @@ export const updateCached = (key, updater) => {
   }
 
   const nextValue = updater(cachedEntry.value);
-  cacheStore.set(key, {
-    value: nextValue,
-    timestamp: Date.now()
-  });
+  setCached(key, nextValue);
   return nextValue;
 };
 

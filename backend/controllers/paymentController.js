@@ -12,7 +12,7 @@ const { createNotification } = require('../utils/notificationDelivery');
 const populatePaymentQuery = (query) => query
   .populate({
     path: 'playerId',
-    select: 'fullName parentId parentPhoneEncrypted isDeleted deletedAt packageName packageClasses packageHours payment previousDueBalance dueAdjustment startDate endDate currentSubscriptionStartedAt currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId',
+    select: 'fullName parentId parentPhoneEncrypted isDeleted deletedAt packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual startDate endDate currentSubscriptionStartedAt currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId',
     populate: [
       {
         path: 'parentId',
@@ -400,6 +400,8 @@ const createPayment = async (req, res, next) => {
         title: 'Payment received',
         message: `Payment recorded for ${player.fullName}.`,
         type: 'payment'
+      }, { waitForPush: false }).catch((error) => {
+        console.error('Payment notification failed:', error.message);
       });
     }
     const paymentForHistory = await loadPaymentForHistory(payment._id);

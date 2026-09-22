@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
+import * as pendingWrites from '../src/services/pendingWrites.js';
 
 const load = async (file, dependencies, globals = {}, env = {}) => {
   const context = vm.createContext(globals);
@@ -30,6 +31,7 @@ for (const native of [true, false]) {
     let baseURL;
     const api = { defaults: { headers: { common: {} } }, interceptors: { request: { use() {} }, response: { use() {} } } };
     await load('../src/services/api.js', {
+      './pendingWrites.js': pendingWrites,
       axios: { default: { create: (config) => { baseURL = config.baseURL; return api; } } },
       '@capacitor/core': { Capacitor: { isNativePlatform: () => native } }
     }, {

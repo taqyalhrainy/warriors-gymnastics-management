@@ -33,9 +33,11 @@ const pushNotification = (notification) => {
   });
 };
 
-const createNotification = async (data) => {
+const createNotification = async (data, { waitForPush = true } = {}) => {
   const notification = await Notification.create(data);
-  await pushNotification(notification);
+  const delivery = pushNotification(notification);
+  if (waitForPush) await delivery;
+  else delivery.catch((error) => console.error('Push delivery failed:', error.message));
   return notification;
 };
 

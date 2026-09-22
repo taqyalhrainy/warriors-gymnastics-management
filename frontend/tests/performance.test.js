@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchCached, invalidateCache, getCachedValue, clearCache } from '../src/services/cache.js';
+import { fetchCached, invalidateCache, getCachedValue, clearCache, setCached, updateCached } from '../src/services/cache.js';
 import { groupBoardPlayers } from '../src/utils/groupBoardPlayers.js';
 
 test('simultaneous refreshes share work but an edit starts a new request', async () => {
@@ -14,8 +14,23 @@ test('simultaneous refreshes share work but an edit starts a new request', async
   invalidateCache('groups:');
   assert.equal(await fetchCached('groups:test', async () => 'new'), 'new');
   resolveOld('old');
-  assert.deepEqual(await Promise.all([first, second]), ['old', 'old']);
+  assert.deepEqual(await Promise.all([first, second]), ['new', 'new']);
   assert.equal(getCachedValue('groups:test'), 'new');
+});
+
+test('a delayed read cannot overwrite a confirmed zero balance or a local cache update', async () => {
+  for (const patch of [false, true]) {
+    clearCache();
+    const key = 'players:item:p';
+    setCached(key, { due: 70 });
+    let finish;
+    const read = fetchCached(key, () => new Promise((resolve) => { finish = resolve; }), { force: true });
+    if (patch) updateCached(key, () => ({ due: 0 }));
+    else setCached(key, { due: 0 });
+    finish({ due: 70 });
+    assert.deepEqual(await read, { due: 0 });
+    assert.deepEqual(getCachedValue(key), { due: 0 });
+  }
 });
 
 test('batch board preserves legacy groupId, multiple groups, empty groups and counters', () => {
