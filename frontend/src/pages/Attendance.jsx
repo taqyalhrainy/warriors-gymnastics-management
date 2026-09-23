@@ -13,6 +13,7 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
 import { compressProfileImage } from '../utils/imageUpload.js';
 import { getCacheVersion } from '../services/cache.js';
+import { attachAttendanceRecords, isAttendanceInCycle, getUnassignedAttendance } from '../utils/attendanceRecords.js';
 
 const ATTENDANCE_BOARD_CACHE_TTL_MS = 5 * 60 * 1000;
 const LOCAL_ATTENDANCE_OVERRIDE_TTL_MS = 60 * 1000;
@@ -545,27 +546,7 @@ const AttendancePage = () => {
     : new Date(`${selectedAttendanceDate}T00:00:00`).toLocaleDateString();
 
   const applyTodayRecordsToGroups = (groups, todayRecords) => {
-    const recordsByPlayerAndGroupId = new Map();
-
-    todayRecords.forEach((record) => {
-      recordsByPlayerAndGroupId.set(getAttendanceRecordKey(record.playerId, record.groupId), record);
-    });
-
-    return groups.map((group) => {
-      const players = dedupePlayersById(group.players).map((player) => ({
-        ...player,
-        todayAttendance: recordsByPlayerAndGroupId.get(getAttendanceRecordKey(player._id, group._id)) || null
-      }));
-      const markedCount = players.filter((player) => Boolean(player.todayAttendance)).length;
-      const presentCount = players.filter((player) => player.todayAttendance?.status === 'present').length;
-
-      return {
-        ...group,
-        players,
-        markedCount,
-        presentCount
-      };
-    });
+    return attachAttendanceRecords(groups, todayRecords);
   };
 
   const buildHistoricalGroups = (groups, playerSnapshots, snapshotDate, currentGroupsWithPlayers = []) => {
@@ -1318,7 +1299,10 @@ const AttendancePage = () => {
 
       const nextGroups = currentGroups.map((group) => {
         const groupId = getEntityId(group._id);
-        const shouldIncludePlayer = isVisibleForSelectedDate && targetGroupIds.has(groupId);
+        const recordedAttendance = hasAttendanceOverride
+          ? overrideAttendanceByGroupId.get(groupId)
+          : attendanceByGroupId.get(groupId);
+        const shouldIncludePlayer = isVisibleForSelectedDate && (targetGroupIds.has(groupId) || Boolean(recordedAttendance));
         const groupInfo = targetGroups.find((targetGroup) => getEntityId(targetGroup._id) === groupId);
         const cleanPlayers = dedupePlayersById(group.players);
         const existingPlayerIndex = cleanPlayers.findIndex((player) => getEntityId(player._id) === playerId);
@@ -1484,31 +1468,7 @@ const AttendancePage = () => {
   );
 
   const isAttendanceRecordInSubscriptionCycle = (record, player, cycleStartOverride = '') => {
-    const preciseCycleStart = cycleStartOverride;
-    const cycleStart = preciseCycleStart || getCurrentSubscriptionCycleStartValue(player);
-
-    if (isRecordExplicitlyExcludedFromCurrentSubscription(record, player)) {
-      return false;
-    }
-
-    if (isRecordExplicitlyCountedInCurrentSubscription(record, player)) {
-      return true;
-    }
-
-    if (!cycleStart && !preciseCycleStart) {
-      return true;
-    }
-
-    if (!cycleStart) {
-      return false;
-    }
-
-    if (preciseCycleStart) {
-      const recordTime = record.checkInTime || getObjectIdDate(record._id) || record.date;
-      return new Date(recordTime) >= new Date(preciseCycleStart);
-    }
-
-    return getLocalDateOnly(record.date) >= getLocalDateOnly(cycleStart);
+    return isAttendanceInCycle(record, player, cycleStartOverride || getCurrentSubscriptionCycleStartValue(player));
   };
 
   const getAttendancePresentCountForCycle = (records, player, cycleStartOverride = '') => {
@@ -2063,6 +2023,10 @@ const AttendancePage = () => {
   const handleSubscriptionSave = async (event, keepWarning = false) => {
     event.preventDefault();
     if (!selectedPlayer?._id || isSavingSubscription) {
+      return;
+    }
+    if (pendingSelectedPlayerMutationRef.current || pendingAttendanceKeysRef.current.size) {
+      setSubscriptionMessage('Please wait for the current save to finish.');
       return;
     }
     if (!subscriptionForm.groupIds.length) {
@@ -2973,7 +2937,8 @@ const AttendancePage = () => {
         payment: Number(snapshot.payment || 0)
       };
     };
-    const initialCycle = makeCycle(initialEntry?.after || player, initialEntry?.changedAt || new Date().toISOString(), true);
+    const initialSnapshot = initialEntry?.after || sortedEntries.find((entry) => entry.before)?.before || player;
+    const initialCycle = makeCycle(initialSnapshot, initialEntry?.changedAt || sortedEntries[0]?.changedAt || new Date().toISOString(), true);
     if (initialCycle) {
       cycles.push(initialCycle);
     }
@@ -3037,6 +3002,11 @@ const AttendancePage = () => {
   const isCurrentSubscriptionAttendanceRecord = (record) => {
     return isAttendanceRecordInSubscriptionCycle(record, selectedPlayer);
   };
+  const unassignedAttendance = getUnassignedAttendance(selectedPlayerAttendanceHistory,
+    selectedPlayerSubscriptionHistory.flatMap((cycle) => getAttendanceRecordsForSubscription(selectedPlayerAttendanceHistory, cycle, selectedPlayerSubscriptionHistory)));
+  const attendanceHistoryCycles = unassignedAttendance.length
+    ? [...selectedPlayerSubscriptionHistory, { key: 'unassigned-attendance', packageName: 'Attendance records', records: unassignedAttendance }]
+    : selectedPlayerSubscriptionHistory;
   const getPlayerGroups = (player) => {
     const groups = player?.groupIds?.length ? player.groupIds : [player?.groupId].filter(Boolean);
     return groups.map((group) => group?.name).filter(Boolean).join(', ');
@@ -3602,8 +3572,8 @@ const AttendancePage = () => {
                       <div className="student-history-list">
                         <DataStatus state={loadStates.selectedAttendance} />
                         <DataStatus state={loadStates.selectedHistory} />
-                        {loadStates.selectedHistory?.loading || loadStates.selectedHistory?.error ? null : selectedPlayerSubscriptionHistory.length ? selectedPlayerSubscriptionHistory.map((cycle) => {
-                          const records = getAttendanceRecordsForSubscription(selectedPlayerAttendanceHistory, cycle, selectedPlayerSubscriptionHistory);
+                        {loadStates.selectedHistory?.loading || loadStates.selectedHistory?.error ? null : attendanceHistoryCycles.length ? attendanceHistoryCycles.map((cycle) => {
+                          const records = cycle.records || getAttendanceRecordsForSubscription(selectedPlayerAttendanceHistory, cycle, selectedPlayerSubscriptionHistory);
                           const isOpen = openSubscriptionHistoryKey === cycle.key;
                           const isCurrentCycle = cycle.key === getCurrentSubscriptionCycleStartValue();
                           const presentCount = records.filter((record) => (
@@ -3615,9 +3585,9 @@ const AttendancePage = () => {
                               <button type="button" className={`subscription-history-summary${isCurrentCycle ? ' is-current-subscription' : ''}`} onClick={() => setOpenSubscriptionHistoryKey(isOpen ? '' : cycle.key)}>
                                 <span>
                                   <strong>{cycle.packageName || 'Subscription'}</strong>
-                                  <small>{formatDate(cycle.startDate)} - {formatDate(cycle.endDate)}</small>
+                                  {!cycle.records && <small>{formatDate(cycle.startDate)} - {formatDate(cycle.endDate)}</small>}
                                 </span>
-                                <b>{presentCount}/{cycle.packageClasses || 0}</b>
+                                <b>{cycle.records ? records.length : `${presentCount}/${cycle.packageClasses || 0}`}</b>
                               </button>
                               {isOpen && (
                                 <div className="subscription-history-records">
