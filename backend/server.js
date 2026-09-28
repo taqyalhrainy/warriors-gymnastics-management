@@ -7,6 +7,7 @@ const cors = require('cors');
 const compression = require('compression');
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
+const { databaseHealth } = require('./utils/databaseAvailability');
 const adminAppHtml = require('./utils/adminAppHtml');
 
 const normalizeGroupName = (value) => String(value || '')
@@ -122,13 +123,7 @@ app.use('/api/history', lazyRouter(() => require('./routes/history')));
 app.use('/api/audit-logs', lazyRouter(() => require('./routes/auditLogs')));
 app.use('/api/security', lazyRouter(() => require('./routes/security')));
 
-app.get('/api/health', (req, res) => {
-  res.status(isDatabaseReady ? 200 : 503).json({
-    status: isDatabaseReady ? 'ok' : 'starting',
-    database: isDatabaseReady ? 'connected' : 'connecting',
-    time: new Date().toISOString()
-  });
-});
+app.get('/api/health', databaseHealth(require('mongoose').connection, () => isDatabaseReady));
 
 const frontendStaticPaths = [
   /^\/assets\//,

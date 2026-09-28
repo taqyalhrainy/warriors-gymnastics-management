@@ -16,7 +16,10 @@ const protect = async (req, res, next) => {
     req.user = user;
     next();
   } catch (error) {
-    return res.status(401).json({ message: 'Unauthorized access' });
+    if (['JsonWebTokenError', 'TokenExpiredError', 'NotBeforeError'].includes(error.name)) {
+      return res.status(401).json({ message: 'Unauthorized access' });
+    }
+    return next(error);
   }
 };
 
