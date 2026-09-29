@@ -101,3 +101,21 @@ test('new subscriptions preserve attendance IDs, dates, marks and original group
     assert.equal(reloaded[0].groupId, String(group._id));
   }
 });
+
+test('board reload and frontend recalculation agree on 3/8 after renewal', async () => {
+  const { countAttendanceForCycle, packageCounter, isAttendanceSubscriptionExpired } = await import('../../frontend/src/utils/attendanceRecords.js');
+  const renewed = await Player.create({ fullName: 'Renewed', parentId: player.parentId, parentPhoneEncrypted: 'test',
+    groupId: group._id, groupIds: [group._id], startDate: '2026-08-01', currentSubscriptionStartedAt: '2026-09-20',
+    endDate: '2026-10-20', packageClasses: 8 });
+  const markedBy = (await User.findOne())._id;
+  await Attendance.insertMany([1, 2, 3, 4, 5, 20, 21, 22].map((date) => ({
+    playerId: renewed._id, groupId: group._id, markedBy, status: 'present', date: `2026-09-${String(date).padStart(2, '0')}T00:00:00Z`
+  })));
+  const board = (await request(`/groups/${group._id}`)).find((row) => row._id === String(renewed._id));
+  const detail = await request(`/players/${renewed._id}`);
+  const records = await Attendance.find({ playerId: renewed._id }).lean();
+  const recalculated = { ...detail, attendancePresentCount: countAttendanceForCycle(records, detail) };
+  assert.equal(board.attendancePresentCount, 3);
+  assert.deepEqual(packageCounter(recalculated), packageCounter(board));
+  assert.equal(isAttendanceSubscriptionExpired(recalculated, new Date('2026-09-29')), false);
+});

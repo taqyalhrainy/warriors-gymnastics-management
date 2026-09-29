@@ -13,7 +13,7 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
 import { compressProfileImage } from '../utils/imageUpload.js';
 import { getCacheVersion } from '../services/cache.js';
-import { attachAttendanceRecords, isAttendanceInCycle, getUnassignedAttendance } from '../utils/attendanceRecords.js';
+import { attachAttendanceRecords, isAttendanceInCycle, getUnassignedAttendance, attendanceCycleStart, packageCounter, countAttendanceForCycle, mergeCurrentAttendanceState, isAttendanceSubscriptionExpired } from '../utils/attendanceRecords.js';
 
 const ATTENDANCE_BOARD_CACHE_TTL_MS = 5 * 60 * 1000;
 const LOCAL_ATTENDANCE_OVERRIDE_TTL_MS = 60 * 1000;
@@ -197,18 +197,7 @@ const isPlayerVisibleInAttendance = (player) => (
 );
 const isPlayerFrozen = (player) => player?.status === 'frozen';
 
-const getPlayerPackageCounter = (player) => {
-  const subscription = player?.subscriptionId && typeof player.subscriptionId === 'object'
-    ? player.subscriptionId
-    : null;
-  const total = Number(subscription?.totalSessions || player?.packageClasses || 0);
-  const used = Number(player?.attendancePresentCount ?? subscription?.usedSessions ?? 0);
-
-  return {
-    used: Math.max(0, total ? Math.min(used, total) : used),
-    total: Math.max(0, total)
-  };
-};
+const getPlayerPackageCounter = packageCounter;
 
 const firstMeaningfulValue = (...values) => values.find((value) => value !== undefined && value !== null && value !== '');
 
@@ -279,39 +268,7 @@ const getAttendanceMoneyState = (value) => {
   return null;
 };
 
-const isPlayerSubscriptionExpired = (player) => {
-  if (!player) {
-    return false;
-  }
-
-  if (isPlayerFrozen(player)) {
-    return false;
-  }
-
-  if (player.subscriptionNeedsAttention) {
-    return true;
-  }
-
-  if (player.status === 'expired') {
-    return true;
-  }
-
-  const subscription = player.subscriptionId && typeof player.subscriptionId === 'object'
-    ? player.subscriptionId
-    : null;
-
-  const endDate = subscription?.endDate || player.endDate;
-  if (endDate && getLocalDateOnly(endDate) <= getLocalDateOnly()) {
-    return true;
-  }
-
-  const { total: packageClasses, used: usedClasses } = getPlayerPackageCounter(player);
-  if (packageClasses > 0 && usedClasses >= packageClasses) {
-    return true;
-  }
-
-  return false;
-};
+const isPlayerSubscriptionExpired = isAttendanceSubscriptionExpired;
 
 const getSnapshotGroups = (player) => {
   if (Array.isArray(player?.groupIds) && player.groupIds.length) {
@@ -573,7 +530,7 @@ const AttendancePage = () => {
       }
 
       return {
-        ...player,
+        ...mergeCurrentAttendanceState(player, currentPlayer),
         fullName: currentPlayer.fullName || player.fullName,
         parentId: currentPlayer.parentId || player.parentId,
         parentPhone: currentPlayer.parentPhone || player.parentPhone,
@@ -1174,11 +1131,13 @@ const AttendancePage = () => {
       const targetPlayerRecord = currentPlayerRecords
         .find((item) => item.groupId === getEntityId(targetGroupId))?.player || null;
       const previousTargetAttendance = targetPlayerRecord?.todayAttendance || null;
-      const hadPresentAttendance = currentPlayerRecords.some((item) => item.player.todayAttendance?.status === 'present');
+      const countsInCycle = (record, player) => record?.status === 'present'
+        && isAttendanceInCycle(record, player, attendanceCycleStart(player));
+      const hadPresentAttendance = currentPlayerRecords.some((item) => countsInCycle(item.player.todayAttendance, item.player));
       const willHavePresentAttendance = currentPlayerRecords.some((item) => (
         item.groupId === getEntityId(targetGroupId)
-          ? attendance?.status === 'present'
-          : item.player.todayAttendance?.status === 'present'
+          ? countsInCycle(attendance, item.player)
+          : countsInCycle(item.player.todayAttendance, item.player)
       ));
       const canSafelyAdjustCount = Boolean(previousTargetAttendance);
       const presentDelta = canSafelyAdjustCount
@@ -1455,8 +1414,7 @@ const AttendancePage = () => {
   );
 
   const getCurrentSubscriptionCycleStartValue = (player = selectedPlayer) => (
-    getDateInputValue(player?.startDate || player?.subscriptionId?.startDate)
-    || getDateInputValue(selectedPlayerSubscriptionHistory[0]?.startDate)
+    getDateInputValue(attendanceCycleStart(player))
   );
 
   const isRecordExplicitlyCountedInCurrentSubscription = (record, player = selectedPlayer) => (
@@ -1472,18 +1430,7 @@ const AttendancePage = () => {
   };
 
   const getAttendancePresentCountForCycle = (records, player, cycleStartOverride = '') => {
-    if (!Array.isArray(records)) {
-      return Number(player?.attendancePresentCount || 0);
-    }
-
-    const countedDates = new Set();
-    records.forEach((record) => {
-      if (record.status !== 'present' || !isAttendanceRecordInSubscriptionCycle(record, player, cycleStartOverride)) {
-        return;
-      }
-      countedDates.add(getDateInputValue(record.date));
-    });
-    return countedDates.size;
+    return countAttendanceForCycle(records, player, cycleStartOverride || attendanceCycleStart(player));
   };
 
   const withAttendancePresentCount = (player, records, cycleStartOverride = '', groupId = '') => {
@@ -1493,7 +1440,7 @@ const AttendancePage = () => {
 
     const targetGroupId = getEntityId(groupId) || getPlayerAttendanceGroupId(player);
     const attendancePresentCount = getAttendancePresentCountForCycle(records, player, cycleStartOverride);
-    const totalSessions = Number(player.subscriptionId?.totalSessions || player.packageClasses || 0);
+    const totalSessions = packageCounter(player).total;
     const subscription = player.subscriptionId && typeof player.subscriptionId === 'object'
       ? {
         ...player.subscriptionId,
@@ -1732,7 +1679,7 @@ const AttendancePage = () => {
       const attendanceRecords = applyLocalPlayerAttendanceOverrides(attendanceResponse, player._id);
 
       const subscriptionHistory = buildSubscriptionHistory(playerHistory.entries || [], latestPlayer)
-        .filter((cycle) => !latestPlayer.startDate || getLocalDateOnly(cycle.startDate).getTime() <= getLocalDateOnly(latestPlayer.startDate).getTime());
+        .filter((cycle) => !attendanceCycleStart(latestPlayer) || getLocalDateOnly(cycle.startDate).getTime() <= getLocalDateOnly(attendanceCycleStart(latestPlayer)).getTime());
       const latestRemainingAmount = typeof latestPlayer.paymentRemainingAmount !== 'undefined'
         ? latestPlayer.paymentRemainingAmount
         : player.paymentRemainingAmount;
@@ -2116,7 +2063,7 @@ const AttendancePage = () => {
       ]);
       const attendanceRecords = applyLocalPlayerAttendanceOverrides(attendanceData, selectedPlayer._id);
       const refreshedHistory = buildSubscriptionHistory(playerHistory.entries || [], savedPlayer)
-        .filter((cycle) => !savedPlayer.startDate || getLocalDateOnly(cycle.startDate).getTime() <= getLocalDateOnly(savedPlayer.startDate).getTime());
+        .filter((cycle) => !attendanceCycleStart(savedPlayer) || getLocalDateOnly(cycle.startDate).getTime() <= getLocalDateOnly(attendanceCycleStart(savedPlayer)).getTime());
 
       const countedPlayer = withAttendancePresentCount(
         savedPlayer,
@@ -2612,7 +2559,7 @@ const AttendancePage = () => {
       if (!isLatestSelectedPlayerMutation(mutation)) return;
 
       const refreshedHistory = buildSubscriptionHistory(playerHistory.entries || [], refreshedPlayer)
-        .filter((cycle) => getLocalDateOnly(cycle.startDate).getTime() <= getLocalDateOnly(refreshedPlayer.startDate).getTime());
+        .filter((cycle) => getLocalDateOnly(cycle.startDate).getTime() <= getLocalDateOnly(attendanceCycleStart(refreshedPlayer)).getTime());
       const refreshedPlayerWithCount = withAttendancePresentCount(
         refreshedPlayer,
         attendanceRecords,
@@ -2793,7 +2740,7 @@ const AttendancePage = () => {
       };
       const refreshedPlayerWithCount = withAttendancePresentCount(confirmedPlayer, attendanceRecords);
       const refreshedHistory = buildSubscriptionHistory(playerHistory.entries || [], confirmedPlayer)
-        .filter((cycle) => !confirmedPlayer.startDate || getLocalDateOnly(cycle.startDate).getTime() <= getLocalDateOnly(confirmedPlayer.startDate).getTime());
+        .filter((cycle) => !attendanceCycleStart(confirmedPlayer) || getLocalDateOnly(cycle.startDate).getTime() <= getLocalDateOnly(attendanceCycleStart(confirmedPlayer)).getTime());
 
       syncPlayerInAttendanceBoard(refreshedPlayerWithCount, attendanceRecords);
       if (!shouldCloseAfterSave) {
@@ -2840,8 +2787,8 @@ const AttendancePage = () => {
     return records.filter((record) => new Date(record.date) >= threeMonthsAgo);
   };
   const getSubscriptionStartValue = (snapshot, allowInitialFallback = false) => (
-    snapshot?.startDate
-    || (allowInitialFallback ? (snapshot?.currentSubscriptionStartedAt || snapshot?.createdAt || '') : '')
+    attendanceCycleStart(snapshot)
+    || (allowInitialFallback ? (snapshot?.createdAt || '') : '')
   );
   const getSubscriptionCycleStartDate = (snapshot, allowInitialFallback = false) => getDateInputValue(getSubscriptionStartValue(snapshot, allowInitialFallback));
   const getSubscriptionHistoryKey = (snapshot, allowInitialFallback = false) => getSubscriptionCycleStartDate(snapshot, allowInitialFallback);
@@ -2946,7 +2893,7 @@ const AttendancePage = () => {
     sortedEntries.forEach((entry) => {
       if (entry.action === 'create') return;
       const changedFields = entry.changedFields || [];
-      const subscriptionFields = ['startDate', 'endDate', 'packageName', 'packageClasses', 'packageHours', 'payment'];
+      const subscriptionFields = ['currentSubscriptionStartedAt', 'startDate', 'endDate', 'packageName', 'packageClasses', 'packageHours', 'payment'];
       const isSubscriptionSnapshot = entry.after?.startDate
         && changedFields.some((field) => subscriptionFields.includes(field));
       if (isSubscriptionSnapshot) {

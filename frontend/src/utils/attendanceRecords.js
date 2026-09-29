@@ -11,6 +11,50 @@ export const isAttendanceInCycle = (record, player, cycleStart) => {
   return !cycleStart || day(record.date) >= day(cycleStart);
 };
 
+export const attendanceCycleStart = (player) => (
+  player?.currentSubscriptionStartedAt || player?.startDate || player?.subscriptionId?.startDate || ''
+);
+
+export const packageCounter = (player) => {
+  const total = Math.max(0, Number(player?.packageClasses || player?.subscriptionId?.totalSessions || 0));
+  const count = Number(player?.attendancePresentCount ?? player?.subscriptionId?.usedSessions ?? 0);
+  return { total, used: Math.max(0, total ? Math.min(total, count) : count) };
+};
+
+export const countAttendanceForCycle = (records, player, cycleStart = attendanceCycleStart(player)) => {
+  if (!Array.isArray(records)) return packageCounter(player).used;
+  const dates = new Set();
+  records.forEach((record) => {
+    if (record.playerId && id(record.playerId) !== id(player)) return;
+    if (record.status !== 'present' || !isAttendanceInCycle(record, player, cycleStart)) return;
+    const value = day(record.date);
+    if (Number.isFinite(value)) dates.add(value);
+  });
+  const { total } = packageCounter(player);
+  return total ? Math.min(total, dates.size) : dates.size;
+};
+
+// Historical group membership must not replace the current subscription used by counters.
+export const mergeCurrentAttendanceState = (snapshot, current) => {
+  const result = { ...snapshot };
+  for (const key of ['startDate', 'endDate', 'currentSubscriptionStartedAt',
+    'currentSubscriptionAttendanceIds', 'currentSubscriptionExcludedAttendanceIds',
+    'packageClasses', 'packageHours', 'packageName', 'subscriptionId',
+    'attendancePresentCount', 'status', 'subscriptionNeedsAttention']) {
+    if (Object.hasOwn(current, key)) result[key] = current[key];
+  }
+  return result;
+};
+
+export const isAttendanceSubscriptionExpired = (player, now = new Date()) => {
+  if (!player || player.status === 'frozen') return false;
+  if (player.subscriptionNeedsAttention || player.status === 'expired') return true;
+  const end = player.endDate || player.subscriptionId?.endDate;
+  if (end && day(end) <= day(now)) return true;
+  const { total, used } = packageCounter(player);
+  return total > 0 && used >= total;
+};
+
 // A recorded class belongs to its original group, even after a membership change.
 export const attachAttendanceRecords = (groups, records) => {
   const playersById = new Map(groups.flatMap((group) => group.players.map((player) => [id(player), player])));

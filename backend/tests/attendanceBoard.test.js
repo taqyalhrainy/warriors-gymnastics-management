@@ -12,15 +12,17 @@ test('batch board preserves group counters with one player query and one attenda
   const groups = [group('a'), group('b')];
   const player = (id, primary, secondary) => ({
     _id: id, groupId: primary, groupIds: secondary,
-    startDate: '2026-09-01', packageClasses: 8,
+    startDate: '2026-08-01', currentSubscriptionStartedAt: '2026-09-01', packageClasses: 8,
     currentSubscriptionAttendanceIds: ['early'], currentSubscriptionExcludedAttendanceIds: ['excluded'],
     attendanceDueManual: true, previousDueBalance: 100, dueAdjustment: 25,
     toObject() { const { toObject, ...data } = this; return data; }
   });
   const players = [player('p', 'a', ['a', 'b']), player('q', 'b', [])];
   const records = [
+    ...[2, 3, 4, 5, 6].map((day) => ({ _id: `old-${day}`, playerId: 'p', date: `2026-08-${String(day).padStart(2, '0')}` })),
     { _id: 'early', playerId: 'p', date: '2026-08-01' },
     { _id: 'normal', playerId: 'p', date: '2026-09-01' },
+    { _id: 'third', playerId: 'p', date: '2026-09-03' },
     { _id: 'duplicate', playerId: 'p', date: '2026-09-01' },
     { _id: 'excluded', playerId: 'p', date: '2026-09-02' }
   ];
@@ -53,7 +55,13 @@ test('batch board preserves group counters with one player query and one attenda
   assert.equal(playerQueries, 1);
   assert.equal(projections[0].profileImage, 0);
   assert.equal(attendanceQueries, 1);
-  assert.equal(board.players[0].attendancePresentCount, 2);
+  assert.equal(board.players[0].attendancePresentCount, 3);
+  const { countAttendanceForCycle, packageCounter } = await import('../../frontend/src/utils/attendanceRecords.js');
+  for (const player of board.players) {
+    const counted = countAttendanceForCycle(records.map((record) => ({ ...record, status: 'present' })), player);
+    assert.equal(counted, player.attendancePresentCount);
+    assert.deepEqual(packageCounter({ ...player, attendancePresentCount: counted }), packageCounter(player));
+  }
   assert.equal(board.players[0].paymentRemainingAmount, 75);
   for (const g of groups) {
     const oldRows = await invoke(module.exports.getGroupPlayers, { id: g._id });
