@@ -5,20 +5,20 @@ const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { synchronizeSubscriptionAttendanceUsage } = require('../utils/subscriptionAttendance');
 const { createNotification } = require('../utils/notificationDelivery');
+const { getAppDateKey, dateKeyToUtc } = require('../utils/appDate');
 
-const toDateKey = (date = new Date()) => new Date(date).toISOString().split('T')[0];
+const toStoredDateKey = (date) => new Date(date).toISOString().split('T')[0];
 
 const getAttendanceDateOnly = (value) => {
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return new Date(`${value}T00:00:00.000Z`);
   }
-  return new Date(`${toDateKey()}T00:00:00.000Z`);
+  return dateKeyToUtc(getAppDateKey());
 };
 
 const getAttendanceRangeStart = () => {
-  const start = new Date();
-  start.setMonth(start.getMonth() - 3);
-  start.setHours(0, 0, 0, 0);
+  const start = dateKeyToUtc(getAppDateKey());
+  start.setUTCMonth(start.getUTCMonth() - 3);
   return start;
 };
 
@@ -45,7 +45,7 @@ const markPresent = async (req, res, next) => {
       return res.status(400).json({ message: 'Valid player and group IDs are required.' });
     }
     const today = new Date();
-    const dateOnly = new Date(today.toISOString().split('T')[0]);
+    const dateOnly = dateKeyToUtc(getAppDateKey(today));
     const existing = await Attendance.findOne({ playerId, groupId, date: dateOnly });
     if (existing) {
       return res.status(400).json({ message: 'Attendance already marked for this player today.' });
@@ -88,7 +88,7 @@ const markAbsent = async (req, res, next) => {
       return res.status(400).json({ message: 'Valid player and group IDs are required.' });
     }
     const today = new Date();
-    const dateOnly = new Date(today.toISOString().split('T')[0]);
+    const dateOnly = dateKeyToUtc(getAppDateKey(today));
     const existing = await Attendance.findOne({ playerId, groupId, date: dateOnly });
     if (existing) {
       return res.status(400).json({ message: 'Attendance already marked for this player today.' });
@@ -124,7 +124,7 @@ const updateTodayAttendance = async (req, res, next) => {
     const today = new Date();
     const dateOnly = getAttendanceDateOnly(date);
     validateAttendanceDateInRange(dateOnly);
-    const isCurrentDate = toDateKey(dateOnly) === toDateKey(today);
+    const isCurrentDate = toStoredDateKey(dateOnly) === getAppDateKey(today);
     const player = await Player.findById(playerId).populate({ path: 'parentId', populate: { path: 'userId', select: '_id' } });
     if (!player || player.isDeleted) {
       return res.status(404).json({ message: 'Player not found.' });

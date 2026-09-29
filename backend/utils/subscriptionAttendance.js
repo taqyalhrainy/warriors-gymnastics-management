@@ -1,16 +1,17 @@
 const Attendance = require('../models/Attendance');
 const Subscription = require('../models/Subscription');
+const { getAppDateKey, getAppDateOnly } = require('./appDate');
 
 const synchronizeSubscriptionAttendanceUsage = async (player, today = new Date()) => {
   if (!player?._id) return;
-  const subscription = await Subscription.findOne({ playerId: player._id });
+  const subscription = player.subscriptionId
+    ? await Subscription.findOne({ _id: player.subscriptionId?._id || player.subscriptionId, playerId: player._id })
+    : await Subscription.findOne({ playerId: player._id });
   if (!subscription || subscription.type !== 'sessions') return;
 
   const cycleStartValue = player.currentSubscriptionStartedAt || player.startDate || subscription.startDate;
   const cycleStart = cycleStartValue ? new Date(cycleStartValue) : null;
-  if (cycleStart && !Number.isNaN(cycleStart.getTime())) {
-    cycleStart.setHours(0, 0, 0, 0);
-  }
+  const normalizedCycleStart = cycleStart && !Number.isNaN(cycleStart.getTime()) ? getAppDateOnly(cycleStart) : null;
 
   const explicitlyCountedIds = new Set((player.currentSubscriptionAttendanceIds || []).map(String));
   const explicitlyExcludedIds = new Set((player.currentSubscriptionExcludedAttendanceIds || []).map(String));
@@ -24,11 +25,9 @@ const synchronizeSubscriptionAttendanceUsage = async (player, today = new Date()
   presentRecords.forEach((record) => {
     if (explicitlyExcludedIds.has(String(record._id))) return;
 
-    const recordDate = new Date(record.date);
-    recordDate.setHours(0, 0, 0, 0);
-    const isInCurrentCycle = !cycleStart
-      || Number.isNaN(cycleStart.getTime())
-      || recordDate >= cycleStart
+    const recordDate = getAppDateOnly(record.date);
+    const isInCurrentCycle = !normalizedCycleStart
+      || recordDate >= normalizedCycleStart
       || explicitlyCountedIds.has(String(record._id));
     if (!isInCurrentCycle) return;
 
@@ -47,7 +46,7 @@ const synchronizeSubscriptionAttendanceUsage = async (player, today = new Date()
     : Math.max(0, Number(subscription.remainingSessions || 0));
   subscription.lastAttendanceDate = latestAttendanceDate || undefined;
 
-  if ((subscription.endDate && subscription.endDate <= today) || (totalSessions > 0 && subscription.remainingSessions === 0)) {
+  if ((subscription.endDate && getAppDateKey(subscription.endDate) <= getAppDateKey(today)) || (totalSessions > 0 && subscription.remainingSessions === 0)) {
     subscription.status = 'expired';
   } else if (totalSessions > 0 && subscription.remainingSessions <= 2) {
     subscription.status = 'almost_expired';

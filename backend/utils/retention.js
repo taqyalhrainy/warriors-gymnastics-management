@@ -1,10 +1,10 @@
 const Attendance = require('../models/Attendance');
 const Notification = require('../models/Notification');
+const { getAppDateOnly } = require('./appDate');
 
 const getAttendanceRetentionCutoff = () => {
-  const cutoff = new Date();
-  cutoff.setFullYear(cutoff.getFullYear() - 1);
-  cutoff.setHours(0, 0, 0, 0);
+  const cutoff = getAppDateOnly();
+  cutoff.setUTCFullYear(cutoff.getUTCFullYear() - 1);
   return cutoff;
 };
 

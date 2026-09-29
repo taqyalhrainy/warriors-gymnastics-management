@@ -29,9 +29,18 @@ export const fetchCached = async (key, loader, options = {}) => {
   request = loader()
     .then((value) => {
       const activeRequest = pendingRequests.get(key);
-      // A read started before a confirmed write must not restore the old value.
-      if (startedAtVersion !== getKeyVersion(key) && cacheStore.has(key)) {
-        return cacheStore.get(key).value;
+      // A read started before a confirmed write must never reach the UI as fresh data.
+      if (startedAtVersion !== getKeyVersion(key)) {
+        if (cacheStore.has(key)) {
+          return cacheStore.get(key).value;
+        }
+        if (activeRequest?.promise && activeRequest.promise !== request) {
+          return activeRequest.promise;
+        }
+        if (activeRequest?.promise === request) {
+          pendingRequests.delete(key);
+        }
+        return fetchCached(key, loader, { ...options, force: true });
       }
       if (activeRequest?.promise === request && startedAtVersion === getKeyVersion(key)) {
         cacheStore.set(key, {

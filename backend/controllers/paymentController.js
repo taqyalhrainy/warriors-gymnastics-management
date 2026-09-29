@@ -8,6 +8,7 @@ const { encrypt, decrypt } = require('../utils/encryption');
 const { parseLocalizedNumber } = require('../utils/numberInput');
 const { snapshotPaymentDocument, createHistoryEntry } = require('../utils/history');
 const { createNotification } = require('../utils/notificationDelivery');
+const { getAppDateOnly } = require('../utils/appDate');
 
 const populatePaymentQuery = (query) => query
   .populate({
@@ -144,8 +145,7 @@ const getSubscriptionTransactionType = (remainingAmount) => (
 
 const getDateOnly = (value) => {
   const date = value ? new Date(value) : new Date(0);
-  date.setHours(0, 0, 0, 0);
-  return date;
+  return Number.isNaN(date.getTime()) ? new Date(0) : getAppDateOnly(date);
 };
 
 const getPlayerIdFromPayment = (payment) => {

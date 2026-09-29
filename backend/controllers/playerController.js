@@ -2,15 +2,16 @@ const Player = require('../models/Player');
 const Parent = require('../models/Parent');
 const TrainingGroup = require('../models/TrainingGroup');
 const Payment = require('../models/Payment');
+const Subscription = require('../models/Subscription');
 require('../models/Program');
 require('../models/Coach');
-require('../models/Subscription');
 const { sanitizeObject, decodeText, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { encrypt, decrypt } = require('../utils/encryption');
 const { parseLocalizedNumber } = require('../utils/numberInput');
 const { snapshotPlayerDocument, createHistoryEntry } = require('../utils/history');
 const { synchronizeSubscriptionAttendanceUsage } = require('../utils/subscriptionAttendance');
+const { getAppDateKey, getAppDateOnly } = require('../utils/appDate');
 
 const formatPlayerResponse = (player) => {
   const obj = player.toObject({ virtuals: true });
@@ -173,8 +174,51 @@ const getDateAtStartOfDay = (value) => {
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  date.setHours(0, 0, 0, 0);
-  return date;
+  return getAppDateOnly(date);
+};
+
+const synchronizeLinkedSubscription = async (player, startsNewSubscription = false) => {
+  if (!player.subscriptionId) return;
+  const subscriptionId = player.subscriptionId?._id || player.subscriptionId;
+  const subscription = await Subscription.findById(subscriptionId);
+  if (!subscription) return;
+
+  subscription.packageName = player.packageName ?? subscription.packageName;
+  subscription.startDate = player.currentSubscriptionStartedAt || player.startDate || subscription.startDate;
+  subscription.endDate = player.endDate || subscription.endDate;
+  subscription.price = Math.max(0, Number(player.payment ?? subscription.price ?? 0));
+
+  if (subscription.type === 'sessions') {
+    subscription.totalSessions = Math.max(0, Number(player.packageClasses ?? subscription.totalSessions ?? 0));
+    if (startsNewSubscription) subscription.usedSessions = 0;
+    subscription.remainingSessions = Math.max(0, subscription.totalSessions - Number(subscription.usedSessions || 0));
+  }
+
+  const endDateKey = subscription.endDate ? getAppDateKey(subscription.endDate) : '';
+  const todayKey = getAppDateKey();
+  const exhausted = subscription.type === 'sessions'
+    && subscription.totalSessions > 0
+    && subscription.remainingSessions === 0;
+  if ((endDateKey && endDateKey <= todayKey) || exhausted) {
+    subscription.status = 'expired';
+  } else if (subscription.type === 'sessions' && subscription.totalSessions > 0 && subscription.remainingSessions <= 2) {
+    subscription.status = 'almost_expired';
+  } else {
+    subscription.status = 'active';
+  }
+  await subscription.save();
+};
+
+const reconcileLinkedSubscriptions = async () => {
+  const players = await Player.find({ subscriptionId: { $ne: null }, isDeleted: { $ne: true } });
+  const batchSize = 20;
+  for (let index = 0; index < players.length; index += batchSize) {
+    await Promise.all(players.slice(index, index + batchSize).map(async (player) => {
+      await synchronizeLinkedSubscription(player, false);
+      await synchronizeSubscriptionAttendanceUsage(player);
+    }));
+  }
+  return players.length;
 };
 
 const getPlayers = async (req, res, next) => {
@@ -429,6 +473,16 @@ const updatePlayer = async (req, res, next) => {
     await player.save();
     if (
       startsNewSubscription
+      || typeof updates.startDate !== 'undefined'
+      || typeof updates.endDate !== 'undefined'
+      || typeof updates.packageName !== 'undefined'
+      || typeof updates.packageClasses !== 'undefined'
+      || typeof updates.payment !== 'undefined'
+    ) {
+      await synchronizeLinkedSubscription(player, startsNewSubscription);
+    }
+    if (
+      startsNewSubscription
       || typeof updates.currentSubscriptionAttendanceIds !== 'undefined'
       || typeof updates.currentSubscriptionExcludedAttendanceIds !== 'undefined'
     ) {
@@ -516,4 +570,4 @@ const getPlayerAlertCandidates = async (req, res, next) => {
   }
 };
 
-module.exports = { getPlayers, createPlayer, getPlayerById, updatePlayer, deletePlayer, getPlayerAlertCandidates };
+module.exports = { getPlayers, createPlayer, getPlayerById, updatePlayer, deletePlayer, getPlayerAlertCandidates, reconcileLinkedSubscriptions };

@@ -5,6 +5,12 @@ const day = (value) => {
   return date.getTime();
 };
 
+export const authoritativeField = (incoming, fallback, key, defaultValue) => {
+  if (incoming && Object.hasOwn(incoming, key) && incoming[key] !== undefined) return incoming[key];
+  if (fallback && Object.hasOwn(fallback, key) && fallback[key] !== undefined) return fallback[key];
+  return defaultValue;
+};
+
 export const isAttendanceInCycle = (record, player, cycleStart) => {
   if ((player?.currentSubscriptionExcludedAttendanceIds || []).some((value) => id(value) === id(record._id))) return false;
   if ((player?.currentSubscriptionAttendanceIds || []).some((value) => id(value) === id(record._id))) return true;

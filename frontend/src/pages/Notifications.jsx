@@ -16,9 +16,10 @@ import {
 import { fetchParentsCompact } from '../services/parents.js';
 import { fetchGroups } from '../services/groups.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
+import { birthdayDay } from '../utils/birthdayAlerts.js';
 
 const SAVED_MESSAGES_KEY = 'warriors-saved-notification-messages';
-const todayInputValue = () => new Date().toISOString().split('T')[0];
+const todayInputValue = () => birthdayDay();
 const MESSAGE_PAGE_SIZE = 20;
 
 const readSavedMessages = () => {

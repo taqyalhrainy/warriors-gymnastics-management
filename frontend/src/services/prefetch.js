@@ -16,10 +16,11 @@ import {
   fetchParentDashboard,
   fetchParentPayments
 } from './parents.js';
+import { birthdayDay } from '../utils/birthdayAlerts.js';
 
 const warmed = new Set();
 
-const todayKey = () => new Date().toISOString().split('T')[0];
+const todayKey = () => birthdayDay();
 
 const runQuietly = async (tasks) => {
   for (const task of tasks) {

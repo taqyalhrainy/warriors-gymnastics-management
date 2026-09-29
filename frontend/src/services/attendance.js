@@ -3,6 +3,7 @@ import { fetchCached, getCachedValue, invalidateCache } from './cache.js';
 
 const invalidateAttendanceRelatedCache = () => {
   invalidateCache(['attendance:', 'players:', 'groups:', 'reports:', 'notifications:', 'parent:']);
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('attendance:changed'));
 };
 
 export const markPresent = async (data) => {

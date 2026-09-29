@@ -33,6 +33,20 @@ test('a delayed read cannot overwrite a confirmed zero balance or a local cache 
   }
 });
 
+test('an invalidated read refetches before returning when no replacement cache exists', async () => {
+  clearCache();
+  const resolvers = [];
+  const loader = () => new Promise((resolve) => resolvers.push(resolve));
+  const read = fetchCached('players:list', loader, { force: true });
+  invalidateCache('players:');
+  resolvers[0](['old']);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(resolvers.length, 2);
+  resolvers[1](['fresh']);
+  assert.deepEqual(await read, ['fresh']);
+  assert.deepEqual(getCachedValue('players:list'), ['fresh']);
+});
+
 test('batch board preserves legacy groupId, multiple groups, empty groups and counters', () => {
   const groups = [{ _id: 'a' }, { _id: 'b' }, { _id: 'empty' }];
   const player = { _id: 'p', groupId: { _id: 'a' }, groupIds: [{ _id: 'a' }, { _id: 'b' }], attendancePresentCount: 4 };

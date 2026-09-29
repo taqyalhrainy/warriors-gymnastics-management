@@ -15,6 +15,7 @@ require('../models/Subscription');
 const { sanitizeObject, validateEmail, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { encrypt, decrypt } = require('../utils/encryption');
+const { getAppDateOnly } = require('../utils/appDate');
 
 const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
 const escapeRegex = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -71,8 +72,7 @@ const getParentVisibleRemaining = (player) => (
 
 const getDateOnly = (value) => {
   const date = value ? new Date(value) : new Date(0);
-  date.setHours(0, 0, 0, 0);
-  return date;
+  return Number.isNaN(date.getTime()) ? new Date(0) : getAppDateOnly(date);
 };
 
 const getDateInputValue = (value) => {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { attendanceCycleStart, countAttendanceForCycle, packageCounter, mergeCurrentAttendanceState, isAttendanceSubscriptionExpired } from '../src/utils/attendanceRecords.js';
+import { attendanceCycleStart, authoritativeField, countAttendanceForCycle, packageCounter, mergeCurrentAttendanceState, isAttendanceSubscriptionExpired } from '../src/utils/attendanceRecords.js';
 
 const player = { _id: 'a', status: 'active', startDate: '2026-08-01', currentSubscriptionStartedAt: '2026-09-20',
   endDate: '2026-10-20', packageClasses: 8,
@@ -43,4 +43,13 @@ test('genuine exhausted, expired and frozen subscriptions keep their intended ba
   assert.equal(isAttendanceSubscriptionExpired({ ...player, attendancePresentCount: 8 }, now), true);
   assert.equal(isAttendanceSubscriptionExpired({ ...player, endDate: '2026-09-28', attendancePresentCount: 3 }, now), true);
   assert.equal(isAttendanceSubscriptionExpired({ ...player, status: 'frozen', attendancePresentCount: 8 }, now), false);
+});
+
+test('an explicit empty server value clears stale attendance and subscription data', () => {
+  const stale = { todayAttendance: { status: 'present' }, subscriptionId: { status: 'expired' }, endDate: '2026-09-20', paymentRemainingAmount: 70 };
+  const fresh = { todayAttendance: null, subscriptionId: null, endDate: null, paymentRemainingAmount: 0 };
+  for (const key of Object.keys(fresh)) {
+    assert.equal(authoritativeField(fresh, stale, key), fresh[key]);
+  }
+  assert.equal(authoritativeField({}, stale, 'todayAttendance'), stale.todayAttendance);
 });

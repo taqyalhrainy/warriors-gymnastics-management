@@ -213,7 +213,7 @@ const AdminDashboard = () => {
     setError('');
     setIsDashboardLoading(!dashboardStatsCache);
 
-    fetchDashboard()
+    fetchDashboard({ force: true })
       .then((data) => {
         dashboardStatsCache = data;
         writeDashboardStatsCache(data);
@@ -229,6 +229,30 @@ const AdminDashboard = () => {
 
     return () => {
       isMounted = false;
+    };
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return undefined;
+    let refreshTimer;
+    const refreshStats = () => {
+      clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        fetchDashboard({ force: true }).then((data) => {
+          dashboardStatsCache = data;
+          writeDashboardStatsCache(data);
+          setStats(data);
+        }).catch(() => {});
+      }, 150);
+    };
+    window.addEventListener('players:changed', refreshStats);
+    window.addEventListener('payments:changed', refreshStats);
+    window.addEventListener('attendance:changed', refreshStats);
+    return () => {
+      clearTimeout(refreshTimer);
+      window.removeEventListener('players:changed', refreshStats);
+      window.removeEventListener('payments:changed', refreshStats);
+      window.removeEventListener('attendance:changed', refreshStats);
     };
   }, [token]);
 

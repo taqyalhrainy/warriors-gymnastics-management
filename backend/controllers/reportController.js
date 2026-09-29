@@ -2,35 +2,27 @@ const Player = require('../models/Player');
 const Subscription = require('../models/Subscription');
 const Attendance = require('../models/Attendance');
 const Payment = require('../models/Payment');
+const { getAppDateKey, dateKeyToUtc } = require('../utils/appDate');
 
-const DASHBOARD_CACHE_TTL_MS = 15 * 1000;
-let dashboardReportCache = {
-  timestamp: 0,
-  data: null
-};
-
-const clearDashboardReportCache = () => {
-  dashboardReportCache = {
-    timestamp: 0,
-    data: null
-  };
-};
+const clearDashboardReportCache = () => {};
 
 const getDashboardReport = async (req, res, next) => {
   try {
-    if (dashboardReportCache.data && (Date.now() - dashboardReportCache.timestamp) < DASHBOARD_CACHE_TTL_MS) {
-      return res.json(dashboardReportCache.data);
-    }
-
     const today = new Date();
-    const todayOnly = new Date(today.toISOString().split('T')[0]);
+    const todayOnly = dateKeyToUtc(getAppDateKey(today));
     const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const reportPlayers = await Player.find({
+      isDeleted: { $ne: true },
+      subscriptionId: { $ne: null }
+    }).select('_id status subscriptionId currentSubscriptionStartedAt startDate previousDueBalance dueAdjustment attendanceDueManual').lean();
+    const linkedSubscriptionIds = reportPlayers.map((player) => player.subscriptionId).filter(Boolean);
+    const reportPlayerIds = reportPlayers.map((player) => player._id);
 
     const [
       activePlayers,
       attendanceCounts,
       monthlyRevenue,
-      paymentTotals,
+      currentPlayerPayments,
       subscriptions
     ] = await Promise.all([
       Player.countDocuments({ status: 'active', isDeleted: { $ne: true } }),
@@ -42,25 +34,35 @@ const getDashboardReport = async (req, res, next) => {
         { $match: { paymentDate: { $gte: firstOfMonth } } },
         { $group: { _id: null, totalPaid: { $sum: '$paidAmount' } } }
       ]),
-      Payment.aggregate([
-        { $group: { _id: '$subscriptionId', totalPaid: { $sum: '$paidAmount' } } }
-      ]),
-      Subscription.find({}, 'type status endDate price').lean()
+      Payment.find({
+        playerId: { $in: reportPlayerIds },
+        transactionType: { $in: ['Full payment', 'Partial payment'] }
+      }).select('playerId paidAmount paymentDate createdAt').lean(),
+      Subscription.find({ _id: { $in: linkedSubscriptionIds } }, 'playerId type status endDate price').lean()
     ]);
 
     const attendanceMap = attendanceCounts.reduce((map, item) => {
       map[item._id] = item.count;
       return map;
     }, {});
-    const paidMap = paymentTotals.reduce((map, item) => {
-      if (item._id) map[item._id.toString()] = item.totalPaid;
+    const reportPlayerMap = new Map(reportPlayers.map((player) => [String(player._id), player]));
+    const paidMap = currentPlayerPayments.reduce((map, payment) => {
+      const playerId = String(payment.playerId || '');
+      const player = reportPlayerMap.get(playerId);
+      if (!player) return map;
+      const cycleStartValue = player.currentSubscriptionStartedAt || player.startDate;
+      const cycleStart = cycleStartValue ? new Date(cycleStartValue) : null;
+      const belongsToCurrentCycle = !cycleStart
+        || new Date(payment.paymentDate || 0) >= cycleStart
+        || new Date(payment.createdAt || 0) >= cycleStart;
+      if (belongsToCurrentCycle) map[playerId] = Number(map[playerId] || 0) + Number(payment.paidAmount || 0);
       return map;
     }, {});
     const normalized = subscriptions.map((subscription) => {
       const sub = { ...subscription };
       if (sub.type === 'time' && sub.endDate) {
-        const endDate = new Date(sub.endDate);
-        const daysRemaining = Math.max(0, Math.ceil((endDate - today) / (1000 * 60 * 60 * 24)));
+        const endDateKey = getAppDateKey(sub.endDate);
+        const daysRemaining = Math.max(0, Math.ceil((dateKeyToUtc(endDateKey) - todayOnly) / 86400000));
         if (daysRemaining <= 0) {
           sub.status = 'expired';
         } else if (daysRemaining <= 7) {
@@ -75,8 +77,12 @@ const getDashboardReport = async (req, res, next) => {
     const soonSubscriptions = normalized.filter((sub) => sub.status === 'almost_expired').length;
     const pendingAmounts = normalized.reduce((total, subscription) => {
       if (subscription.status !== 'active') return total;
-      const paid = paidMap[subscription._id.toString()] || 0;
-      const remaining = Math.max(0, subscription.price - paid);
+      const player = reportPlayerMap.get(String(subscription.playerId));
+      const paid = paidMap[String(subscription.playerId)] || 0;
+      const manualDue = player?.attendanceDueManual
+        ? Number(player.previousDueBalance || 0) - Number(player.dueAdjustment || 0)
+        : 0;
+      const remaining = Math.max(0, Number(subscription.price || 0) - paid + manualDue);
       return total + remaining;
     }, 0);
 
@@ -88,11 +94,6 @@ const getDashboardReport = async (req, res, next) => {
       absentCount: attendanceMap.absent || 0,
       monthlyRevenue: monthlyRevenue[0]?.totalPaid || 0,
       pendingAmounts
-    };
-
-    dashboardReportCache = {
-      timestamp: Date.now(),
-      data
     };
 
     res.json(data);

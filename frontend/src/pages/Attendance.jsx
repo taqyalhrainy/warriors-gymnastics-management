@@ -13,7 +13,7 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
 import { compressProfileImage } from '../utils/imageUpload.js';
 import { getCacheVersion } from '../services/cache.js';
-import { attachAttendanceRecords, isAttendanceInCycle, getUnassignedAttendance, attendanceCycleStart, packageCounter, countAttendanceForCycle, mergeCurrentAttendanceState, isAttendanceSubscriptionExpired } from '../utils/attendanceRecords.js';
+import { attachAttendanceRecords, isAttendanceInCycle, getUnassignedAttendance, attendanceCycleStart, authoritativeField, packageCounter, countAttendanceForCycle, mergeCurrentAttendanceState, isAttendanceSubscriptionExpired } from '../utils/attendanceRecords.js';
 
 const ATTENDANCE_BOARD_CACHE_TTL_MS = 5 * 60 * 1000;
 const LOCAL_ATTENDANCE_OVERRIDE_TTL_MS = 60 * 1000;
@@ -199,41 +199,39 @@ const isPlayerFrozen = (player) => player?.status === 'frozen';
 
 const getPlayerPackageCounter = packageCounter;
 
-const firstMeaningfulValue = (...values) => values.find((value) => value !== undefined && value !== null && value !== '');
-
 const mergeStablePlayerFields = (incomingPlayer, fallbackPlayer = null) => ({
   ...incomingPlayer,
-  dateOfBirth: incomingPlayer?.dateOfBirth ?? fallbackPlayer?.dateOfBirth ?? null,
-  profileImage: incomingPlayer?.profileImage ?? fallbackPlayer?.profileImage ?? '',
-  parentId: incomingPlayer?.parentId ?? fallbackPlayer?.parentId,
-  parentPhone: incomingPlayer?.parentPhone ?? fallbackPlayer?.parentPhone,
-  groupId: incomingPlayer?.groupId ?? fallbackPlayer?.groupId,
+  dateOfBirth: authoritativeField(incomingPlayer, fallbackPlayer, 'dateOfBirth', null),
+  profileImage: authoritativeField(incomingPlayer, fallbackPlayer, 'profileImage', ''),
+  parentId: authoritativeField(incomingPlayer, fallbackPlayer, 'parentId'),
+  parentPhone: authoritativeField(incomingPlayer, fallbackPlayer, 'parentPhone'),
+  groupId: authoritativeField(incomingPlayer, fallbackPlayer, 'groupId'),
   groupIds: Array.isArray(incomingPlayer?.groupIds) ? incomingPlayer.groupIds : (fallbackPlayer?.groupIds || []),
-  startDate: firstMeaningfulValue(incomingPlayer?.startDate, fallbackPlayer?.startDate),
-  endDate: firstMeaningfulValue(incomingPlayer?.endDate, fallbackPlayer?.endDate),
-  currentSubscriptionStartedAt: firstMeaningfulValue(incomingPlayer?.currentSubscriptionStartedAt, fallbackPlayer?.currentSubscriptionStartedAt),
+  startDate: authoritativeField(incomingPlayer, fallbackPlayer, 'startDate'),
+  endDate: authoritativeField(incomingPlayer, fallbackPlayer, 'endDate'),
+  currentSubscriptionStartedAt: authoritativeField(incomingPlayer, fallbackPlayer, 'currentSubscriptionStartedAt'),
   currentSubscriptionAttendanceIds: Array.isArray(incomingPlayer?.currentSubscriptionAttendanceIds)
     ? incomingPlayer.currentSubscriptionAttendanceIds
     : (fallbackPlayer?.currentSubscriptionAttendanceIds || []),
   currentSubscriptionExcludedAttendanceIds: Array.isArray(incomingPlayer?.currentSubscriptionExcludedAttendanceIds)
     ? incomingPlayer.currentSubscriptionExcludedAttendanceIds
     : (fallbackPlayer?.currentSubscriptionExcludedAttendanceIds || []),
-  packageName: firstMeaningfulValue(incomingPlayer?.packageName, fallbackPlayer?.packageName, ''),
-  packageClasses: firstMeaningfulValue(incomingPlayer?.packageClasses, fallbackPlayer?.packageClasses, 0),
-  packageHours: firstMeaningfulValue(incomingPlayer?.packageHours, fallbackPlayer?.packageHours, 0),
-  payment: firstMeaningfulValue(incomingPlayer?.payment, fallbackPlayer?.payment, 0),
-  makeupClassesNote: incomingPlayer?.makeupClassesNote ?? fallbackPlayer?.makeupClassesNote ?? '',
-  paymentRemainingAmount: incomingPlayer?.paymentRemainingAmount ?? fallbackPlayer?.paymentRemainingAmount ?? 0,
-  attendancePresentCount: incomingPlayer?.attendancePresentCount ?? fallbackPlayer?.attendancePresentCount ?? 0,
-  attendanceGroupId: incomingPlayer?.attendanceGroupId ?? fallbackPlayer?.attendanceGroupId,
-  todayAttendance: incomingPlayer?.todayAttendance ?? fallbackPlayer?.todayAttendance ?? null,
+  packageName: authoritativeField(incomingPlayer, fallbackPlayer, 'packageName', ''),
+  packageClasses: authoritativeField(incomingPlayer, fallbackPlayer, 'packageClasses', 0),
+  packageHours: authoritativeField(incomingPlayer, fallbackPlayer, 'packageHours', 0),
+  payment: authoritativeField(incomingPlayer, fallbackPlayer, 'payment', 0),
+  makeupClassesNote: authoritativeField(incomingPlayer, fallbackPlayer, 'makeupClassesNote', ''),
+  paymentRemainingAmount: authoritativeField(incomingPlayer, fallbackPlayer, 'paymentRemainingAmount', 0),
+  attendancePresentCount: authoritativeField(incomingPlayer, fallbackPlayer, 'attendancePresentCount', 0),
+  attendanceGroupId: authoritativeField(incomingPlayer, fallbackPlayer, 'attendanceGroupId'),
+  todayAttendance: authoritativeField(incomingPlayer, fallbackPlayer, 'todayAttendance', null),
   subscriptionId: incomingPlayer?.subscriptionId && typeof incomingPlayer.subscriptionId === 'object'
     ? {
       ...(fallbackPlayer?.subscriptionId && typeof fallbackPlayer.subscriptionId === 'object' ? fallbackPlayer.subscriptionId : {}),
       ...incomingPlayer.subscriptionId
     }
-    : (incomingPlayer?.subscriptionId ?? fallbackPlayer?.subscriptionId),
-  status: firstMeaningfulValue(incomingPlayer?.status, fallbackPlayer?.status, 'active'),
+    : authoritativeField(incomingPlayer, fallbackPlayer, 'subscriptionId'),
+  status: authoritativeField(incomingPlayer, fallbackPlayer, 'status', 'active'),
   subscriptionNeedsAttention: typeof incomingPlayer?.subscriptionNeedsAttention === 'boolean'
     ? incomingPlayer.subscriptionNeedsAttention
     : Boolean(fallbackPlayer?.subscriptionNeedsAttention)
@@ -532,8 +530,8 @@ const AttendancePage = () => {
       return {
         ...mergeCurrentAttendanceState(player, currentPlayer),
         fullName: currentPlayer.fullName || player.fullName,
-        parentId: currentPlayer.parentId || player.parentId,
-        parentPhone: currentPlayer.parentPhone || player.parentPhone,
+        parentId: authoritativeField(currentPlayer, player, 'parentId'),
+        parentPhone: authoritativeField(currentPlayer, player, 'parentPhone'),
         note: currentPlayer.note ?? player.note,
         makeupClassesNote: currentPlayer.makeupClassesNote ?? player.makeupClassesNote,
         freezeNote: currentPlayer.freezeNote ?? player.freezeNote,
@@ -541,10 +539,10 @@ const AttendancePage = () => {
         dueAdjustment: currentPlayer.dueAdjustment,
         attendanceDueManual: currentPlayer.attendanceDueManual,
         paymentRemainingAmount: currentPlayer.paymentRemainingAmount,
-        profileImage: currentPlayer.profileImage || player.profileImage,
+        profileImage: authoritativeField(currentPlayer, player, 'profileImage', ''),
         attendanceGroupId: groupId,
         attendancePresentCount: currentPlayer.attendancePresentCount ?? player.attendancePresentCount,
-        subscriptionId: currentPlayer.subscriptionId || player.subscriptionId
+        subscriptionId: authoritativeField(currentPlayer, player, 'subscriptionId')
       };
     };
 
@@ -1334,8 +1332,8 @@ const AttendancePage = () => {
           return {
             ...player,
             ...stablePlayer,
-            groupId: stablePlayer.groupId || player.groupId,
-            groupIds: stablePlayer.groupIds?.length ? stablePlayer.groupIds : player.groupIds,
+            groupId: stablePlayer.groupId,
+            groupIds: stablePlayer.groupIds,
             attendanceGroupId: stablePlayer.attendanceGroupId || player.attendanceGroupId || getEntityId(group._id),
             attendancePresentCount: stablePlayer.attendancePresentCount ?? player.attendancePresentCount,
             todayAttendance: player.todayAttendance

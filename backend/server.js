@@ -282,12 +282,16 @@ const runStartupMaintenance = async () => {
   const Attendance = require('./models/Attendance');
   const { ensureHistoryBaselines } = require('./utils/history');
   const { cleanupOldAttendanceData } = require('./utils/retention');
+  const { reconcileLinkedSubscriptions } = require('./controllers/playerController');
 
   await Promise.all([
     Attendance.createIndexes(),
     initializeDefaultData(),
     ensureHistoryBaselines()
   ]);
+
+  const reconciledSubscriptions = await reconcileLinkedSubscriptions();
+  console.log(`Reconciled ${reconciledSubscriptions} linked player subscriptions.`);
 
   const cleanupResult = await cleanupOldAttendanceData();
   console.log(`Attendance retention cleanup removed ${cleanupResult.deletedAttendance} attendance records and ${cleanupResult.deletedNotifications} attendance notifications.`);

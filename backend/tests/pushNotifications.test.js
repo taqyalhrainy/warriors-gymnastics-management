@@ -60,6 +60,7 @@ const setup = (failureStatus, recover = false) => {
     '../models/NativePushToken': NativePushToken,
     '../middleware/validate': {},
     '../utils/audit': {},
+    '../utils/appDate': { getAppDayRangeUtc: () => ({ start: new Date(0), end: new Date(86400000) }) },
     '../utils/notificationDelivery': {},
     '../utils/pushNotifications': push,
     '../utils/nativePushNotifications': {

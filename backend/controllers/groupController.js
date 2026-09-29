@@ -9,6 +9,7 @@ const { sanitizeObject, decodeText, validateObjectId } = require('../middleware/
 const { createAuditLog } = require('../utils/audit');
 const { decrypt } = require('../utils/encryption');
 const { parseLocalizedNumber } = require('../utils/numberInput');
+const { getAppDateOnly } = require('../utils/appDate');
 
 const defaultGroupColors = ['#2563eb', '#f2c94c', '#16a34a', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16', '#ec4899'];
 const hexColorPattern = /^#[0-9a-fA-F]{6}$/;
@@ -48,8 +49,7 @@ const formatGroupResponse = (group) => {
 
 const getDateOnly = (value) => {
   const date = value ? new Date(value) : new Date(0);
-  date.setHours(0, 0, 0, 0);
-  return date;
+  return Number.isNaN(date.getTime()) ? new Date(0) : getAppDateOnly(date);
 };
 
 const getCurrentSubscriptionStart = (player) => {

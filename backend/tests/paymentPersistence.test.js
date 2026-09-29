@@ -10,6 +10,8 @@ const Player = require('../models/Player');
 const Payment = require('../models/Payment');
 const Group = require('../models/TrainingGroup');
 const Attendance = require('../models/Attendance');
+const Subscription = require('../models/Subscription');
+const Program = require('../models/Program');
 let releasePush;
 const pendingPush = new Promise((resolve) => { releasePush = resolve; });
 require('../utils/pushNotifications').sendPushToUser = () => pendingPush;
@@ -18,10 +20,12 @@ const payments = require('../controllers/paymentController');
 const players = require('../controllers/playerController');
 const groups = require('../controllers/groupController');
 const attendance = require('../controllers/attendanceController');
+const subscriptions = require('../controllers/subscriptionController');
+const reports = require('../controllers/reportController');
 let mongo, server, base, player, group;
 const request = async (path, body) => {
   const response = await fetch(base + path, {
-    method: body ? (path.startsWith('/players/') ? 'PUT' : 'POST') : 'GET',
+    method: body ? ((path.startsWith('/players/') || path.startsWith('/subscriptions/')) ? 'PUT' : 'POST') : 'GET',
     headers: { 'Content-Type': 'application/json' },
     ...(body ? { body: JSON.stringify(body) } : {})
   });
@@ -45,6 +49,9 @@ before(async () => {
   app.get('/players/:id', players.getPlayerById);
   app.get('/groups/:id', groups.getGroupPlayers);
   app.get('/attendance/:playerId', attendance.getAttendanceByPlayer);
+  app.post('/subscriptions', subscriptions.createSubscription);
+  app.put('/subscriptions/:id', subscriptions.updateSubscription);
+  app.get('/reports/dashboard', reports.getDashboardReport);
   app.use((error, req, res, next) => res.status(500).json({ message: error.message }));
   server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
@@ -118,4 +125,65 @@ test('board reload and frontend recalculation agree on 3/8 after renewal', async
   assert.equal(board.attendancePresentCount, 3);
   assert.deepEqual(packageCounter(recalculated), packageCounter(board));
   assert.equal(isAttendanceSubscriptionExpired(recalculated, new Date('2026-09-29')), false);
+});
+
+test('renewing a player also replaces stale linked subscription dates and counters', async () => {
+  const subject = await Player.create({ fullName: 'Linked subscription player', parentId: player.parentId,
+    parentPhoneEncrypted: 'test', groupId: group._id, groupIds: [group._id], packageName: 'Eight classes', packageClasses: 8, payment: 90 });
+  const linked = await Subscription.create({ playerId: subject._id, type: 'sessions', packageName: 'Old', totalSessions: 12,
+    usedSessions: 12, remainingSessions: 0, startDate: '2026-08-01', endDate: '2026-08-31', price: 70, status: 'expired' });
+  subject.subscriptionId = linked._id;
+  await subject.save();
+
+  await request(`/players/${subject._id}`, {
+    newSubscription: true,
+    startDate: '2026-09-20',
+    endDate: '2026-10-20'
+  });
+
+  const saved = await Subscription.findById(linked._id).lean();
+  assert.equal(saved.packageName, 'Eight classes');
+  assert.equal(saved.totalSessions, 8);
+  assert.equal(saved.usedSessions, 0);
+  assert.equal(saved.remainingSessions, 8);
+  assert.equal(saved.startDate.toISOString().slice(0, 10), '2026-09-20');
+  assert.equal(saved.endDate.toISOString().slice(0, 10), '2026-10-20');
+  assert.equal(saved.price, 90);
+  assert.equal(saved.status, 'active');
+});
+
+test('subscription screen keeps one current record and synchronizes the player in both directions', async () => {
+  const subject = await Player.create({ fullName: 'Subscription screen player', parentId: player.parentId,
+    parentPhoneEncrypted: 'test', groupId: group._id, groupIds: [group._id] });
+  await Program.create({ name: 'Subscription test package', price: 110 });
+  const payload = { playerId: String(subject._id), type: 'sessions', packageName: 'Subscription test package',
+    totalSessions: 10, startDate: '2026-10-01', endDate: '2026-11-01', price: 110 };
+  const first = await request('/subscriptions', payload);
+  await request('/subscriptions', { ...payload, totalSessions: 8, startDate: '2026-10-05' });
+
+  assert.equal(await Subscription.countDocuments({ playerId: subject._id }), 1);
+  const syncedPlayer = await Player.findById(subject._id).lean();
+  assert.equal(String(syncedPlayer.subscriptionId), first._id);
+  assert.equal(syncedPlayer.packageClasses, 8);
+  assert.equal(syncedPlayer.currentSubscriptionStartedAt.toISOString().slice(0, 10), '2026-10-05');
+
+  const updated = await request(`/subscriptions/${first._id}`, { type: 'time', totalSessions: 0, endDate: '2027-01-01' });
+  assert.equal(updated.status, 'active');
+  assert.equal((await Player.findById(subject._id)).packageClasses, 0);
+});
+
+test('dashboard pending amount uses current-cycle player payments even without payment subscriptionId', async () => {
+  const subject = await Player.create({ fullName: 'Dashboard payment player', parentId: player.parentId,
+    parentPhoneEncrypted: 'test', groupId: group._id, groupIds: [group._id], payment: 100,
+    startDate: '2026-09-01', currentSubscriptionStartedAt: '2026-09-01' });
+  const linked = await Subscription.create({ playerId: subject._id, type: 'sessions', packageName: 'Dashboard',
+    totalSessions: 8, remainingSessions: 8, startDate: '2026-09-01', endDate: '2027-01-01', price: 100, status: 'active' });
+  subject.subscriptionId = linked._id;
+  await subject.save();
+  const before = await request('/reports/dashboard');
+  const payment = await request('/payments', { playerId: String(subject._id), paidAmount: 40,
+    paymentDate: '2026-09-29', paymentMethod: 'Cash' });
+  assert.equal(payment.subscriptionId, undefined);
+  const after = await request('/reports/dashboard');
+  assert.equal(after.pendingAmounts, before.pendingAmounts - 40);
 });

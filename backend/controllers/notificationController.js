@@ -6,6 +6,7 @@ const PushSubscription = require('../models/PushSubscription');
 const NativePushToken = require('../models/NativePushToken');
 const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
+const { getAppDayRangeUtc } = require('../utils/appDate');
 const { getVapidPublicKey, isPushConfigured, sendPushToUser } = require('../utils/pushNotifications');
 const { isNativePushConfigured, sendNativePushToUser } = require('../utils/nativePushNotifications');
 const { createNotification: createAndPushNotification, createNotifications } = require('../utils/notificationDelivery');
@@ -296,11 +297,8 @@ const getNotifications = async (req, res, next) => {
       filter.recipientUserId = req.query.userId;
     }
     if (req.query.date) {
-      const start = new Date(req.query.date);
-      if (!Number.isNaN(start.getTime())) {
-        start.setHours(0, 0, 0, 0);
-        const end = new Date(start);
-        end.setDate(end.getDate() + 1);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date))) {
+        const { start, end } = getAppDayRangeUtc(req.query.date);
         filter.createdAt = { $gte: start, $lt: end };
       }
     }

@@ -4,6 +4,7 @@ const Attendance = require('../models/Attendance');
 const WaitingListEntry = require('../models/WaitingListEntry');
 const Coach = require('../models/Coach');
 const CoachAttendance = require('../models/CoachAttendance');
+const { getAppDateKey, dateKeyToUtc } = require('./appDate');
 const HistoryEntry = require('../models/HistoryEntry');
 const { decrypt } = require('./encryption');
 
@@ -281,8 +282,8 @@ const getHistoryAvailableSince = async (entityType) => {
 };
 
 const loadAttendanceForDate = async (asOf) => {
-  const dayKey = new Date(asOf).toISOString().split('T')[0];
-  const startOfDay = new Date(`${dayKey}T00:00:00.000Z`);
+  const dayKey = getAppDateKey(asOf);
+  const startOfDay = dateKeyToUtc(dayKey);
   const endOfDay = new Date(`${dayKey}T23:59:59.999Z`);
 
   const attendance = await Attendance.find({

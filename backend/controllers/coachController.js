@@ -5,16 +5,12 @@ const User = require('../models/User');
 const { sanitizeObject, validateEmail, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { snapshotCoachDocument, createHistoryEntry } = require('../utils/history');
+const { getAppDateKey, dateKeyToUtc } = require('../utils/appDate');
 
 const getDateOnly = (value = new Date()) => {
-  const date = value ? new Date(value) : new Date();
-  if (Number.isNaN(date.getTime())) {
-    const fallback = new Date();
-    fallback.setHours(0, 0, 0, 0);
-    return fallback;
-  }
-  date.setHours(0, 0, 0, 0);
-  return date;
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return dateKeyToUtc(value);
+  const key = getAppDateKey(value);
+  return dateKeyToUtc(key || getAppDateKey());
 };
 
 const formatCoachResponse = (coach, attendanceByCoachId = new Map()) => {

@@ -4,6 +4,26 @@ const Program = require('../models/Program');
 const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { parseLocalizedNumber } = require('../utils/numberInput');
+const { getAppDateKey, dateKeyToUtc } = require('../utils/appDate');
+
+const daysBetweenDateKeys = (first, second) => Math.ceil((dateKeyToUtc(first) - dateKeyToUtc(second)) / 86400000);
+
+const applySubscriptionToPlayer = async (player, subscription, { resetCycle = false } = {}) => {
+  if (!player) return;
+  player.subscriptionId = subscription._id;
+  player.packageName = subscription.packageName || '';
+  player.packageClasses = subscription.type === 'sessions' ? Number(subscription.totalSessions || 0) : 0;
+  player.payment = Number(subscription.price || 0);
+  player.startDate = subscription.startDate;
+  player.endDate = subscription.endDate;
+  if (resetCycle) {
+    player.currentSubscriptionStartedAt = subscription.startDate;
+    player.currentSubscriptionAttendanceIds = [];
+    player.currentSubscriptionExcludedAttendanceIds = [];
+  }
+  if (subscription.status !== 'expired' && player.status === 'expired') player.status = 'active';
+  await player.save();
+};
 
 const getSubscriptions = async (req, res, next) => {
   try {
@@ -15,9 +35,9 @@ const getSubscriptions = async (req, res, next) => {
     const populated = subscriptions.map((subscription) => {
       const sub = subscription.toObject();
       if (sub.type === 'time' && sub.endDate) {
-        const today = new Date();
-        const endDate = new Date(sub.endDate);
-        const daysRemaining = Math.max(0, Math.ceil((endDate - today) / (1000 * 60 * 60 * 24)));
+        const todayKey = getAppDateKey();
+        const endDateKey = getAppDateKey(sub.endDate);
+        const daysRemaining = Math.max(0, daysBetweenDateKeys(endDateKey, todayKey));
         sub.daysRemaining = daysRemaining;
         if (daysRemaining <= 0) {
           sub.status = 'expired';
@@ -49,20 +69,36 @@ const createSubscription = async (req, res, next) => {
       return res.status(400).json({ message: 'Selected package is invalid. Please choose an existing program package.' });
     }
     const remainingSessions = type === 'sessions' ? parseLocalizedNumber(totalSessions) : 0;
-    const subscription = await Subscription.create({
-      playerId,
-      type,
-      packageName: program.name,
-      totalSessions: parseLocalizedNumber(totalSessions),
-      usedSessions: 0,
-      remainingSessions,
-      startDate,
-      endDate,
-      price: parseLocalizedNumber(program.price || price),
-      status: 'active'
-    });
-    player.subscriptionId = subscription._id;
-    await player.save();
+    let subscription = await Subscription.findOne({ playerId });
+    if (subscription) {
+      Object.assign(subscription, {
+        type,
+        packageName: program.name,
+        totalSessions: parseLocalizedNumber(totalSessions),
+        usedSessions: 0,
+        remainingSessions,
+        startDate,
+        endDate,
+        price: parseLocalizedNumber(program.price || price),
+        status: 'active',
+        lastAttendanceDate: undefined
+      });
+      await subscription.save();
+    } else {
+      subscription = await Subscription.create({
+        playerId,
+        type,
+        packageName: program.name,
+        totalSessions: parseLocalizedNumber(totalSessions),
+        usedSessions: 0,
+        remainingSessions,
+        startDate,
+        endDate,
+        price: parseLocalizedNumber(program.price || price),
+        status: 'active'
+      });
+    }
+    await applySubscriptionToPlayer(player, subscription, { resetCycle: true });
     await createAuditLog({ userId: req.user._id, action: 'create subscription', entity: 'Subscription', entityId: subscription._id, req });
     res.status(201).json(subscription);
   } catch (error) {
@@ -81,6 +117,7 @@ const updateSubscription = async (req, res, next) => {
     if (!subscription) {
       return res.status(404).json({ message: 'Subscription not found.' });
     }
+    const previousStartDate = subscription.startDate ? new Date(subscription.startDate).getTime() : null;
     Object.assign(subscription, payload);
     if (payload.totalSessions !== undefined) {
       subscription.totalSessions = parseLocalizedNumber(payload.totalSessions);
@@ -91,14 +128,20 @@ const updateSubscription = async (req, res, next) => {
     if (subscription.type === 'sessions') {
       subscription.remainingSessions = Math.max(0, subscription.totalSessions - subscription.usedSessions);
     }
-    if (new Date(subscription.endDate) <= new Date() || subscription.remainingSessions <= 0) {
+    const sessionsExhausted = subscription.type === 'sessions'
+      && subscription.totalSessions > 0
+      && subscription.remainingSessions <= 0;
+    if (getAppDateKey(subscription.endDate) <= getAppDateKey() || sessionsExhausted) {
       subscription.status = 'expired';
-    } else if (subscription.remainingSessions <= 2) {
+    } else if (subscription.type === 'sessions' && subscription.totalSessions > 0 && subscription.remainingSessions <= 2) {
       subscription.status = 'almost_expired';
     } else {
       subscription.status = 'active';
     }
     await subscription.save();
+    const player = await Player.findById(subscription.playerId);
+    const nextStartDate = subscription.startDate ? new Date(subscription.startDate).getTime() : null;
+    await applySubscriptionToPlayer(player, subscription, { resetCycle: previousStartDate !== nextStartDate });
     await createAuditLog({ userId: req.user._id, action: 'update subscription', entity: 'Subscription', entityId: subscription._id, req });
     res.json(subscription);
   } catch (error) {
