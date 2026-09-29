@@ -5,6 +5,7 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 import { fetchUnreadCount } from '../services/notifications.js';
 import { fetchPlayerAlertCandidates } from '../services/players.js';
 import warriorsLogo from '../assets/warriors-logo.png';
+import { BirthdayBadge } from './BirthdayAlerts.jsx';
 
 const EXPIRED_ALERT_READ_KEY = 'warriors-expired-alert-read-ids';
 
@@ -133,6 +134,7 @@ const Sidebar = () => {
             {user?.role !== 'parent' && link.key === 'dashboard' && expiredAlertCount > 0 && (
               <span className="notification-badge dashboard-alert-badge" title="Expired alert">{expiredAlertCount}</span>
             )}
+            {user?.role !== 'parent' && link.key === 'dashboard' && <BirthdayBadge />}
           </NavLink>
         ))}
       </div>

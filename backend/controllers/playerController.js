@@ -508,8 +508,8 @@ const deletePlayer = async (req, res, next) => {
 
 const getPlayerAlertCandidates = async (req, res, next) => {
   try {
-    const players = await Player.find({ isDeleted: { $ne: true }, status: 'active', endDate: { $ne: null } })
-      .select('_id status endDate').lean();
+    const players = await Player.find({ isDeleted: { $ne: true }, status: { $ne: 'left' }, $or: [{ endDate: { $ne: null } }, { dateOfBirth: { $ne: null } }] })
+      .select('_id fullName status endDate dateOfBirth').lean();
     res.json(players);
   } catch (error) {
     next(error);

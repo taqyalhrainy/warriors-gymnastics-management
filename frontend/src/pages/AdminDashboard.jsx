@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
+import BirthdayAlerts from '../components/BirthdayAlerts.jsx';
 import DataStatus from '../components/DataStatus.jsx';
 import { useSectionLoader, canShowEmpty, isSectionBlocking } from '../hooks/useSectionLoader.js';
 import StatsCard from '../components/StatsCard.jsx';
@@ -670,6 +671,7 @@ const AdminDashboard = () => {
           <button className="expired-time-button" type="button" onClick={() => setIsExpiredTimeOpen(true)}>
             <span>Expired Time</span>
           </button>
+          <BirthdayAlerts />
         </div>
 
         {isWaitingFormOpen && (
