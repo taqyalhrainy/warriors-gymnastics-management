@@ -47,5 +47,5 @@ export const useBirthdayAlerts = () => {
     };
   }, [enabled, userId]);
   const birthdays = enabled ? todaysBirthdays(players, day) : [];
-  return { birthdays, day, userId, ready, error, unread: birthdays.filter((player) => !readIds.includes(String(player._id))).length };
+  return { players: enabled ? players : [], birthdays, day, userId, ready, error, unread: birthdays.filter((player) => !readIds.includes(String(player._id))).length };
 };

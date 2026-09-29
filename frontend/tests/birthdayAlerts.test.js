@@ -26,3 +26,10 @@ test('opening birthdays acknowledges only this user, day and displayed students'
     assert.equal(readBirthdayIds('admin1', '2026-09-29').includes('student2'), false);
   } finally { delete globalThis.localStorage; delete globalThis.window; }
 });
+
+test('date selection finds birthdays in other months and years, including leap day', () => {
+  const players = [{ _id: 'a', fullName: 'A', dateOfBirth: '2012-02-29' }, { _id: 'b', fullName: 'B', dateOfBirth: '2014-12-10' }];
+  assert.deepEqual(todaysBirthdays(players, '2028-02-29').map((p) => p._id), ['a']);
+  assert.deepEqual(todaysBirthdays(players, '2026-12-10').map((p) => p._id), ['b']);
+  assert.deepEqual(todaysBirthdays(players, '2010-12-10'), []);
+});
