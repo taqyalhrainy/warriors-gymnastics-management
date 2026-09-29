@@ -16,6 +16,7 @@ const { sanitizeObject, validateEmail, validateObjectId } = require('../middlewa
 const { createAuditLog } = require('../utils/audit');
 const { encrypt, decrypt } = require('../utils/encryption');
 const { getAppDateOnly } = require('../utils/appDate');
+const { getCurrentSubscriptionStart } = require('../utils/subscriptionCycle');
 
 const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
 const escapeRegex = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -43,13 +44,6 @@ const isOnOrAfter = (value, date) => {
   if (!value || !date) return false;
   const parsed = new Date(value);
   return !Number.isNaN(parsed.getTime()) && parsed >= date;
-};
-
-const getCurrentSubscriptionStart = (player) => {
-  const rawDate = player?.currentSubscriptionStartedAt || player?.startDate || player?.subscriptionId?.startDate;
-  if (!rawDate) return null;
-  const date = new Date(rawDate);
-  return Number.isNaN(date.getTime()) ? null : date;
 };
 
 const getCurrentSubscriptionPaymentMatch = (player) => {

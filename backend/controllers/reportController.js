@@ -3,6 +3,7 @@ const Subscription = require('../models/Subscription');
 const Attendance = require('../models/Attendance');
 const Payment = require('../models/Payment');
 const { getAppDateKey, dateKeyToUtc } = require('../utils/appDate');
+const { getCurrentSubscriptionStart } = require('../utils/subscriptionCycle');
 
 const clearDashboardReportCache = () => {};
 
@@ -50,8 +51,7 @@ const getDashboardReport = async (req, res, next) => {
       const playerId = String(payment.playerId || '');
       const player = reportPlayerMap.get(playerId);
       if (!player) return map;
-      const cycleStartValue = player.currentSubscriptionStartedAt || player.startDate;
-      const cycleStart = cycleStartValue ? new Date(cycleStartValue) : null;
+      const cycleStart = getCurrentSubscriptionStart(player);
       const belongsToCurrentCycle = !cycleStart
         || new Date(payment.paymentDate || 0) >= cycleStart
         || new Date(payment.createdAt || 0) >= cycleStart;

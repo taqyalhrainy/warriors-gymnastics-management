@@ -44,6 +44,10 @@ test('batch board preserves group counters with one player query and one attenda
       if (name === '../models/Attendance') return { find: () => { attendanceQueries += 1; return query(records); } };
       if (name === '../middleware/validate') return { decodeText: (value) => value, validateObjectId: () => true };
       if (name === '../utils/appDate') return { getAppDateOnly: (value) => new Date(`${new Date(value).toISOString().slice(0, 10)}T00:00:00.000Z`) };
+      if (name === '../utils/subscriptionCycle') return { getCurrentSubscriptionStart: (value) => new Date(Math.max(
+        ...[value.currentSubscriptionStartedAt, value.startDate, value.subscriptionId?.startDate]
+          .filter(Boolean).map((date) => new Date(date).getTime())
+      )) };
       return {};
     }
   });

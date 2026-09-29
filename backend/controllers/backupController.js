@@ -3,6 +3,7 @@ const Player = require('../models/Player');
 const Payment = require('../models/Payment');
 const { decrypt } = require('../utils/encryption');
 const { createAuditLog } = require('../utils/audit');
+const { getCurrentSubscriptionStart } = require('../utils/subscriptionCycle');
 
 const safeDecrypt = (value) => {
   if (!value) return '';
@@ -25,11 +26,9 @@ const isOnOrAfter = (value, date) => {
 };
 
 const getCurrentPayments = (player, payments) => payments.filter((payment) => {
-  const subscriptionStart = player.currentSubscriptionStartedAt || player.startDate;
+  const subscriptionStart = getCurrentSubscriptionStart(player);
   if (!subscriptionStart) return true;
-  const startDate = new Date(subscriptionStart);
-  if (Number.isNaN(startDate.getTime())) return true;
-  return isOnOrAfter(payment.paymentDate, startDate) || isOnOrAfter(payment.createdAt, startDate);
+  return isOnOrAfter(payment.paymentDate, subscriptionStart) || isOnOrAfter(payment.createdAt, subscriptionStart);
 });
 
 const exportPlayersBackup = async (req, res, next) => {

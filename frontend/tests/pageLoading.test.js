@@ -40,6 +40,7 @@ async function mount(file, services) {
     '../hooks/useSectionLoader.js': hook,
     '../context/LanguageContext.jsx': { useLanguage: () => ({ t: (key) => key, language: 'en' }) },
     '../utils/format.js': { formatCurrency: (value) => `MONEY:${value}` },
+    '../utils/attendanceRecords.js': { attendanceCycleStart: (player) => player?.startDate || player?.currentSubscriptionStartedAt || '' },
     ...services
   };
   const code = transformSync(readFileSync(new URL(file, import.meta.url), 'utf8'), { loader: 'jsx', jsx: 'automatic', format: 'esm' }).code;

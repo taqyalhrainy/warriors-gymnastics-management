@@ -6,6 +6,7 @@ import { useSectionLoader } from '../hooks/useSectionLoader.js';
 import { fetchParentAttendance, fetchParentAttendanceHistory, getCachedParentAttendance } from '../services/parents.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import warriorsLogo from '../assets/warriors-logo.png';
+import { attendanceCycleStart } from '../utils/attendanceRecords.js';
 
 const formatDate = (date) => (date ? new Date(date).toLocaleDateString() : '-');
 const formatTime = (date) => (date ? new Date(date).toLocaleTimeString() : '-');
@@ -95,12 +96,12 @@ const isCurrentRecord = (record, child) => {
   if (excludedIds.has(String(record._id))) return false;
   const explicitIds = new Set((child.currentSubscriptionAttendanceIds || []).map(String));
   if (explicitIds.has(String(record._id))) return true;
-  const start = child.currentSubscriptionStartedAt || child.startDate || child.subscriptionId?.startDate;
+  const start = attendanceCycleStart(child);
   if (!start) return true;
   return dateOnly(record.date).getTime() >= dateOnly(start).getTime();
 };
 
-const getCurrentSubscriptionCycleKey = (child) => getDateInputValue(child.currentSubscriptionStartedAt || child.startDate || child.subscriptionId?.startDate);
+const getCurrentSubscriptionCycleKey = (child) => getDateInputValue(attendanceCycleStart(child));
 const CHILDREN_PAGE_SIZE = 8;
 
 const getAttendanceRecordsForSubscription = (records, child, cycle, cycles) => {
@@ -203,7 +204,7 @@ const ParentAttendancePage = () => {
       ? child.subscriptionHistory
       : [{
         key: currentCycleKey || `${child._id}:current`,
-        startDate: child.currentSubscriptionStartedAt || child.startDate || child.subscriptionId?.startDate,
+        startDate: attendanceCycleStart(child),
         endDate: child.endDate || child.subscriptionId?.endDate,
         packageName: getPackageTitle(child),
         packageClasses: Number(child.packageClasses || child.subscriptionId?.totalSessions || 0),

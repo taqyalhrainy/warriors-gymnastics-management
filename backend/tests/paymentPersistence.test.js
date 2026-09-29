@@ -127,6 +127,27 @@ test('board reload and frontend recalculation agree on 3/8 after renewal', async
   assert.equal(isAttendanceSubscriptionExpired(recalculated, new Date('2026-09-29')), false);
 });
 
+test('a newer start date repairs a stale cycle marker even when the client omits newSubscription', async () => {
+  const { attendanceCycleStart, countAttendanceForCycle, isAttendanceSubscriptionExpired } = await import('../../frontend/src/utils/attendanceRecords.js');
+  const subject = await Player.create({ fullName: 'Stale cycle marker', parentId: player.parentId, parentPhoneEncrypted: 'test',
+    groupId: group._id, groupIds: [group._id], startDate: '2026-07-20', currentSubscriptionStartedAt: '2026-07-20',
+    endDate: '2026-08-20', packageClasses: 8 });
+  const markedBy = (await User.findOne())._id;
+  await Attendance.insertMany(['2026-07-20', '2026-08-03', '2026-08-10', '2026-09-14', '2026-09-21', '2026-09-24'].map((date) => ({
+    playerId: subject._id, groupId: group._id, markedBy, status: 'present', date: `${date}T00:00:00Z`
+  })));
+
+  const updated = await request(`/players/${subject._id}`, { startDate: '2026-09-14', endDate: '2026-10-08' });
+  const board = (await request(`/groups/${group._id}`)).find((row) => row._id === String(subject._id));
+  const records = await Attendance.find({ playerId: subject._id }).lean();
+
+  assert.equal(updated.currentSubscriptionStartedAt.slice(0, 10), '2026-09-14');
+  assert.equal(new Date(attendanceCycleStart(updated)).toISOString().slice(0, 10), '2026-09-14');
+  assert.equal(countAttendanceForCycle(records, updated), 3);
+  assert.equal(board.attendancePresentCount, 3);
+  assert.equal(isAttendanceSubscriptionExpired(board, new Date('2026-09-29')), false);
+});
+
 test('renewing a player also replaces stale linked subscription dates and counters', async () => {
   const subject = await Player.create({ fullName: 'Linked subscription player', parentId: player.parentId,
     parentPhoneEncrypted: 'test', groupId: group._id, groupIds: [group._id], packageName: 'Eight classes', packageClasses: 8, payment: 90 });

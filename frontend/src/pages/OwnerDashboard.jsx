@@ -5,6 +5,7 @@ import { fetchTodayAttendance } from '../services/attendance.js';
 import { fetchAttendanceBoard } from '../services/groups.js';
 import { fetchPayments } from '../services/payments.js';
 import { fetchPlayers } from '../services/players.js';
+import { attendanceCycleStart } from '../utils/attendanceRecords.js';
 
 const NEW_SUBSCRIPTION_ALERT_READ_KEY = 'warriors-new-subscription-alert-read-ids';
 
@@ -26,7 +27,7 @@ const getPaymentMonthKey = (date) => {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`;
 };
 
-const getPlayerSubscriptionDate = (player) => player?.startDate || player?.currentSubscriptionStartedAt || player?.createdAt || null;
+const getPlayerSubscriptionDate = (player) => attendanceCycleStart(player) || player?.createdAt || null;
 
 const getSortableDateTime = (...dates) => {
   for (const date of dates) {

@@ -8,6 +8,7 @@ import { verifyPaymentPassword } from '../services/security.js';
 import { confirmAction } from '../utils/confirmAction.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
+import { attendanceCycleStart } from '../utils/attendanceRecords.js';
 
 const formatDate = (date) => {
   if (!date) return '-';
@@ -80,11 +81,10 @@ const getParentPhone = (payment) => payment.playerId?.parentId?.phone || payment
 const getPaymentPlayerKey = (payment) => String(payment.playerId?._id || payment.playerId || payment.playerNameSnapshot || payment._id || '');
 const isDeletedPlayerPayment = (payment) => Boolean(payment.playerId?.isDeleted);
 const isPaymentInCurrentSubscription = (payment, player) => {
-  if (player?.currentSubscriptionStartedAt) {
-    return payment.createdAt && new Date(payment.createdAt) >= new Date(player.currentSubscriptionStartedAt);
-  }
-  if (!player?.startDate) return true;
-  return new Date(payment.paymentDate || 0) >= new Date(player.startDate);
+  const cycleStart = attendanceCycleStart(player);
+  if (!cycleStart) return true;
+  return (payment.createdAt && new Date(payment.createdAt) >= new Date(cycleStart))
+    || new Date(payment.paymentDate || 0) >= new Date(cycleStart);
 };
 const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
 const getPlayerSubscriptionTotal = (player) => Math.max(0, Number(player?.payment || 0));

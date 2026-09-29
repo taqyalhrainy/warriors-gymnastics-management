@@ -1,6 +1,7 @@
 const Attendance = require('../models/Attendance');
 const Subscription = require('../models/Subscription');
 const { getAppDateKey, getAppDateOnly } = require('./appDate');
+const { getCurrentSubscriptionStart } = require('./subscriptionCycle');
 
 const synchronizeSubscriptionAttendanceUsage = async (player, today = new Date()) => {
   if (!player?._id) return;
@@ -9,8 +10,7 @@ const synchronizeSubscriptionAttendanceUsage = async (player, today = new Date()
     : await Subscription.findOne({ playerId: player._id });
   if (!subscription || subscription.type !== 'sessions') return;
 
-  const cycleStartValue = player.currentSubscriptionStartedAt || player.startDate || subscription.startDate;
-  const cycleStart = cycleStartValue ? new Date(cycleStartValue) : null;
+  const cycleStart = getCurrentSubscriptionStart(player, subscription.startDate);
   const normalizedCycleStart = cycleStart && !Number.isNaN(cycleStart.getTime()) ? getAppDateOnly(cycleStart) : null;
 
   const explicitlyCountedIds = new Set((player.currentSubscriptionAttendanceIds || []).map(String));

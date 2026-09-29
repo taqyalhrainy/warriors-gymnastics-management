@@ -12,6 +12,7 @@ const { parseLocalizedNumber } = require('../utils/numberInput');
 const { snapshotPlayerDocument, createHistoryEntry } = require('../utils/history');
 const { synchronizeSubscriptionAttendanceUsage } = require('../utils/subscriptionAttendance');
 const { getAppDateKey, getAppDateOnly } = require('../utils/appDate');
+const { getCurrentSubscriptionStart, isLaterSubscriptionStart } = require('../utils/subscriptionCycle');
 
 const formatPlayerResponse = (player) => {
   const obj = player.toObject({ virtuals: true });
@@ -158,12 +159,7 @@ const recalculatePlayerPayments = async (player) => {
   }
 };
 
-const getPlayerCycleStart = (player) => (
-  player.currentSubscriptionStartedAt
-  || player.startDate
-  || player.subscriptionId?.startDate
-  || null
-);
+const getPlayerCycleStart = (player) => getCurrentSubscriptionStart(player);
 
 const getPlayerRemainingAmount = async (player) => {
   if (!player.attendanceDueManual) return 0;
@@ -184,7 +180,7 @@ const synchronizeLinkedSubscription = async (player, startsNewSubscription = fal
   if (!subscription) return;
 
   subscription.packageName = player.packageName ?? subscription.packageName;
-  subscription.startDate = player.currentSubscriptionStartedAt || player.startDate || subscription.startDate;
+  subscription.startDate = getCurrentSubscriptionStart(player, subscription.startDate) || subscription.startDate;
   subscription.endDate = player.endDate || subscription.endDate;
   subscription.price = Math.max(0, Number(player.payment ?? subscription.price ?? 0));
 
@@ -210,12 +206,29 @@ const synchronizeLinkedSubscription = async (player, startsNewSubscription = fal
 };
 
 const reconcileLinkedSubscriptions = async () => {
-  const players = await Player.find({ subscriptionId: { $ne: null }, isDeleted: { $ne: true } });
+  const players = await Player.find({
+    isDeleted: { $ne: true },
+    $or: [{ startDate: { $ne: null } }, { subscriptionId: { $ne: null } }]
+  });
   const batchSize = 20;
   for (let index = 0; index < players.length; index += batchSize) {
     await Promise.all(players.slice(index, index + batchSize).map(async (player) => {
-      await synchronizeLinkedSubscription(player, false);
-      await synchronizeSubscriptionAttendanceUsage(player);
+      const startDate = getDateAtStartOfDay(player.startDate);
+      const cycleMarker = getDateAtStartOfDay(player.currentSubscriptionStartedAt);
+      const advancedExistingCycle = Boolean(startDate && cycleMarker && startDate > cycleMarker);
+      const missingCycleMarker = Boolean(startDate && !cycleMarker);
+      if (advancedExistingCycle || missingCycleMarker) {
+        player.currentSubscriptionStartedAt = startDate;
+        if (advancedExistingCycle) {
+          player.currentSubscriptionAttendanceIds = [];
+          player.currentSubscriptionExcludedAttendanceIds = [];
+        }
+        await player.save();
+      }
+      if (player.subscriptionId) {
+        await synchronizeLinkedSubscription(player, advancedExistingCycle);
+        await synchronizeSubscriptionAttendanceUsage(player);
+      }
     }));
   }
   return players.length;
@@ -399,12 +412,14 @@ const updatePlayer = async (req, res, next) => {
       return res.status(400).json({ message: 'Invalid player ID.' });
     }
     const updates = cleanPlayerPayload(sanitizeObject(req.body));
-    const startsNewSubscription = Boolean(updates.newSubscription);
+    const requestedNewSubscription = Boolean(updates.newSubscription);
     delete updates.newSubscription;
     const player = await Player.findById(id);
     if (!player) {
       return res.status(404).json({ message: 'Player not found.' });
     }
+    const startsNewSubscription = requestedNewSubscription
+      || isLaterSubscriptionStart(updates.startDate, player);
     const beforePlayer = await loadPlayerForHistory(id);
     const beforeSnapshot = snapshotPlayerDocument(beforePlayer);
 

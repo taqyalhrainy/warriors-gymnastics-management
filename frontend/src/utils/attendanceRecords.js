@@ -17,9 +17,18 @@ export const isAttendanceInCycle = (record, player, cycleStart) => {
   return !cycleStart || day(record.date) >= day(cycleStart);
 };
 
-export const attendanceCycleStart = (player) => (
-  player?.currentSubscriptionStartedAt || player?.startDate || player?.subscriptionId?.startDate || ''
-);
+export const attendanceCycleStart = (player) => {
+  const values = [
+    player?.currentSubscriptionStartedAt,
+    player?.startDate,
+    player?.subscriptionId?.startDate
+  ].filter(Boolean);
+  return values.reduce((latest, value) => {
+    const timestamp = new Date(value).getTime();
+    if (!Number.isFinite(timestamp)) return latest;
+    return !latest || timestamp > new Date(latest).getTime() ? value : latest;
+  }, '');
+};
 
 export const packageCounter = (player) => {
   const total = Math.max(0, Number(player?.packageClasses || player?.subscriptionId?.totalSessions || 0));

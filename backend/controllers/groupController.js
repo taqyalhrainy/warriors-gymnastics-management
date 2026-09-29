@@ -10,6 +10,7 @@ const { createAuditLog } = require('../utils/audit');
 const { decrypt } = require('../utils/encryption');
 const { parseLocalizedNumber } = require('../utils/numberInput');
 const { getAppDateOnly } = require('../utils/appDate');
+const { getCurrentSubscriptionStart: getLatestSubscriptionStart } = require('../utils/subscriptionCycle');
 
 const defaultGroupColors = ['#2563eb', '#f2c94c', '#16a34a', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16', '#ec4899'];
 const hexColorPattern = /^#[0-9a-fA-F]{6}$/;
@@ -53,10 +54,7 @@ const getDateOnly = (value) => {
 };
 
 const getCurrentSubscriptionStart = (player) => {
-  const rawDate = player.currentSubscriptionStartedAt || player.startDate || player.subscriptionId?.startDate;
-  if (!rawDate) return null;
-  const date = new Date(rawDate);
-  return Number.isNaN(date.getTime()) ? null : date;
+  return getLatestSubscriptionStart(player);
 };
 
 const normalizeGroupPayload = (payload) => {

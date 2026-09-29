@@ -8,6 +8,7 @@ import { fetchAttendanceByPlayer, getCachedAttendanceByPlayer } from '../service
 import { fetchPaymentsByPlayer, getCachedPaymentsByPlayer } from '../services/payments.js';
 import { formatCurrency } from '../utils/format.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
+import { attendanceCycleStart } from '../utils/attendanceRecords.js';
 
 const getDateInputValue = (date = new Date()) => {
   if (!date) return '';
@@ -157,11 +158,10 @@ const PlayerProfilePage = () => {
   };
 
   const currentSubscriptionPayments = paymentHistory.filter((payment) => {
-    if (player?.currentSubscriptionStartedAt) {
-      return payment.createdAt && new Date(payment.createdAt) >= new Date(player.currentSubscriptionStartedAt);
-    }
-    if (!player?.startDate) return true;
-    return new Date(payment.paymentDate || 0) >= new Date(player.startDate);
+    const cycleStart = attendanceCycleStart(player);
+    if (!cycleStart) return true;
+    return (payment.createdAt && new Date(payment.createdAt) >= new Date(cycleStart))
+      || new Date(payment.paymentDate || 0) >= new Date(cycleStart);
   });
   const totalPaid = currentSubscriptionPayments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
 
