@@ -42,10 +42,13 @@ const server = http.createServer((req, res) => {
       window.dispatchEvent(event);
     });
     await page.locator('button.install-app-button').click();
-    await page.locator('button.install-app-button').waitFor({ state: 'hidden' });
+    await page.getByRole('dialog').waitFor({ state: 'hidden' });
     assert.equal(await page.evaluate(() => window.promptCalls), 1);
-    assert.equal(await page.getByRole('dialog').count(), 0);
-    console.log('Native prompt dispatch and accepted state: PASS (simulated browser event)');
+    assert.equal(await page.locator('button.install-app-button').isVisible(), true);
+    // Accepting the prompt is not proof that installation completed.
+    await page.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
+    await page.locator('button.install-app-button').waitFor({ state: 'hidden' });
+    console.log('Prompt acceptance and confirmed installation: PASS (simulated browser events)');
     await page.goto(`${origin}/parent/login`);
     await page.locator('link[rel="manifest"]').waitFor({ state: 'attached' });
     assert.match(await page.locator('link[rel="manifest"]').getAttribute('href'), /^\/manifest\.webmanifest$/);

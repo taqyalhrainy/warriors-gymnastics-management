@@ -7,6 +7,8 @@ Date: 2026-09-30. Tests use disposable local databases, not club records.
 - Backend: 65 tests passed (`cd backend && npm test`).
 - Frontend: 77 tests passed (`cd frontend && npm test`).
 - Chrome: 41 navigation/login/reload checks passed against real local API routes.
+- Separate Chrome check: admin manifest/installability, installation event handling,
+  and parent manifest selection pass (installation events are simulated).
 - Production frontend build and signed Android web-assets bundle completed.
 - The browser fixture intentionally contains five previous-cycle classes, three
   current-cycle classes, and a stale linked subscription claiming 8/8. The board
