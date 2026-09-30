@@ -34,6 +34,6 @@ const playerSchema = new mongoose.Schema({
   deletedAt: { type: Date },
   profileImage: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now }
-});
+}, { optimisticConcurrency: true });
 
 module.exports = mongoose.model('Player', playerSchema);

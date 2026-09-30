@@ -49,6 +49,7 @@ before(async () => {
   app.get('/players/:id', players.getPlayerById);
   app.get('/groups/:id', groups.getGroupPlayers);
   app.get('/attendance/:playerId', attendance.getAttendanceByPlayer);
+  app.post('/attendance/today', attendance.updateTodayAttendance);
   app.post('/subscriptions', subscriptions.createSubscription);
   app.put('/subscriptions/:id', subscriptions.updateSubscription);
   app.get('/reports/dashboard', reports.getDashboardReport);
@@ -87,6 +88,13 @@ test('attendance due 70 to zero, other amounts and credit persist across fresh r
     assert.equal(board[0].paymentRemainingAmount, due);
     assert.equal((await Player.findById(player._id)).previousDueBalance, due);
   }
+});
+
+test('attendance confirmation does not wait for phone push providers', { timeout: 10000 }, async () => {
+  const saved = await request('/attendance/today', { playerId: String(player._id), groupId: String(group._id), status: 'present' });
+  assert.equal(saved.status, 'present');
+  assert.ok(await Attendance.findById(saved._id));
+  await Attendance.deleteOne({ _id: saved._id });
 });
 
 test('new subscriptions preserve attendance IDs, dates, marks and original groups', async () => {

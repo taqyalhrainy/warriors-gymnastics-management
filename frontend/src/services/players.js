@@ -50,6 +50,7 @@ export const getCachedPlayersPage = (params = {}) => {
 const invalidatePlayerRelatedCache = (playerId) => {
   invalidateCache([
     'players:',
+    'subscriptions:',
     'groups:',
     'payments:',
     'attendance:',
@@ -111,6 +112,7 @@ const patchCreatedPlayerIntoCache = (player) => {
 
 export const createPlayer = async (data) => {
   const response = await api.post('/players', data);
+  invalidateCache(['players:page:', 'players:list:compact', 'subscriptions:']);
   patchCreatedPlayerIntoCache(response.data);
   window.dispatchEvent(new CustomEvent('players:changed', {
     detail: {
@@ -122,10 +124,14 @@ export const createPlayer = async (data) => {
 };
 
 export const updatePlayer = async (id, data) => {
-  const response = await api.put(`/players/${id}`, data);
+  const cached = getCachedValue(`players:item:${id}`);
+  const expectedVersion = data.__v ?? cached?.__v;
+  const response = await api.put(`/players/${id}`, {
+    ...data, ...(expectedVersion === undefined ? {} : { expectedVersion })
+  });
   invalidateCache([
-    'players:list',
-    'players:alerts',
+    'players:',
+    'subscriptions:',
     'groups:',
     'payments:',
     'attendance:',

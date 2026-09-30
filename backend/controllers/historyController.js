@@ -10,6 +10,7 @@ const { validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { encrypt } = require('../utils/encryption');
 const { clearDashboardReportCache } = require('./reportController');
+const { reconcileLinkedSubscriptions } = require('./playerController');
 const {
   restoreStateAt,
   getHistoryAvailableSince,
@@ -18,6 +19,28 @@ const {
   snapshotWaitingListDocument,
   createHistoryEntry
 } = require('../utils/history');
+const { loadCurrentPlayerSnapshots, loadCurrentPaymentSnapshots, loadCurrentWaitingListSnapshots,
+  loadCurrentCoachSnapshots, diffChangedFields } = require('../utils/history');
+
+const snapshotLoaders = { player: loadCurrentPlayerSnapshots, payment: loadCurrentPaymentSnapshots,
+  waitingList: loadCurrentWaitingListSnapshots, coach: loadCurrentCoachSnapshots };
+
+const restoreWithHistory = async (entityType, restore, req) => {
+  const before = new Map((await snapshotLoaders[entityType]()).map((row) => [String(row._id), row]));
+  const result = await restore();
+  const after = new Map((await snapshotLoaders[entityType]()).map((row) => [String(row._id), row]));
+  const entries = [];
+  for (const id of new Set([...before.keys(), ...after.keys()])) {
+    const oldRow = before.get(id) || null;
+    const newRow = after.get(id) || null;
+    const changedFields = diffChangedFields(oldRow, newRow);
+    if (!changedFields.length) continue;
+    entries.push({ entityType, entityId: id, action: !oldRow ? 'create' : !newRow ? 'delete' : 'update',
+      before: oldRow, after: newRow, changedFields, changedBy: req.user._id });
+  }
+  if (entries.length) await HistoryEntry.insertMany(entries);
+  return result;
+};
 
 const snapshotRestoreJobs = new Map();
 const RESTORE_SCOPES = ['players', 'payments', 'waitingList', 'coaches'];
@@ -308,7 +331,7 @@ const restorePayments = async (targetPayments, req) => {
     if (!payload.playerId && payment.playerId) {
       payload.playerId = payment.playerId;
     }
-    if (!payload.playerId) {
+    if (!payload.playerId && !payload.playerNameSnapshot) {
       skipped += 1;
       targetById.delete(paymentId);
       continue;
@@ -326,7 +349,7 @@ const restorePayments = async (targetPayments, req) => {
 
   for (const target of targetById.values()) {
     const payload = buildPaymentRestorePayload(target);
-    if (!payload.playerId || !validateObjectId(target._id)) {
+    if ((!payload.playerId && !payload.playerNameSnapshot) || !validateObjectId(target._id)) {
       skipped += 1;
       continue;
     }
@@ -540,19 +563,20 @@ const runSnapshotRestore = async ({ jobId, asOf, scopes, reqMeta }) => {
     let coachResult = null;
     if (shouldRestorePlayers) {
       job.message = 'Restoring players...';
-      playerResult = await restorePlayers(players, reqMeta);
+      playerResult = await restoreWithHistory('player', () => restorePlayers(players, reqMeta), reqMeta);
+      await reconcileLinkedSubscriptions();
     }
     if (shouldRestorePayments) {
       job.message = 'Restoring payments...';
-      paymentResult = await restorePayments(payments, reqMeta);
+      paymentResult = await restoreWithHistory('payment', () => restorePayments(payments, reqMeta), reqMeta);
     }
     if (shouldRestoreWaitingList) {
       job.message = 'Restoring waiting list...';
-      waitingListResult = await restoreWaitingList(waitingList, reqMeta);
+      waitingListResult = await restoreWithHistory('waitingList', () => restoreWaitingList(waitingList, reqMeta), reqMeta);
     }
     if (shouldRestoreCoaches) {
       job.message = 'Restoring coaches...';
-      coachResult = await restoreCoaches(coaches);
+      coachResult = await restoreWithHistory('coach', () => restoreCoaches(coaches), reqMeta);
     }
     job.message = 'Rebuilding links and counters...';
     await Promise.all([
@@ -602,6 +626,7 @@ const restoreHistorySnapshot = async (req, res, next) => {
     if (Number.isNaN(asOf.getTime())) {
       return res.status(400).json({ message: 'Invalid snapshot date/time.' });
     }
+    if (asOf > new Date()) return res.status(400).json({ message: 'Choose a snapshot time in the past.' });
     const availabilityChecks = await Promise.all(scopes.map(async (scope) => ({
       scope,
       availableSince: await getHistoryAvailableSince(RESTORE_SCOPE_ENTITY_TYPES[scope])
@@ -616,6 +641,10 @@ const restoreHistorySnapshot = async (req, res, next) => {
       });
     }
     const skippedUnavailableScopes = unavailableScopes.map((item) => item.scope);
+
+    if ([...snapshotRestoreJobs.values()].some((job) => ['queued', 'running'].includes(job.status))) {
+      return res.status(409).json({ message: 'A snapshot restore is already running.' });
+    }
 
     const jobId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     snapshotRestoreJobs.set(jobId, {

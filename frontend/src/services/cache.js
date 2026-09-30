@@ -4,6 +4,7 @@ const cacheStore = new Map();
 const pendingRequests = new Map();
 const keyVersions = new Map();
 let cacheVersion = 0;
+let sessionEpoch = 0;
 
 const isFresh = (entry, ttlMs) => entry && (Date.now() - entry.timestamp) < ttlMs;
 const getKeyVersion = (key) => keyVersions.get(key) || 0;
@@ -25,9 +26,15 @@ export const fetchCached = async (key, loader, options = {}) => {
   }
 
   const startedAtVersion = getKeyVersion(key);
+  const startedInSession = sessionEpoch;
   let request;
   request = loader()
     .then((value) => {
+      if (startedInSession !== sessionEpoch) {
+        const error = new Error('Discarded data from a previous login session.');
+        error.name = 'AbortError';
+        throw error;
+      }
       const activeRequest = pendingRequests.get(key);
       // A read started before a confirmed write must never reach the UI as fresh data.
       if (startedAtVersion !== getKeyVersion(key)) {
@@ -117,6 +124,7 @@ export const invalidateCache = (prefixes = []) => {
 };
 
 export const clearCache = () => {
+  sessionEpoch += 1;
   new Set([
     ...cacheStore.keys(),
     ...pendingRequests.keys(),

@@ -69,6 +69,7 @@ const PlayerFormPage = () => {
           });
         }
         setPlayer({
+          __v: data.__v,
           fullName: data.fullName,
           dateOfBirth: data.dateOfBirth?.split('T')[0] || '',
           profileImage: data.profileImage || '',

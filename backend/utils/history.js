@@ -412,6 +412,11 @@ const restoreStateAt = async (entityType, asOf) => {
 };
 
 module.exports = {
+  loadCurrentPlayerSnapshots,
+  loadCurrentPaymentSnapshots,
+  loadCurrentWaitingListSnapshots,
+  loadCurrentCoachSnapshots,
+  diffChangedFields,
   snapshotPlayerDocument,
   snapshotPaymentDocument,
   snapshotWaitingListDocument,

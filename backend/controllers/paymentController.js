@@ -276,6 +276,7 @@ const getCurrentSubscriptionPaymentMatch = (player) => {
 const getPayments = async (req, res, next) => {
   try {
     const filter = {};
+    if (req.parentScope) filter.$and = [{ playerId: { $in: req.parentScope.playerIds } }];
     if (req.query.playerId && validateObjectId(req.query.playerId)) {
       filter.playerId = req.query.playerId;
     }

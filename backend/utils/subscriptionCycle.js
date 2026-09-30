@@ -11,11 +11,10 @@ const getLatestDate = (...values) => values
   .filter(Boolean)
   .reduce((latest, date) => (!latest || date > latest ? date : latest), null);
 
-const getCurrentSubscriptionStart = (player, fallbackStart = null) => getLatestDate(
-  player?.currentSubscriptionStartedAt,
-  player?.startDate,
-  player?.subscriptionId?.startDate,
-  fallbackStart
+// A linked subscription is a fallback, not authority over an explicit rollback.
+const getCurrentSubscriptionStart = (player, fallbackStart = null) => (
+  getLatestDate(player?.currentSubscriptionStartedAt, player?.startDate)
+  || getLatestDate(player?.subscriptionId?.startDate, fallbackStart)
 );
 
 const isLaterSubscriptionStart = (candidate, player, fallbackStart = null) => {

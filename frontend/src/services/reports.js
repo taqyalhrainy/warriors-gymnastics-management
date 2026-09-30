@@ -5,10 +5,10 @@ export const fetchDashboard = async (options = {}) => {
   return fetchCached('reports:dashboard', async () => {
     const response = await api.get('/reports/dashboard');
     return response.data;
-  }, { ttlMs: 60 * 1000 });
+  }, { ttlMs: 60 * 1000, force: Boolean(options.force) });
 };
 
-export const fetchRevenue = async () => {
+export const fetchRevenue = async (options = {}) => {
   return fetchCached('reports:revenue', async () => {
     const response = await api.get('/reports/revenue');
     return response.data;

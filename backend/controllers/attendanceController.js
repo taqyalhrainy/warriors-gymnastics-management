@@ -10,10 +10,14 @@ const { getAppDateKey, dateKeyToUtc } = require('../utils/appDate');
 const toStoredDateKey = (date) => new Date(date).toISOString().split('T')[0];
 
 const getAttendanceDateOnly = (value) => {
+  if (value == null || value === '') return dateKeyToUtc(getAppDateKey());
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return new Date(`${value}T00:00:00.000Z`);
+    const date = new Date(`${value}T00:00:00.000Z`);
+    if (Number.isFinite(date.getTime()) && toStoredDateKey(date) === value) return date;
   }
-  return dateKeyToUtc(getAppDateKey());
+  const error = new Error('Invalid attendance date.');
+  error.statusCode = 400;
+  throw error;
 };
 
 const getAttendanceRangeStart = () => {
@@ -62,7 +66,7 @@ const markPresent = async (req, res, next) => {
       status: 'present',
       markedBy: req.user._id
     });
-    const attendanceTime = today.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const attendanceTime = today.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Amman' });
     await Promise.all([
       safelyRunAttendanceSideEffect('subscription synchronization', () => synchronizeSubscriptionAttendanceUsage(player, today)),
       player.parentId?.userId ? safelyRunAttendanceSideEffect('notification', () => createNotification({
@@ -72,7 +76,7 @@ const markPresent = async (req, res, next) => {
         message: `تم تسجيل حضور ابنتكم ${player.fullName} في نادي Warriors Gymnastics الساعة ${attendanceTime}.`,
         type: 'attendance',
         isRead: false
-      })) : Promise.resolve(),
+      }, { waitForPush: false })) : Promise.resolve(),
       safelyRunAttendanceSideEffect('audit log', () => createAuditLog({ userId: req.user._id, action: 'attendance present', entity: 'Attendance', entityId: attendance._id, req }))
     ]);
     res.json(attendance);
@@ -130,28 +134,24 @@ const updateTodayAttendance = async (req, res, next) => {
       return res.status(404).json({ message: 'Player not found.' });
     }
 
-    let attendance = await Attendance.findOne({ playerId, groupId, date: dateOnly });
-    const previousStatus = attendance?.status;
-
-    if (!attendance) {
-      attendance = await Attendance.create({
-        playerId,
-        groupId,
-        date: dateOnly,
-        checkInTime: status === 'present' ? (isCurrentDate ? today : dateOnly) : undefined,
-        status,
-        markedBy: req.user._id
-      });
-    } else {
-      attendance.groupId = groupId;
-      attendance.status = status;
-      attendance.markedBy = req.user._id;
-      attendance.checkInTime = status === 'present' ? (attendance.checkInTime || (isCurrentDate ? today : dateOnly)) : undefined;
-      await attendance.save();
+    const query = { playerId, groupId, date: dateOnly };
+    const existing = await Attendance.findOne(query);
+    const change = { $set: { status, markedBy: req.user._id } };
+    if (status === 'present') change.$set.checkInTime = existing?.checkInTime || (isCurrentDate ? today : dateOnly);
+    else change.$unset = { checkInTime: 1 };
+    // The pre-update status atomically identifies the request that should notify.
+    let previous;
+    try {
+      previous = await Attendance.findOneAndUpdate(query, change, { upsert: true, new: false, runValidators: true });
+    } catch (error) {
+      if (error.code !== 11000) throw error;
+      previous = await Attendance.findOneAndUpdate(query, change, { new: false, runValidators: true });
     }
+    const previousStatus = previous?.status;
+    const attendance = await Attendance.findOne(query);
 
     const shouldNotify = isCurrentDate && status === 'present' && previousStatus !== 'present' && player.parentId?.userId;
-    const attendanceTime = today.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const attendanceTime = today.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Amman' });
     await Promise.all([
       safelyRunAttendanceSideEffect('subscription synchronization', () => synchronizeSubscriptionAttendanceUsage(player, today)),
       shouldNotify ? safelyRunAttendanceSideEffect('notification', () => createNotification({
@@ -161,7 +161,7 @@ const updateTodayAttendance = async (req, res, next) => {
         message: `تم تسجيل حضور ابنكم ${player.fullName} في نادي Warriors Gymnastics الساعة ${attendanceTime}.`,
         type: 'attendance',
         isRead: false
-      })) : Promise.resolve(),
+      }, { waitForPush: false })) : Promise.resolve(),
       safelyRunAttendanceSideEffect('audit log', () => createAuditLog({ userId: req.user._id, action: `attendance ${status}`, entity: 'Attendance', entityId: attendance._id, req }))
     ]);
     res.json(attendance);
@@ -210,10 +210,7 @@ const getAttendanceByPlayer = async (req, res, next) => {
     if (!validateObjectId(playerId)) {
       return res.status(400).json({ message: 'Invalid player ID.' });
     }
-    const attendance = await Attendance.find({
-      playerId,
-      date: { $gte: getAttendanceRangeStart() }
-    }).sort({ date: -1, _id: -1 });
+    const attendance = await Attendance.find({ playerId }).sort({ date: -1, _id: -1 });
     res.json(attendance);
   } catch (error) {
     next(error);

@@ -2,7 +2,7 @@ import api from './api.js';
 import { fetchCached, getCachedValue, invalidateCache } from './cache.js';
 
 const invalidateAttendanceRelatedCache = () => {
-  invalidateCache(['attendance:', 'players:', 'groups:', 'reports:', 'notifications:', 'parent:']);
+  invalidateCache(['attendance:', 'players:', 'subscriptions:', 'groups:', 'reports:', 'notifications:', 'parent:']);
   if (typeof window !== 'undefined') window.dispatchEvent(new Event('attendance:changed'));
 };
 

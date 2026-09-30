@@ -1702,6 +1702,7 @@ const AttendancePage = () => {
   };
 
   const createSelectedPlayerForm = (player) => ({
+    __v: player?.__v,
     fullName: player?.fullName || '',
     dateOfBirth: player?.dateOfBirth?.split?.('T')?.[0] || '',
     profileImage: player?.profileImage || '',
@@ -2036,9 +2037,8 @@ const AttendancePage = () => {
         ...current.filter((cycle) => cycle.key !== optimisticCycle.key)
       ].sort((first, second) => new Date(second.startDate) - new Date(first.startDate)));
       setOpenSubscriptionHistoryKey(optimisticCycle.key);
-      setShowSubscriptionModal(false);
-      setMessage('New subscription started');
       savedPlayer = await updatePlayer(selectedPlayer._id, {
+        __v: selectedPlayer.__v,
         startDate: subscriptionForm.startDate,
         endDate: subscriptionForm.endDate,
         groupId: subscriptionForm.groupIds[0] || '',
@@ -2050,6 +2050,8 @@ const AttendancePage = () => {
       if (subscriptionSaveSequenceRef.current !== saveSequence) {
         return;
       }
+      setShowSubscriptionModal(false);
+      setMessage('New subscription started');
 
       const committedPlayer = mergeStablePlayerFields(savedPlayer, optimisticPlayer);
       syncPlayerInAttendanceBoard(committedPlayer, null, getPlayerAttendanceGroupId(selectedPlayer));
@@ -2702,17 +2704,15 @@ const AttendancePage = () => {
       setShowUnsavedExitConfirm(false);
       setPendingFrozenVisibilitySave(null);
       applyOptimisticSelectedPlayer(optimisticPlayer);
-      selectedPlayerFormDirtyRef.current = false;
-      setIsEditingSelectedPlayer(false);
-      setMessage('Player updated successfully');
-      if (shouldCloseAfterSave) {
-        closeSelectedPlayer({ force: true });
-      }
       savedPlayer = await updatePlayer(selectedPlayer._id, updatePayload);
 
       if (!isLatestSelectedPlayerMutation(mutation)) {
         return;
       }
+      selectedPlayerFormDirtyRef.current = false;
+      setIsEditingSelectedPlayer(false);
+      setMessage('Player updated successfully');
+      if (shouldCloseAfterSave) closeSelectedPlayer({ force: true });
 
       const committedPlayer = mergeStablePlayerFields({
         ...savedPlayer,
@@ -2779,11 +2779,7 @@ const AttendancePage = () => {
 
   const formatGroupTime = (group) => [group.startTime, group.endTime].filter(Boolean).join(' - ');
   const formatDate = (date) => date ? new Date(date).toLocaleDateString() : t('notSet');
-  const getRecentAttendanceRecords = (records) => {
-    const threeMonthsAgo = new Date();
-    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-    return records.filter((record) => new Date(record.date) >= threeMonthsAgo);
-  };
+  const getRecentAttendanceRecords = (records) => records;
   const getSubscriptionStartValue = (snapshot, allowInitialFallback = false) => (
     attendanceCycleStart(snapshot)
     || (allowInitialFallback ? (snapshot?.createdAt || '') : '')
@@ -2895,7 +2891,9 @@ const AttendancePage = () => {
       const isSubscriptionSnapshot = entry.after?.startDate
         && changedFields.some((field) => subscriptionFields.includes(field));
       if (isSubscriptionSnapshot) {
-        const startsNewSubscription = changedFields.includes('currentSubscriptionStartedAt');
+        const startsNewSubscription = changedFields.includes('currentSubscriptionStartedAt')
+          || (changedFields.includes('startDate')
+            && getSubscriptionHistoryKey(entry.before) !== getSubscriptionHistoryKey(entry.after));
         const nextCycle = makeCycle(entry.after, entry.changedAt);
         if (!nextCycle) return;
 
@@ -2920,7 +2918,7 @@ const AttendancePage = () => {
       const existingIndex = cycles.findIndex((cycle) => cycle.key === currentCycle.key);
       if (existingIndex >= 0) {
         cycles[existingIndex] = currentCycle;
-      } else if (!cycles.length) {
+      } else {
         cycles.push(currentCycle);
       }
     }

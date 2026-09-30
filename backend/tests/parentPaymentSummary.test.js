@@ -8,14 +8,14 @@ test('package price is not money paid, and other children cannot contribute', ()
   assert.equal(summarizeParentPayments(players, [{ playerId: 'b', paidAmount: 100 }]).get('a'), 0);
 });
 
-test('renewal uses creation date exactly like admin, regardless of payment date', () => {
+test('current-cycle totals match admin for booking dates and entered-later payments', () => {
   const players = [{ _id: 'a', currentSubscriptionStartedAt: '2026-09-08' }];
   const rows = [
     { playerId: 'a', paidAmount: 100, createdAt: '2026-09-07', paymentDate: '2026-09-09' },
     { playerId: { _id: 'a' }, paidAmount: 25, createdAt: '2026-09-08', paymentDate: '2026-09-01' },
     { playerId: 'a', paidAmount: 10, createdAt: '2026-09-09', transactionType: 't-shirt' }
   ];
-  assert.equal(summarizeParentPayments(players, rows).get('a'), 35);
+  assert.equal(summarizeParentPayments(players, rows).get('a'), 135);
 });
 
 test('without renewal marker uses start date, or all payments if no start date', () => {

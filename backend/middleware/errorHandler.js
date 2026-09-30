@@ -5,7 +5,9 @@ const errorHandler = (err, req, res, next) => {
     console.error('Database unavailable:', err.name, err.code || '');
     return res.status(503).json({ message: 'Database connection is temporarily unavailable. Please try again shortly.' });
   }
-  const statusCode = err.statusCode || 500;
+  if (err.code === 11000) return res.status(409).json({ message: 'This record already exists. Refresh and try again.' });
+  if (err.name === 'VersionError') return res.status(409).json({ message: 'This record changed while you were editing. Refresh before saving again.' });
+  const statusCode = err.statusCode || (['ValidationError', 'CastError'].includes(err.name) ? 400 : 500);
   const response = {
     message: err.message || 'Server Error'
   };

@@ -2,7 +2,8 @@ import api from './api.js';
 import { fetchCached, invalidateCache } from './cache.js';
 
 const invalidateSubscriptionRelatedCache = () => {
-  invalidateCache(['subscriptions:', 'players:', 'payments:', 'attendance:', 'reports:', 'parent:']);
+  invalidateCache(['subscriptions:', 'players:', 'groups:', 'payments:', 'attendance:', 'reports:', 'parent:']);
+  window.dispatchEvent(new Event('players:changed'));
 };
 
 export const fetchSubscriptions = async (params) => {

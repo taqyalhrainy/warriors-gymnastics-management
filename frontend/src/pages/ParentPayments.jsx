@@ -92,7 +92,12 @@ const ParentPaymentsPage = () => {
     if (!totalPaidByPlayer.has(playerId)) totalPaidByPlayer.set(playerId, getVisiblePaid(payment));
   });
   const totalPaid = [...totalPaidByPlayer.values()].reduce((sum, value) => sum + value, 0);
-  const totalRemaining = payments.reduce((sum, payment) => sum + getVisibleRemaining(payment), 0);
+  const remainingByPlayer = new Map();
+  payments.forEach((payment) => {
+    const playerId = String(payment.playerId?._id || payment.playerId || payment._id);
+    remainingByPlayer.set(playerId, Math.max(remainingByPlayer.get(playerId) || 0, getVisibleRemaining(payment)));
+  });
+  const totalRemaining = [...remainingByPlayer.values()].reduce((sum, value) => sum + value, 0);
 
   return (
     <div className="dashboard-layout parent-app-layout">

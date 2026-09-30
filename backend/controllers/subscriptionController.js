@@ -5,6 +5,7 @@ const { sanitizeObject, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { parseLocalizedNumber } = require('../utils/numberInput');
 const { getAppDateKey, dateKeyToUtc } = require('../utils/appDate');
+const { synchronizeSubscriptionAttendanceUsage } = require('../utils/subscriptionAttendance');
 
 const daysBetweenDateKeys = (first, second) => Math.ceil((dateKeyToUtc(first) - dateKeyToUtc(second)) / 86400000);
 
@@ -28,6 +29,7 @@ const applySubscriptionToPlayer = async (player, subscription, { resetCycle = fa
 const getSubscriptions = async (req, res, next) => {
   try {
     const filter = {};
+    if (req.parentScope) filter.$and = [{ playerId: { $in: req.parentScope.playerIds } }];
     if (req.query.playerId && validateObjectId(req.query.playerId)) {
       filter.playerId = req.query.playerId;
     }
@@ -79,7 +81,7 @@ const createSubscription = async (req, res, next) => {
         remainingSessions,
         startDate,
         endDate,
-        price: parseLocalizedNumber(program.price || price),
+        price: parseLocalizedNumber(program.price ?? price),
         status: 'active',
         lastAttendanceDate: undefined
       });
@@ -94,13 +96,14 @@ const createSubscription = async (req, res, next) => {
         remainingSessions,
         startDate,
         endDate,
-        price: parseLocalizedNumber(program.price || price),
+        price: parseLocalizedNumber(program.price ?? price),
         status: 'active'
       });
     }
     await applySubscriptionToPlayer(player, subscription, { resetCycle: true });
+    await synchronizeSubscriptionAttendanceUsage(player);
     await createAuditLog({ userId: req.user._id, action: 'create subscription', entity: 'Subscription', entityId: subscription._id, req });
-    res.status(201).json(subscription);
+    res.status(201).json(await Subscription.findById(subscription._id));
   } catch (error) {
     next(error);
   }
@@ -118,7 +121,10 @@ const updateSubscription = async (req, res, next) => {
       return res.status(404).json({ message: 'Subscription not found.' });
     }
     const previousStartDate = subscription.startDate ? new Date(subscription.startDate).getTime() : null;
-    Object.assign(subscription, payload);
+    // Ownership and derived usage cannot be changed by an edit form.
+    for (const key of ['type', 'packageName', 'startDate', 'endDate']) {
+      if (payload[key] !== undefined) subscription[key] = payload[key];
+    }
     if (payload.totalSessions !== undefined) {
       subscription.totalSessions = parseLocalizedNumber(payload.totalSessions);
     }
@@ -142,8 +148,9 @@ const updateSubscription = async (req, res, next) => {
     const player = await Player.findById(subscription.playerId);
     const nextStartDate = subscription.startDate ? new Date(subscription.startDate).getTime() : null;
     await applySubscriptionToPlayer(player, subscription, { resetCycle: previousStartDate !== nextStartDate });
+    await synchronizeSubscriptionAttendanceUsage(player);
     await createAuditLog({ userId: req.user._id, action: 'update subscription', entity: 'Subscription', entityId: subscription._id, req });
-    res.json(subscription);
+    res.json(await Subscription.findById(subscription._id));
   } catch (error) {
     next(error);
   }

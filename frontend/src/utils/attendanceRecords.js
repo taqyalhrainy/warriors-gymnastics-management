@@ -20,14 +20,13 @@ export const isAttendanceInCycle = (record, player, cycleStart) => {
 export const attendanceCycleStart = (player) => {
   const values = [
     player?.currentSubscriptionStartedAt,
-    player?.startDate,
-    player?.subscriptionId?.startDate
+    player?.startDate
   ].filter(Boolean);
   return values.reduce((latest, value) => {
     const timestamp = new Date(value).getTime();
     if (!Number.isFinite(timestamp)) return latest;
     return !latest || timestamp > new Date(latest).getTime() ? value : latest;
-  }, '');
+  }, '') || player?.subscriptionId?.startDate || '';
 };
 
 export const packageCounter = (player) => {

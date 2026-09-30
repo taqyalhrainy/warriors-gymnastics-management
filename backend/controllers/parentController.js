@@ -76,8 +76,8 @@ const getDateInputValue = (value) => {
 };
 
 const getSubscriptionStartValue = (snapshot, allowInitialFallback = false) => (
-  snapshot?.startDate
-  || (allowInitialFallback ? (snapshot?.currentSubscriptionStartedAt || snapshot?.createdAt || '') : '')
+  getCurrentSubscriptionStart(snapshot)
+  || (allowInitialFallback ? (snapshot?.createdAt || '') : '')
 );
 
 const getSubscriptionHistoryKey = (snapshot, allowInitialFallback = false) => getDateInputValue(getSubscriptionStartValue(snapshot, allowInitialFallback));
@@ -157,12 +157,12 @@ const buildSubscriptionHistory = (entries = [], player = null) => {
   sortedEntries.forEach((entry) => {
     if (entry.action === 'create') return;
     const changedFields = entry.changedFields || [];
-    const subscriptionFields = ['startDate', 'endDate', 'packageName', 'packageClasses', 'packageHours', 'payment'];
+    const subscriptionFields = ['currentSubscriptionStartedAt', 'startDate', 'endDate', 'packageName', 'packageClasses', 'packageHours', 'payment'];
     const isSubscriptionSnapshot = entry.after?.startDate
       && changedFields.some((field) => subscriptionFields.includes(field));
     if (!isSubscriptionSnapshot) return;
 
-    const startsNewSubscription = changedFields.includes('currentSubscriptionStartedAt');
+    const startsNewSubscription = changedFields.includes('currentSubscriptionStartedAt') || changedFields.includes('startDate');
     const nextCycle = makeCycle(entry.after, entry.changedAt);
     if (!nextCycle) return;
 
@@ -186,7 +186,7 @@ const buildSubscriptionHistory = (entries = [], player = null) => {
     const existingIndex = cycles.findIndex((cycle) => cycle.key === currentCycle.key);
     if (existingIndex >= 0) {
       cycles[existingIndex] = currentCycle;
-    } else if (!cycles.length) {
+    } else {
       cycles.push(currentCycle);
     }
   }
@@ -463,6 +463,8 @@ const updateParent = async (req, res, next) => {
       return res.status(404).json({ message: 'Parent user not found.' });
     }
     if (body.name) {
+      const duplicate = await User.exists({ _id: { $ne: user._id }, role: 'parent', name: new RegExp(`^${escapeRegex(body.name)}$`, 'i') });
+      if (duplicate) return res.status(409).json({ message: 'A parent with this login name already exists.' });
       user.name = body.name;
       parent.name = body.name;
     }
@@ -479,6 +481,7 @@ const updateParent = async (req, res, next) => {
     }
     if (body.password) {
       user.passwordHash = await bcrypt.hash(body.password, 12);
+      user.sessionVersion = Number(user.sessionVersion || 0) + 1;
     }
     await user.save();
     await parent.save();
@@ -534,7 +537,7 @@ const getParentChildren = async (req, res, next) => {
     if (!parent) {
       return res.status(404).json({ message: 'Parent record not found.' });
     }
-    const children = await Player.find({ parentId: parent._id })
+    const children = await Player.find({ parentId: parent._id, isDeleted: { $ne: true } })
       .sort({ createdAt: -1, _id: -1 })
       .select('_id fullName dateOfBirth profileImage status programId groupId groupIds subscriptionId')
       .populate('programId', 'name level')
@@ -553,7 +556,7 @@ const getParentAttendance = async (req, res, next) => {
     if (!parent) {
       return res.status(404).json({ message: 'Parent record not found.' });
     }
-    const children = await Player.find({ parentId: parent._id })
+    const children = await Player.find({ parentId: parent._id, isDeleted: { $ne: true } })
       .sort({ createdAt: -1, _id: -1 })
       .select('_id fullName dateOfBirth profileImage status startDate endDate packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual currentSubscriptionStartedAt currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId')
       .populate('subscriptionId', 'totalSessions usedSessions remainingSessions startDate endDate status price');
@@ -584,7 +587,7 @@ const getParentAttendanceHistory = async (req, res, next) => {
     if (!parent) {
       return res.status(404).json({ message: 'Parent record not found.' });
     }
-    const player = await Player.findOne({ _id: req.params.playerId, parentId: parent._id })
+    const player = await Player.findOne({ _id: req.params.playerId, parentId: parent._id, isDeleted: { $ne: true } })
       .select('_id fullName startDate endDate packageName packageClasses packageHours payment currentSubscriptionStartedAt createdAt')
       .populate('subscriptionId', 'totalSessions usedSessions remainingSessions startDate endDate status price');
     if (!player) {
@@ -639,7 +642,7 @@ const getParentPayments = async (req, res, next) => {
     if (!parent) {
       return res.status(404).json({ message: 'Parent record not found.' });
     }
-    const children = await Player.find({ parentId: parent._id })
+    const children = await Player.find({ parentId: parent._id, isDeleted: { $ne: true } })
       .sort({ createdAt: -1, _id: -1 })
       .select('_id fullName profileImage startDate endDate packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual currentSubscriptionStartedAt currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId createdAt updatedAt')
       .populate('subscriptionId', 'totalSessions usedSessions remainingSessions startDate endDate status price');
@@ -714,7 +717,7 @@ const getParentDashboard = async (req, res, next) => {
     if (!parent) {
       return res.status(404).json({ message: 'Parent record not found.' });
     }
-    const children = await Player.find({ parentId: parent._id })
+    const children = await Player.find({ parentId: parent._id, isDeleted: { $ne: true } })
       .sort({ createdAt: -1, _id: -1 })
       .select('_id fullName dateOfBirth profileImage status programId groupId groupIds coachId subscriptionId startDate endDate packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual currentSubscriptionStartedAt')
       .populate('programId', 'name')

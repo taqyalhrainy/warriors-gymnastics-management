@@ -8,14 +8,15 @@ const {
   deletePlayer
 } = require('../controllers/playerController');
 const { protect, authorize } = require('../middleware/auth');
+const { parentScope } = require('../middleware/parentScope');
 
 const router = express.Router();
 
 router.use(protect);
 router.get('/alert-candidates', authorize('admin', 'coach', 'receptionist'), getPlayerAlertCandidates);
-router.get('/', authorize('admin', 'coach', 'receptionist', 'parent'), getPlayers);
+router.get('/', authorize('admin', 'coach', 'receptionist', 'parent'), parentScope, getPlayers);
 router.post('/', authorize('admin', 'coach', 'receptionist'), createPlayer);
-router.get('/:id', authorize('admin', 'coach', 'receptionist', 'parent'), getPlayerById);
+router.get('/:id', authorize('admin', 'coach', 'receptionist', 'parent'), parentScope, getPlayerById);
 router.put('/:id', authorize('admin', 'coach', 'receptionist'), updatePlayer);
 router.delete('/:id', authorize('admin'), deletePlayer);
 

@@ -208,25 +208,13 @@ const synchronizeLinkedSubscription = async (player, startsNewSubscription = fal
 const reconcileLinkedSubscriptions = async () => {
   const players = await Player.find({
     isDeleted: { $ne: true },
-    $or: [{ startDate: { $ne: null } }, { subscriptionId: { $ne: null } }]
+    subscriptionId: { $ne: null }
   });
   const batchSize = 20;
   for (let index = 0; index < players.length; index += batchSize) {
     await Promise.all(players.slice(index, index + batchSize).map(async (player) => {
-      const startDate = getDateAtStartOfDay(player.startDate);
-      const cycleMarker = getDateAtStartOfDay(player.currentSubscriptionStartedAt);
-      const advancedExistingCycle = Boolean(startDate && cycleMarker && startDate > cycleMarker);
-      const missingCycleMarker = Boolean(startDate && !cycleMarker);
-      if (advancedExistingCycle || missingCycleMarker) {
-        player.currentSubscriptionStartedAt = startDate;
-        if (advancedExistingCycle) {
-          player.currentSubscriptionAttendanceIds = [];
-          player.currentSubscriptionExcludedAttendanceIds = [];
-        }
-        await player.save();
-      }
       if (player.subscriptionId) {
-        await synchronizeLinkedSubscription(player, advancedExistingCycle);
+        await synchronizeLinkedSubscription(player);
         await synchronizeSubscriptionAttendanceUsage(player);
       }
     }));
@@ -238,12 +226,7 @@ const getPlayers = async (req, res, next) => {
   try {
     const filter = { isDeleted: { $ne: true } };
     const compact = req.query.compact === 'true';
-    if (req.user.role === 'parent') {
-      const parent = await Parent.findOne({ userId: req.user._id });
-      if (parent) {
-        filter.parentId = parent._id;
-      }
-    }
+    if (req.parentScope) filter._id = { $in: req.parentScope.playerIds };
     if (req.query.parentId && validateObjectId(req.query.parentId)) {
       filter.parentId = req.query.parentId;
     }
@@ -357,10 +340,9 @@ const createPlayer = async (req, res, next) => {
       profileImage: profileImage || ''
     };
 
-    await incrementGroups(groupIds, 1);
     const player = await Player.create(payload);
-    parent.children.push(player._id);
-    await parent.save();
+    await incrementGroups(groupIds, status === 'left' ? 0 : 1);
+    await Parent.updateOne({ _id: parent._id }, { $addToSet: { children: player._id } });
     const playerForHistory = await loadPlayerForHistory(player._id);
     await createHistoryEntry({
       entityType: 'player',
@@ -412,6 +394,8 @@ const updatePlayer = async (req, res, next) => {
       return res.status(400).json({ message: 'Invalid player ID.' });
     }
     const updates = cleanPlayerPayload(sanitizeObject(req.body));
+    const expectedVersion = updates.expectedVersion;
+    for (const key of ['expectedVersion', '__v', '_id', 'createdAt', 'isDeleted', 'deletedAt']) delete updates[key];
     const requestedNewSubscription = Boolean(updates.newSubscription);
     delete updates.newSubscription;
     const player = await Player.findById(id);
@@ -420,40 +404,42 @@ const updatePlayer = async (req, res, next) => {
     }
     const startsNewSubscription = requestedNewSubscription
       || isLaterSubscriptionStart(updates.startDate, player);
+    if (expectedVersion !== undefined && Number(expectedVersion) !== Number(player.__v || 0)) {
+      return res.status(409).json({ message: 'This player changed while you were editing. Refresh before saving again.' });
+    }
     const beforePlayer = await loadPlayerForHistory(id);
     const beforeSnapshot = snapshotPlayerDocument(beforePlayer);
+
+    const relatedUpdates = [];
 
     if (updates.parentId && String(updates.parentId) !== String(player.parentId)) {
       const newParent = await Parent.findById(updates.parentId);
       if (!newParent) {
         return res.status(404).json({ message: 'New parent not found.' });
       }
-      const oldParent = await Parent.findById(player.parentId);
-      if (oldParent) {
-        oldParent.children = oldParent.children.filter((childId) => String(childId) !== String(player._id));
-        await oldParent.save();
-      }
-      newParent.children = newParent.children.filter((childId, index, children) => (
-        String(childId) !== String(player._id) || children.findIndex((item) => String(item) === String(player._id)) === index
-      ));
-      if (!newParent.children.some((childId) => String(childId) === String(player._id))) {
-        newParent.children.push(player._id);
-      }
-      await newParent.save();
+      const oldParentId = player.parentId;
+      relatedUpdates.push(async () => {
+        await Parent.updateOne({ _id: oldParentId }, { $pull: { children: player._id } });
+        await Parent.updateOne({ _id: newParent._id }, { $addToSet: { children: player._id } });
+      });
     }
 
-    if (Array.isArray(updates.groupIds) || typeof updates.groupId !== 'undefined') {
-      const nextGroupIds = normalizeGroupIds(updates);
-      const currentGroupIds = getPlayerGroupIds(player);
+    if (Array.isArray(updates.groupIds) || typeof updates.groupId !== 'undefined' || updates.status !== undefined) {
+      const groupChange = Array.isArray(updates.groupIds) || typeof updates.groupId !== 'undefined';
+      const membershipIds = groupChange ? normalizeGroupIds(updates) : getPlayerGroupIds(player);
+      const nextGroupIds = (updates.status || player.status) === 'left' ? [] : membershipIds;
+      const currentGroupIds = player.status === 'left' ? [] : getPlayerGroupIds(player);
       const addedGroupIds = nextGroupIds.filter((groupId) => !currentGroupIds.includes(groupId));
       const removedGroupIds = currentGroupIds.filter((groupId) => !nextGroupIds.includes(groupId));
 
       await validateGroupsHaveCapacity(addedGroupIds, 'One or more new groups were not found.', 'is full.');
-      await incrementGroups(addedGroupIds, 1);
-      await incrementGroups(removedGroupIds, -1);
+      relatedUpdates.push(async () => {
+        await incrementGroups(addedGroupIds, 1);
+        await incrementGroups(removedGroupIds, -1);
+      });
 
-      updates.groupIds = nextGroupIds;
-      updates.groupId = nextGroupIds[0] || undefined;
+      updates.groupIds = membershipIds;
+      updates.groupId = membershipIds[0] || undefined;
     }
     if (updates.parentPhone) {
       updates.parentPhoneEncrypted = encrypt(updates.parentPhone);
@@ -486,6 +472,7 @@ const updatePlayer = async (req, res, next) => {
     }
     Object.assign(player, updates);
     await player.save();
+    for (const updateRelated of relatedUpdates) await updateRelated();
     if (
       startsNewSubscription
       || typeof updates.startDate !== 'undefined'
@@ -493,11 +480,16 @@ const updatePlayer = async (req, res, next) => {
       || typeof updates.packageName !== 'undefined'
       || typeof updates.packageClasses !== 'undefined'
       || typeof updates.payment !== 'undefined'
+      || typeof updates.currentSubscriptionStartedAt !== 'undefined'
     ) {
       await synchronizeLinkedSubscription(player, startsNewSubscription);
     }
     if (
       startsNewSubscription
+      || typeof updates.startDate !== 'undefined'
+      || typeof updates.endDate !== 'undefined'
+      || typeof updates.packageClasses !== 'undefined'
+      || typeof updates.currentSubscriptionStartedAt !== 'undefined'
       || typeof updates.currentSubscriptionAttendanceIds !== 'undefined'
       || typeof updates.currentSubscriptionExcludedAttendanceIds !== 'undefined'
     ) {

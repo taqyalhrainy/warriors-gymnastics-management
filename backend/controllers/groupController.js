@@ -191,7 +191,8 @@ const formatPlayerResponse = (player) => {
 const getGroups = async (req, res, next) => {
   try {
     scheduleGroupMaintenance();
-    const groups = await TrainingGroup.find().sort({ displayOrder: 1, _id: -1 }).populate('coachId', 'name');
+    const groups = await TrainingGroup.find(req.parentScope ? { _id: { $in: req.parentScope.groupIds } } : {})
+      .sort({ displayOrder: 1, _id: -1 }).populate('coachId', 'name');
     res.json(groups.map(formatGroupResponse));
   } catch (error) {
     next(error);
@@ -285,8 +286,9 @@ const deleteGroup = async (req, res, next) => {
   }
 };
 
-const loadGroupPlayers = async (id, compact = false) => {
+const loadGroupPlayers = async (id, compact = false, scope = null) => {
     const players = await Player.find({
+      ...(scope ? { _id: { $in: scope.playerIds } } : {}),
       isDeleted: { $ne: true },
       status: { $ne: 'left' },
       $and: [
@@ -365,7 +367,7 @@ const getGroupPlayers = async (req, res, next) => {
     if (!validateObjectId(id)) {
       return res.status(400).json({ message: 'Invalid group ID.' });
     }
-    res.json(await loadGroupPlayers(id));
+    res.json(await loadGroupPlayers(id, false, req.parentScope));
   } catch (error) {
     next(error);
   }
