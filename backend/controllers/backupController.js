@@ -4,6 +4,7 @@ const Payment = require('../models/Payment');
 const { decrypt } = require('../utils/encryption');
 const { createAuditLog } = require('../utils/audit');
 const { getCurrentSubscriptionStart } = require('../utils/subscriptionCycle');
+const { getRemainingAmount } = require('../utils/manualRemaining');
 
 const safeDecrypt = (value) => {
   if (!value) return '';
@@ -72,7 +73,6 @@ const exportPlayersBackup = async (req, res, next) => {
       const playerPayments = getCurrentPayments(player, paymentsByPlayer.get(String(player._id)) || []);
       const totalPaid = playerPayments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
       const price = Number(player.payment || 0);
-      const excelRow = index + 5;
       const parentPhone = safeDecrypt(player.parentId?.phoneEncrypted) || safeDecrypt(player.parentPhoneEncrypted);
 
       return [
@@ -94,7 +94,7 @@ const exportPlayersBackup = async (req, res, next) => {
         player.endDate || null,
         price,
         totalPaid,
-        { formula: `MAX(0,Q${excelRow}-R${excelRow})`, result: Math.max(0, price - totalPaid) },
+        getRemainingAmount(player),
         player.note || '',
         player.createdAt || null,
         player.isDeleted ? 'Yes' : 'No'

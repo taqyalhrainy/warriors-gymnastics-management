@@ -201,10 +201,10 @@ test('subscription screen keeps one current record and synchronizes the player i
   assert.equal((await Player.findById(subject._id)).packageClasses, 0);
 });
 
-test('dashboard pending amount uses current-cycle player payments even without payment subscriptionId', async () => {
+test('dashboard remaining is manual-only and payment recording cannot change it', async () => {
   const subject = await Player.create({ fullName: 'Dashboard payment player', parentId: player.parentId,
     parentPhoneEncrypted: 'test', groupId: group._id, groupIds: [group._id], payment: 100,
-    startDate: '2026-09-01', currentSubscriptionStartedAt: '2026-09-01' });
+    startDate: '2026-09-01', currentSubscriptionStartedAt: '2026-09-01', attendanceDueManual: true, previousDueBalance: 70 });
   const linked = await Subscription.create({ playerId: subject._id, type: 'sessions', packageName: 'Dashboard',
     totalSessions: 8, remainingSessions: 8, startDate: '2026-09-01', endDate: '2027-01-01', price: 100, status: 'active' });
   subject.subscriptionId = linked._id;
@@ -214,5 +214,6 @@ test('dashboard pending amount uses current-cycle player payments even without p
     paymentDate: '2026-09-29', paymentMethod: 'Cash' });
   assert.equal(payment.subscriptionId, undefined);
   const after = await request('/reports/dashboard');
-  assert.equal(after.pendingAmounts, before.pendingAmounts - 40);
+  assert.equal(after.pendingAmounts, before.pendingAmounts);
+  assert.equal(payment.remainingAmount, 70);
 });

@@ -41,6 +41,15 @@ Date: 2026-09-30. Tests use disposable local databases, not club records.
 
 ## Ongoing Checks
 
+### Manual Remaining Balances (2026-10-04)
+
+- Remaining is no longer derived from package prices or payments. Only explicit manual balance edits replace it, including zero.
+- An idempotent startup cutover freezes existing finance balances once, without modifying manual fields or payment documents. The API stays unavailable until preservation completes. New players start at zero.
+- Renewal, price edits, payment creation/edit/deletion and history reads no longer rewrite stored receipt balances. Explicit manual edits also replace the preserved legacy balance.
+- Payments, reports, owner summaries and XLSX exports use the fixed/manual amount. Payment-view totals count each player once.
+- Verification: 68 backend tests, 79 frontend tests, production build and signed OTA generation passed. Isolated Chrome checks passed for zero automatic debt after renewal/payment, manual 70 persistence, mobile layout and manual zero after reload.
+- Targeted browser check: set `AUDIT_REMAINING_ONLY=1` with `PLAYWRIGHT_MODULE` as described below. Production customer records were not used for tests.
+
 `Verify Application` runs backend tests, frontend tests and the build on GitHub.
 Android OTA publication also requires both test suites to pass.
 

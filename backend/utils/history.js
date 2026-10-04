@@ -68,6 +68,7 @@ const snapshotPlayerDocument = (playerDocument) => {
     previousDueBalance: Number(player?.previousDueBalance || 0),
     dueAdjustment: Number(player?.dueAdjustment || 0),
     attendanceDueManual: Boolean(player?.attendanceDueManual),
+    ...(player?.preservedRemainingBalance === undefined ? {} : { preservedRemainingBalance: Number(player.preservedRemainingBalance) }),
     note: player?.note || '',
     makeupClassesNote: player?.makeupClassesNote || '',
     freezeNote: player?.freezeNote || '',
@@ -383,32 +384,7 @@ const restoreStateAt = async (entityType, asOf) => {
     return rows.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
   }
 
-  const paymentsByPlayer = new Map();
-  rows.forEach((payment) => {
-    const playerKey = String(payment.playerId || 'unknown');
-    if (!paymentsByPlayer.has(playerKey)) {
-      paymentsByPlayer.set(playerKey, []);
-    }
-    paymentsByPlayer.get(playerKey).push({ ...payment });
-  });
-
-  const normalizedPayments = [];
-  paymentsByPlayer.forEach((payments) => {
-    payments
-      .sort((a, b) => new Date(a.paymentDate || 0) - new Date(b.paymentDate || 0))
-      .reduce((runningPaid, payment) => {
-        const nextPaid = runningPaid + Number(payment.paidAmount || 0);
-        normalizedPayments.push({
-          ...payment,
-          remainingAmount: payment.totalAmount
-            ? Math.max(0, Number(payment.totalAmount || 0) - nextPaid)
-            : 0
-        });
-        return nextPaid;
-      }, 0);
-  });
-
-  return normalizedPayments.sort((a, b) => new Date(b.paymentDate || 0) - new Date(a.paymentDate || 0));
+  return rows.sort((a, b) => new Date(b.paymentDate || 0) - new Date(a.paymentDate || 0));
 };
 
 module.exports = {

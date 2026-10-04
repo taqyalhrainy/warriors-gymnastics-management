@@ -102,6 +102,40 @@ async function main() {
     await page.getByRole('button', { name: 'Sign In', exact: true }).click();
     await page.waitForURL(origin + '/admin');
     results.push('admin-login-submit');
+    if (process.env.AUDIT_REMAINING_ONLY === '1') {
+      const token = require('jsonwebtoken').sign({ id: String(admin._id) }, process.env.JWT_SECRET);
+      const update = async (route, body, method = 'PUT') => {
+        const response = await fetch(origin + '/api' + route, { method,
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        assert.ok(response.ok, await response.text());
+      };
+      const checkRemaining = async (amount, label) => {
+        await visit('/payments', label);
+        await page.getByRole('button', { name: 'Pending Amounts', exact: true }).click();
+        const dialog = page.getByRole('dialog', { name: 'Unlock payment data' });
+        await dialog.locator('input[type=password]').fill('1234');
+        await dialog.getByRole('button', { name: 'Unlock', exact: true }).click();
+        await dialog.waitFor({ state: 'hidden' });
+        await page.waitForLoadState('networkidle');
+        assert.equal(Number(await page.locator('.payment-metrics > div').nth(1).locator('strong').innerText()), amount);
+        await page.screenshot({ path: path.join(output, label + '.png'), fullPage: true });
+      };
+      await checkRemaining(0, 'remaining-new-player-zero');
+      await update('/payments', { playerId: String(player._id), paidAmount: 20, paymentMethod: 'Cash' }, 'POST');
+      await update(`/players/${player._id}`, { payment: 999, newSubscription: true, startDate: '2026-10-04' });
+      await checkRemaining(0, 'remaining-after-payment-renewal-zero');
+      await update(`/players/${player._id}`, { previousDueBalance: 70, dueAdjustment: 0 });
+      await update('/payments', { playerId: String(player._id), paidAmount: 50, paymentMethod: 'Cash' }, 'POST');
+      await checkRemaining(70, 'remaining-manual-seventy');
+      await page.setViewportSize({ width: 390, height: 844 });
+      await checkRemaining(70, 'remaining-mobile-seventy');
+      await update(`/players/${player._id}`, { previousDueBalance: 0, dueAdjustment: 0 });
+      await update(`/players/${player._id}`, { payment: 200, note: 'Unrelated edit' });
+      await checkRemaining(0, 'remaining-manual-zero-persists');
+      assert.deepEqual(errors, [], 'Browser/API errors');
+      console.log(`Remaining browser audit passed; artifacts: ${output}`);
+      return;
+    }
     for (const route of ['/admin', '/players', '/players/new', `/players/${player._id}`, `/players/${player._id}/edit`, '/parents', '/groups', '/attendance', '/coaches', `/coaches/${coach._id}`, '/payments', '/notifications', '/reports', '/history', '/security', '/owner-summary', '/media-gallery']) {
       await visit(route, 'admin-' + route.replace(/\//g, '_'), ['/admin', '/attendance', '/reports'].includes(route));
     }

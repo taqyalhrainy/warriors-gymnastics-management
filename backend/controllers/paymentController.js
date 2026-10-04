@@ -10,11 +10,12 @@ const { snapshotPaymentDocument, createHistoryEntry } = require('../utils/histor
 const { createNotification } = require('../utils/notificationDelivery');
 const { getAppDateOnly } = require('../utils/appDate');
 const { getCurrentSubscriptionStart } = require('../utils/subscriptionCycle');
+const { getRemainingAmount } = require('../utils/manualRemaining');
 
 const populatePaymentQuery = (query) => query
   .populate({
     path: 'playerId',
-    select: 'fullName parentId parentPhoneEncrypted isDeleted deletedAt packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual startDate endDate currentSubscriptionStartedAt currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId',
+    select: 'fullName parentId parentPhoneEncrypted isDeleted deletedAt packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual preservedRemainingBalance startDate endDate currentSubscriptionStartedAt currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId',
     populate: [
       {
         path: 'parentId',
@@ -46,11 +47,6 @@ const decryptOptional = (value) => {
 
 const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
 const getPlayerSubscriptionAmount = (player) => Math.max(0, Number(player?.payment || 0));
-const getPlayerDisplayRemainingAmount = (player, subscriptionRemainingAmount = 0) => Math.max(
-  0,
-  Number(subscriptionRemainingAmount || 0)
-    + (player?.attendanceDueManual ? Number(player.previousDueBalance || 0) - Number(player.dueAdjustment || 0) : 0)
-);
 const getPaginationOptions = (query) => {
   const limit = Math.min(Math.max(parseInt(query.limit, 10) || 0, 0), 100);
   const page = Math.max(parseInt(query.page, 10) || 1, 1);
@@ -91,31 +87,6 @@ const formatPaymentResponse = (payment) => {
   }
   delete obj.notesEncrypted;
   return obj;
-};
-
-const recalculatePlayerPayments = async (playerId) => {
-  const player = await Player.findById(playerId);
-  if (!player) return;
-
-  const payments = await Payment.find({ playerId }).sort({ paymentDate: 1, _id: 1 });
-  const totalAmount = getPlayerSubscriptionAmount(player);
-  let runningPaid = 0;
-
-  for (const payment of payments) {
-    if (!isPaymentInPlayerCurrentSubscription(payment, player)) {
-      continue;
-    }
-    if (isSubscriptionPaymentType(payment.transactionType)) {
-      runningPaid += Number(payment.paidAmount || 0);
-      payment.totalAmount = totalAmount;
-      payment.remainingAmount = totalAmount ? Math.max(0, totalAmount - runningPaid) : 0;
-      payment.transactionType = getSubscriptionTransactionType(payment.remainingAmount);
-    } else {
-      payment.totalAmount = 0;
-      payment.remainingAmount = 0;
-    }
-    await payment.save();
-  }
 };
 
 const parsePaymentDate = (value) => {
@@ -170,12 +141,12 @@ const getCurrentPaymentSummaryMap = async (players) => {
 
   const summaryMap = new Map(players.map((player) => {
     const totalAmount = getPlayerSubscriptionAmount(player);
-    const remainingAmount = Math.max(0, totalAmount);
+    const remainingAmount = getRemainingAmount(player);
     return [String(player._id), {
       totalAmount,
       paidAmount: 0,
       remainingAmount,
-      displayRemainingAmount: getPlayerDisplayRemainingAmount(player, remainingAmount)
+      displayRemainingAmount: remainingAmount
     }];
   }));
 
@@ -185,8 +156,6 @@ const getCurrentPaymentSummaryMap = async (players) => {
     const summary = summaryMap.get(playerId);
     if (!player || !summary || !isPaymentInPlayerCurrentSubscription(payment, player)) return;
     summary.paidAmount += Number(payment.paidAmount || 0);
-    summary.remainingAmount = Math.max(0, Number(summary.totalAmount || 0) - summary.paidAmount);
-    summary.displayRemainingAmount = getPlayerDisplayRemainingAmount(player, summary.remainingAmount);
   });
 
   return summaryMap;
@@ -369,7 +338,7 @@ const createPayment = async (req, res, next) => {
     const totalPaidBefore = previousPaid[0]?.totalPaid || 0;
     const totalPaidAfter = totalPaidBefore + parseLocalizedNumber(paidAmount);
     const remainingAmount = subscriptionPayment && playerTotalAmount ? Math.max(0, playerTotalAmount - totalPaidAfter) : 0;
-    const displayRemainingAmount = subscriptionPayment ? getPlayerDisplayRemainingAmount(player, remainingAmount) : 0;
+    const displayRemainingAmount = subscriptionPayment ? getRemainingAmount(player) : 0;
     const parentRecord = await Parent.findById(player.parentId).populate('userId');
     const payment = await Payment.create({
       playerId,
@@ -409,7 +378,6 @@ const createPayment = async (req, res, next) => {
       req
     });
     await createAuditLog({ userId: req.user._id, action: 'create payment', entity: 'Payment', entityId: payment._id, req });
-    await recalculatePlayerPayments(player._id);
     const createdPayment = await populatePaymentQuery(Payment.findById(payment._id));
     res.status(201).json(await formatPaymentsWithAttendanceCounts(createdPayment));
   } catch (error) {
@@ -457,9 +425,6 @@ const updatePayment = async (req, res, next) => {
     payment.updatedBy = req.user._id;
     payment.updatedAt = new Date();
     await payment.save();
-    if (payment.playerId) {
-      await recalculatePlayerPayments(payment.playerId);
-    }
     const afterPayment = await loadPaymentForHistory(id);
     await createHistoryEntry({
       entityType: 'payment',
@@ -491,11 +456,7 @@ const deletePayment = async (req, res, next) => {
     }
     const paymentForHistory = await loadPaymentForHistory(id);
     const beforeSnapshot = snapshotPaymentDocument(paymentForHistory);
-    const { playerId } = payment;
     await payment.deleteOne();
-    if (playerId) {
-      await recalculatePlayerPayments(playerId);
-    }
     await createHistoryEntry({
       entityType: 'payment',
       entityId: payment._id,

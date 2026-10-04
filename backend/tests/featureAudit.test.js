@@ -176,8 +176,8 @@ test('repeated simultaneous attendance marks save one class and one parent notif
   assert.equal(await Attendance.countDocuments({ playerId: player._id }), 0);
 });
 
-test('reports include unlinked subscriptions and count the current unpaid balance only once', async () => {
-  const player = await newPlayer({ payment: 100 });
+test('reports include unlinked subscriptions and count a manual balance only once', async () => {
+  const player = await newPlayer({ payment: 100, previousDueBalance: 50, attendanceDueManual: true });
   await newPlayer({ fullName: 'Expired player', endDate: '2026-01-01' });
   await Payment.create([
     { playerId: player._id, paidAmount: 20, remainingAmount: 80, transactionType: 'Partial payment' },
@@ -266,4 +266,67 @@ test('snapshot restores custom DSR payments that have no player link', async () 
   assert.equal((await Payment.findById(saved._id)).paidAmount, 25);
   const historical = await call(`/history?entityType=payment&at=${beforeRestore.toISOString()}`);
   assert.equal(historical.rows.find((row) => row._id === saved._id).paidAmount, 50);
+});
+
+test('price changes, renewals and payment edits never rewrite existing stored balances', async () => {
+  const player = await newPlayer({ payment: 100, previousDueBalance: 70, attendanceDueManual: true });
+  const old = await Payment.create({ playerId: player._id, paidAmount: 30, totalAmount: 100,
+    remainingAmount: 70, transactionType: 'Partial payment' });
+  const before = old.toObject();
+  await call(`/players/${player._id}`, { method: 'PUT', body: { payment: 250 } });
+  await call(`/players/${player._id}`, { method: 'PUT', body: { newSubscription: true, startDate: getAppDateKey() } });
+  const added = await call('/payments', { method: 'POST', body: { playerId: String(player._id), paidAmount: 40,
+    paymentMethod: 'Cash', transactionType: 'Partial payment' }, status: 201 });
+  await call(`/payments/${added._id}`, { method: 'PUT', body: { paidAmount: 60 } });
+  await call(`/payments/${added._id}`, { method: 'DELETE' });
+  assert.deepEqual((await Payment.findById(old._id)).toObject(), before);
+  assert.equal((await Player.findById(player._id)).previousDueBalance, 70);
+});
+
+test('new players never acquire remaining automatically; manual amounts persist until manually replaced', async () => {
+  const player = await newPlayer({ payment: 100 });
+  assert.equal((await call('/reports/dashboard')).pendingAmounts, 0);
+  const saved = await call('/payments', { method: 'POST', body: { playerId: String(player._id), paidAmount: 20,
+    paymentMethod: 'Cash', transactionType: 'Partial payment' }, status: 201 });
+  assert.equal(saved.remainingAmount, 0);
+  assert.equal((await Payment.findById(saved._id)).remainingAmount, 0);
+  await call(`/players/${player._id}`, { method: 'PUT', body: { payment: 250, newSubscription: true, startDate: getAppDateKey() } });
+  assert.equal((await call('/payments'))[0].remainingAmount, 0);
+  for (const amount of [70, 0, 35, 0]) {
+    await call(`/players/${player._id}`, { method: 'PUT', body: { previousDueBalance: amount, dueAdjustment: 0 } });
+    await call(`/payments/${saved._id}`, { method: 'PUT', body: { paidAmount: 500 } });
+    await call(`/players/${player._id}`, { method: 'PUT', body: { payment: 999, note: 'Unrelated edit' } });
+    assert.equal((await call('/payments'))[0].remainingAmount, amount);
+    assert.equal((await call('/reports/dashboard')).pendingAmounts, amount);
+    assert.equal((await call('/reports/revenue')).totalRemaining, amount);
+    assert.equal((await call('/parents/me/payments', { auth: parentToken }))[0].visibleRemainingAmount, amount);
+    assert.equal((await call(`/players/${player._id}`)).paymentRemainingAmount, amount);
+  }
+});
+
+test('cutover preserves all existing finance balances without overwriting manual money or receipts', async () => {
+  const { preserveLegacyRemainingBalances, getRemainingAmount } = require('../utils/manualRemaining');
+  const old = await newPlayer({ payment: 100, previousDueBalance: 70, dueAdjustment: 10, attendanceDueManual: true });
+  const untouchedNew = await newPlayer({ payment: 500 });
+  await Player.collection.updateOne({ _id: old._id }, { $unset: { remainingBalancePolicyVersion: '', preservedRemainingBalance: '' } });
+  const receipt = await Payment.create({ playerId: old._id, paidAmount: 30, totalAmount: 100,
+    remainingAmount: 70, transactionType: 'Partial payment' });
+  const originalReceipt = receipt.toObject();
+  assert.equal(await preserveLegacyRemainingBalances(), 1);
+  const preserved = await Player.findById(old._id);
+  assert.equal(preserved.preservedRemainingBalance, 70);
+  assert.equal(preserved.previousDueBalance, 70);
+  assert.equal(preserved.dueAdjustment, 10);
+  assert.equal(getRemainingAmount(preserved), 130);
+  assert.equal(getRemainingAmount(await Player.findById(untouchedNew._id)), 0);
+  assert.deepEqual((await Payment.findById(receipt._id)).toObject(), originalReceipt);
+  await call(`/players/${old._id}`, { method: 'PUT', body: { payment: 400, newSubscription: true, startDate: getAppDateKey() } });
+  await call('/payments', { method: 'POST', body: { playerId: String(old._id), paidAmount: 400, paymentMethod: 'Cash' }, status: 201 });
+  assert.equal(await preserveLegacyRemainingBalances(), 0);
+  assert.equal((await call('/reports/revenue')).totalRemaining, 130);
+  await call(`/players/${old._id}`, { method: 'PUT', body: { previousDueBalance: 0, dueAdjustment: 0 } });
+  assert.equal((await Player.findById(old._id)).preservedRemainingBalance, 0);
+  assert.equal(await preserveLegacyRemainingBalances(), 0);
+  assert.equal((await call('/reports/revenue')).totalRemaining, 0);
+  assert.deepEqual((await Payment.findById(receipt._id)).toObject(), originalReceipt);
 });

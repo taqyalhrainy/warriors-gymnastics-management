@@ -65,7 +65,6 @@ const getPlayerGroupIds = (player) => {
   return normalizeGroupIds({ groupId: player.groupId ? String(player.groupId) : '' });
 };
 
-const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
 
 const cleanPlayerPayload = (payload) => {
   optionalObjectIdFields.forEach((field) => {
@@ -127,35 +126,6 @@ const incrementGroups = async (groupIds, amount) => {
   await TrainingGroup.updateMany({ _id: { $in: groupIds } }, { $inc: { currentCount: amount } });
   if (amount < 0) {
     await TrainingGroup.updateMany({ _id: { $in: groupIds }, currentCount: { $lt: 0 } }, { $set: { currentCount: 0 } });
-  }
-};
-
-const recalculatePlayerPayments = async (player) => {
-  const payments = await Payment.find({ playerId: player._id }).sort({ paymentDate: 1, _id: 1 });
-  const totalAmount = Number(player.previousDueBalance || 0)
-    + Number(player.payment || 0)
-    - Number(player.dueAdjustment || 0);
-  const subscriptionStart = getDateAtStartOfDay(getPlayerCycleStart(player));
-  let runningPaid = 0;
-
-  for (const payment of payments) {
-    const paymentDate = getDateAtStartOfDay(payment.paymentDate);
-    const createdAt = getDateAtStartOfDay(payment.createdAt);
-    const belongsToCurrentSubscription = !subscriptionStart
-      || (paymentDate && paymentDate >= subscriptionStart)
-      || (createdAt && createdAt >= subscriptionStart);
-    if (!belongsToCurrentSubscription) {
-      continue;
-    }
-    if (isSubscriptionPaymentType(payment.transactionType)) {
-      runningPaid += Number(payment.paidAmount || 0);
-      payment.totalAmount = totalAmount;
-      payment.remainingAmount = totalAmount ? Math.max(0, totalAmount - runningPaid) : 0;
-    } else {
-      payment.totalAmount = 0;
-      payment.remainingAmount = 0;
-    }
-    await payment.save();
   }
 };
 
@@ -254,7 +224,7 @@ const getPlayers = async (req, res, next) => {
     const query = Player.find(filter)
       .sort({ createdAt: -1, _id: -1 })
       .select(compact
-        ? '_id fullName status parentId parentPhoneEncrypted groupId groupIds packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual startDate currentSubscriptionStartedAt subscriptionId'
+        ? '_id fullName status parentId parentPhoneEncrypted groupId groupIds packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual preservedRemainingBalance startDate currentSubscriptionStartedAt subscriptionId'
         : undefined)
       .populate('parentId', compact ? 'name phoneEncrypted' : 'name email userId phoneEncrypted')
       .populate('programId', compact ? 'name' : 'name level')
@@ -395,7 +365,7 @@ const updatePlayer = async (req, res, next) => {
     }
     const updates = cleanPlayerPayload(sanitizeObject(req.body));
     const expectedVersion = updates.expectedVersion;
-    for (const key of ['expectedVersion', '__v', '_id', 'createdAt', 'isDeleted', 'deletedAt']) delete updates[key];
+    for (const key of ['expectedVersion', '__v', '_id', 'createdAt', 'isDeleted', 'deletedAt', 'preservedRemainingBalance', 'remainingBalancePolicyVersion', 'remainingBalancePreservedAt']) delete updates[key];
     const requestedNewSubscription = Boolean(updates.newSubscription);
     delete updates.newSubscription;
     const player = await Player.findById(id);
@@ -451,6 +421,7 @@ const updatePlayer = async (req, res, next) => {
     if (typeof updates.previousDueBalance !== 'undefined') {
       updates.previousDueBalance = parseLocalizedNumber(updates.previousDueBalance);
       updates.attendanceDueManual = true;
+      updates.preservedRemainingBalance = 0;
     }
     if (typeof updates.dueAdjustment !== 'undefined') {
       updates.dueAdjustment = Math.max(0, parseLocalizedNumber(updates.dueAdjustment));
@@ -498,9 +469,6 @@ const updatePlayer = async (req, res, next) => {
       } catch (error) {
         console.error('Player subscription attendance synchronization failed:', error);
       }
-    }
-    if (startsNewSubscription || typeof updates.payment !== 'undefined' || typeof updates.startDate !== 'undefined' || typeof updates.currentSubscriptionStartedAt !== 'undefined') {
-      await recalculatePlayerPayments(player);
     }
     const afterPlayer = await loadPlayerForHistory(id);
     await createHistoryEntry({

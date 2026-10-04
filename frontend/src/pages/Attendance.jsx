@@ -2526,7 +2526,6 @@ const AttendancePage = () => {
       packageClasses: Number(previousCycle.packageClasses || 0),
       packageHours: Number(previousCycle.packageHours || 0),
       payment: Number(previousCycle.payment || 0),
-      dueAdjustment: 0,
       currentSubscriptionStartedAt: getDateInputValue(previousCycle.startDate),
       currentSubscriptionAttendanceIds: [],
       currentSubscriptionExcludedAttendanceIds: []

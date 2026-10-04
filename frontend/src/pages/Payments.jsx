@@ -9,6 +9,7 @@ import { confirmAction } from '../utils/confirmAction.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
 import { attendanceCycleStart } from '../utils/attendanceRecords.js';
+import { getRemainingAmount, sumRemainingByPlayer } from '../utils/manualRemaining.js';
 
 const formatDate = (date) => {
   if (!date) return '-';
@@ -88,11 +89,6 @@ const isPaymentInCurrentSubscription = (payment, player) => {
 };
 const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
 const getPlayerSubscriptionTotal = (player) => Math.max(0, Number(player?.payment || 0));
-const getPlayerDueDisplayAmount = (player) => (
-  player?.attendanceDueManual
-    ? Math.max(0, Number(player?.previousDueBalance || 0) - Number(player?.dueAdjustment || 0))
-    : 0
-);
 const getPackageName = (payment) => {
   const classes = payment.playerId?.packageClasses || payment.packageClassesSnapshot;
   const hours = payment.playerId?.packageHours || payment.packageHoursSnapshot;
@@ -257,21 +253,12 @@ const PaymentsPage = () => {
 
   const buildOptimisticPayment = (payload, id) => {
     const player = players.find((item) => item._id === payload.playerId);
-    const paidBefore = payments
-      .filter((payment) => (
-        String(payment.playerId?._id || payment.playerId) === String(payload.playerId)
-        && payment._id !== editingPaymentId
-        && isPaymentInCurrentSubscription(payment, player)
-        && isSubscriptionPaymentType(getTransactionLabel(payment))
-      ))
-      .reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
     const subscriptionTotal = getPlayerSubscriptionTotal(player);
     const paidAmount = Number(payload.paidAmount || 0);
     const subscriptionPayment = isSubscriptionPaymentType(payload.transactionType);
     const isCustomPayer = payload.payerMode === 'custom';
-    const subscriptionRemainingAmount = !isCustomPayer && subscriptionPayment ? Math.max(0, subscriptionTotal - paidBefore - paidAmount) : 0;
     const remainingAmount = !isCustomPayer && subscriptionPayment
-      ? subscriptionRemainingAmount + getPlayerDueDisplayAmount(player)
+      ? getRemainingAmount(player)
       : 0;
 
     return {
@@ -322,7 +309,6 @@ const PaymentsPage = () => {
   const pendingAmountRows = useMemo(() => players
     .map((player) => {
       const currentTotalAmount = getPlayerSubscriptionTotal(player);
-      if (!currentTotalAmount) return null;
       const paidAmount = payments
         .filter((payment) => (
           String(payment.playerId?._id || payment.playerId) === String(player._id)
@@ -330,7 +316,7 @@ const PaymentsPage = () => {
           && isSubscriptionPaymentType(getTransactionLabel(payment))
         ))
         .reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
-      const remainingAmount = Math.max(0, currentTotalAmount - paidAmount) + getPlayerDueDisplayAmount(player);
+      const remainingAmount = getRemainingAmount(player);
       if (!remainingAmount) return null;
       return {
         _id: `pending-${player._id}`,
@@ -517,7 +503,7 @@ const PaymentsPage = () => {
   const activeRecordCount = searchedPayments.length;
   const viewTotals = useMemo(() => ({
     paid: searchedPayments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0),
-    remaining: searchedPayments.reduce((sum, payment) => sum + Number(payment.remainingAmount || 0), 0),
+    remaining: sumRemainingByPlayer(searchedPayments),
     fullPayments: searchedPayments.filter((payment) => Number(payment.remainingAmount || 0) <= 0).length
   }), [searchedPayments]);
   const viewingPaymentDetails = viewingPayment ? getPaymentSubscriptionDetails(viewingPayment) : null;

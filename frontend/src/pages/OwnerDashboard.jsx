@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { getRemainingAmount } from '../utils/manualRemaining.js';
 import DataStatus from '../components/DataStatus.jsx';
 import { useSectionLoader, canShowEmpty } from '../hooks/useSectionLoader.js';
 import { fetchTodayAttendance } from '../services/attendance.js';
@@ -176,7 +177,7 @@ const OwnerDashboard = () => {
           subscriptionStart,
           expectedAmount,
           paidAmount,
-          remainingAmount: Math.max(0, expectedAmount - paidAmount)
+          remainingAmount: getRemainingAmount(player)
         };
       })
       .sort((first, second) => {

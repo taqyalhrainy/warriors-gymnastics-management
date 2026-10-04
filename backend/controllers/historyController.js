@@ -87,6 +87,8 @@ const buildPlayerRestorePayload = (snapshot) => ({
   previousDueBalance: Number(snapshot.previousDueBalance || 0),
   dueAdjustment: Number(snapshot.dueAdjustment || 0),
   attendanceDueManual: Boolean(snapshot.attendanceDueManual),
+  ...(snapshot.preservedRemainingBalance === undefined ? {} : { preservedRemainingBalance: Number(snapshot.preservedRemainingBalance) }),
+  remainingBalancePolicyVersion: 1,
   note: snapshot.note || '',
   makeupClassesNote: snapshot.makeupClassesNote || '',
   freezeNote: snapshot.freezeNote || '',
