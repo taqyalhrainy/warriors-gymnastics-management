@@ -5,14 +5,15 @@ import { getRemainingAmount, sumRemainingByPlayer } from '../src/utils/manualRem
 
 const backend = createRequire(import.meta.url)('../../backend/utils/manualRemaining.js');
 
-test('client and server remaining use only fixed carried balances and manual entries', () => {
+test('client and server remaining use only attendance manual entries, never legacy automatic balances', () => {
   const cases = [
     [{ payment: 100, paidAmount: 20 }, 0],
     [{ payment: 900, subscriptionId: { price: 900 }, previousDueBalance: 70, attendanceDueManual: true }, 70],
     [{ payment: 900, previousDueBalance: 0, attendanceDueManual: true }, 0],
     [{ previousDueBalance: 70, dueAdjustment: 10, attendanceDueManual: true }, 60],
-    [{ preservedRemainingBalance: 70, payment: 999 }, 70],
-    [{ preservedRemainingBalance: 70, previousDueBalance: 70, dueAdjustment: 10, attendanceDueManual: true }, 130],
+    [{ preservedRemainingBalance: 110, payment: 110, paidAmount: 110 }, 0],
+    [{ preservedRemainingBalance: 70, previousDueBalance: 70, dueAdjustment: 10, attendanceDueManual: true }, 60],
+    [{ preservedRemainingBalance: 70, previousDueBalance: 70, attendanceDueManual: false }, 0],
     [{ previousDueBalance: -20, attendanceDueManual: true }, 0]
   ];
   for (const [player, amount] of cases) {

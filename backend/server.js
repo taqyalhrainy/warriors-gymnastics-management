@@ -314,9 +314,6 @@ const startServer = async () => {
   });
 
   await connectDB();
-  const { preserveLegacyRemainingBalances } = require('./utils/manualRemaining');
-  const preservedBalances = await preserveLegacyRemainingBalances();
-  console.log(`Preserved ${preservedBalances} existing balances; new balances are manual-only.`);
   isDatabaseReady = true;
   require('./utils/performanceIndexes').ensurePerformanceIndexes(require('mongoose').connection.db)
     .catch((error) => console.error('Query index setup failed:', error.message));

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
-import { fetchCoach } from '../services/coaches.js';
+import { fetchCoach, updateCoachAttendance } from '../services/coaches.js';
 
 const formatDate = (value) => {
   if (!value) return '-';
@@ -29,6 +29,30 @@ const CoachProfilePage = () => {
   const [coach, setCoach] = useState(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [editingNote, setEditingNote] = useState(null);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
+  const [noteError, setNoteError] = useState('');
+
+  const saveNote = async (event) => {
+    event.preventDefault();
+    if (savingNote) return;
+    setSavingNote(true);
+    setNoteError('');
+    try {
+      const saved = await updateCoachAttendance(id, {
+        action: 'note', date: editingNote.date, dayNote: noteDraft
+      });
+      setCoach((current) => ({ ...current, attendanceHistory: current.attendanceHistory.map((row) => (
+        row._id === saved._id ? saved : row
+      )) }));
+      setEditingNote(null);
+    } catch (error) {
+      setNoteError(error.response?.data?.message || 'Unable to save day note.');
+    } finally {
+      setSavingNote(false);
+    }
+  };
 
   useEffect(() => {
     const loadCoach = async () => {
@@ -110,7 +134,14 @@ const CoachProfilePage = () => {
                       <span>{formatTime(row.arrivedAt)}</span>
                       <span>{formatTime(row.leftAt)}</span>
                       <span>{formatTime(row.absentAt)}</span>
-                      <span className="coach-history-note">{row.dayNote || '-'}</span>
+                      <div className="coach-history-note">
+                        <span>{row.dayNote || '-'}</span>
+                        <button type="button" className="btn-secondary coach-history-edit" onClick={() => {
+                          setEditingNote(row);
+                          setNoteDraft(row.dayNote || '');
+                          setNoteError('');
+                        }} aria-label={`Edit day note ${formatDate(row.date)}`}>Edit note</button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -121,6 +152,23 @@ const CoachProfilePage = () => {
           </>
         )}
       </main>
+      {editingNote && (
+        <div className="student-modal-backdrop">
+          <section className="student-modal coach-note-dialog" role="dialog" aria-modal="true" aria-labelledby="coach-note-title">
+            <h2 id="coach-note-title">Day note - {formatDate(editingNote.date)}</h2>
+            <form onSubmit={saveNote}>
+              <label htmlFor="coach-history-note-input">Day note</label>
+              <textarea id="coach-history-note-input" value={noteDraft} maxLength={1000} rows={5} autoFocus
+                disabled={savingNote} onChange={(event) => setNoteDraft(event.target.value)} />
+              {noteError && <p role="alert" className="alert-error">{noteError}</p>}
+              <div className="coach-note-actions">
+                <button className="btn-primary" type="submit" disabled={savingNote}>{savingNote ? 'Saving...' : 'Save note'}</button>
+                <button className="btn-secondary" type="button" disabled={savingNote} onClick={() => setEditingNote(null)}>Cancel</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
     </div>
   );
 };

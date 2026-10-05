@@ -16,6 +16,8 @@ const { getCurrentSubscriptionStart, isLaterSubscriptionStart } = require('../ut
 
 const formatPlayerResponse = (player) => {
   const obj = player.toObject({ virtuals: true });
+  // Older installed clients still add this field to the manual balance.
+  obj.preservedRemainingBalance = 0;
   if (obj.parentPhoneEncrypted) {
     try {
       obj.parentPhone = decrypt(obj.parentPhoneEncrypted);

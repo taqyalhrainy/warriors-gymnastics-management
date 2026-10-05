@@ -41,6 +41,13 @@ Date: 2026-09-30. Tests use disposable local databases, not club records.
 
 ## Ongoing Checks
 
+### Attendance-Only Remaining and Coach Notes (2026-10-05)
+
+- Supersedes the 2026-10-04 carried-balance policy below. Only explicit attendance manual balances contribute to Remaining. Legacy automatic balances are excluded, not deleted; the startup cutover is removed.
+- Player/payment API responses expose zero for the obsolete carried balance so previously installed clients cannot add it back. Non-subscription/unlinked payment rows no longer expose old calculated debt.
+- Coach attendance history now supports editing or clearing each date's note, without changing attendance status/timestamps or other dates.
+- Verification: 69 backend tests, 79 frontend tests and production build passed. Isolated browser checks covered automatic debt exclusion, manual balance persistence and coach note saving/reload at 1440px and 390px.
+
 ### Manual Remaining Balances (2026-10-04)
 
 - Remaining is no longer derived from package prices or payments. Only explicit manual balance edits replace it, including zero.

@@ -304,29 +304,48 @@ test('new players never acquire remaining automatically; manual amounts persist 
   }
 });
 
-test('cutover preserves all existing finance balances without overwriting manual money or receipts', async () => {
-  const { preserveLegacyRemainingBalances, getRemainingAmount } = require('../utils/manualRemaining');
-  const old = await newPlayer({ payment: 100, previousDueBalance: 70, dueAdjustment: 10, attendanceDueManual: true });
-  const untouchedNew = await newPlayer({ payment: 500 });
-  await Player.collection.updateOne({ _id: old._id }, { $unset: { remainingBalancePolicyVersion: '', preservedRemainingBalance: '' } });
-  const receipt = await Payment.create({ playerId: old._id, paidAmount: 30, totalAmount: 100,
-    remainingAmount: 70, transactionType: 'Partial payment' });
+test('legacy automatic debt is ignored everywhere while manual attendance debt survives', async () => {
+  const player = await newPlayer({ payment: 110, preservedRemainingBalance: 110 });
+  const receipt = await Payment.create({ playerId: player._id, paidAmount: 110, totalAmount: 110,
+    remainingAmount: 110, transactionType: 'Full payment' });
   const originalReceipt = receipt.toObject();
-  assert.equal(await preserveLegacyRemainingBalances(), 1);
-  const preserved = await Player.findById(old._id);
-  assert.equal(preserved.preservedRemainingBalance, 70);
-  assert.equal(preserved.previousDueBalance, 70);
-  assert.equal(preserved.dueAdjustment, 10);
-  assert.equal(getRemainingAmount(preserved), 130);
-  assert.equal(getRemainingAmount(await Player.findById(untouchedNew._id)), 0);
+  const check = async (amount) => {
+    assert.equal((await call('/payments')).find((row) => row._id === String(receipt._id)).remainingAmount, amount);
+    assert.equal((await call('/reports/dashboard')).pendingAmounts, amount);
+    assert.equal((await call('/reports/revenue')).totalRemaining, amount);
+    assert.equal((await call('/parents/me/payments', { auth: parentToken }))[0].visibleRemainingAmount, amount);
+    assert.equal((await call(`/players/${player._id}`)).paymentRemainingAmount, amount);
+  };
+  await check(0);
+  assert.equal((await call(`/players/${player._id}`)).preservedRemainingBalance, 0);
+  assert.equal((await call('/players?compact=true'))[0].preservedRemainingBalance, 0);
+  assert.equal((await call('/payments'))[0].playerId.preservedRemainingBalance, 0);
+  await call(`/players/${player._id}`, { method: 'PUT', body: { payment: 250, newSubscription: true, startDate: getAppDateKey() } });
+  await check(0);
+  assert.equal((await Player.findById(player._id)).preservedRemainingBalance, 110);
+  await call(`/players/${player._id}`, { method: 'PUT', body: { previousDueBalance: 35, dueAdjustment: 0 } });
+  await check(35);
+  await call('/payments', { method: 'POST', body: { playerId: String(player._id), paidAmount: 250, paymentMethod: 'Cash' }, status: 201 });
+  await check(35);
+  await call(`/players/${player._id}`, { method: 'PUT', body: { previousDueBalance: 0, dueAdjustment: 0 } });
+  await check(0);
   assert.deepEqual((await Payment.findById(receipt._id)).toObject(), originalReceipt);
-  await call(`/players/${old._id}`, { method: 'PUT', body: { payment: 400, newSubscription: true, startDate: getAppDateKey() } });
-  await call('/payments', { method: 'POST', body: { playerId: String(old._id), paidAmount: 400, paymentMethod: 'Cash' }, status: 201 });
-  assert.equal(await preserveLegacyRemainingBalances(), 0);
-  assert.equal((await call('/reports/revenue')).totalRemaining, 130);
-  await call(`/players/${old._id}`, { method: 'PUT', body: { previousDueBalance: 0, dueAdjustment: 0 } });
-  assert.equal((await Player.findById(old._id)).preservedRemainingBalance, 0);
-  assert.equal(await preserveLegacyRemainingBalances(), 0);
-  assert.equal((await call('/reports/revenue')).totalRemaining, 0);
-  assert.deepEqual((await Payment.findById(receipt._id)).toObject(), originalReceipt);
+});
+
+test('editing an old coach day note preserves status, times and other days', async () => {
+  const coach = await call('/coaches', { method: 'POST', body: { name: 'History coach' }, status: 201 });
+  const path = `/coaches/${coach._id}/attendance`;
+  const oldDate = '2026-09-20';
+  const old = await call(path, { method: 'POST', body: { action: 'arrived', date: oldDate } });
+  await call(path, { method: 'POST', body: { action: 'note', date: '2026-09-21', dayNote: 'Other day' } });
+  for (const note of ['Updated past day', '']) {
+    await call(path, { method: 'POST', body: { action: 'note', date: old.date, dayNote: note } });
+    const history = (await call(`/coaches/${coach._id}`)).attendanceHistory;
+    const row = history.find((row) => row._id === old._id);
+    assert.equal(row.dayNote, note);
+    assert.equal(row.status, old.status);
+    assert.equal(row.arrivedAt, old.arrivedAt);
+    assert.equal(history.find((row) => row._id !== old._id).dayNote, 'Other day');
+  }
+  await call(path, { method: 'POST', auth: parentToken, body: { action: 'note', date: oldDate, dayNote: 'Forbidden' }, status: 403 });
 });

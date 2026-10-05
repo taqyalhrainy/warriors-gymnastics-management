@@ -5343,9 +5343,28 @@ body.rtl .new-subscription-summary-card[type='button'] {
 }
 
 .coach-history-note {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+.coach-history-edit {
+  justify-self: start;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.coach-note-dialog {
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+
+.coach-note-dialog form { display: grid; gap: 12px; }
+.coach-note-dialog textarea { width: 100%; box-sizing: border-box; resize: vertical; }
+.coach-note-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 
 .parent-attendance-page {
   display: grid;

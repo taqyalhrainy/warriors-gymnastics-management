@@ -120,7 +120,8 @@ async function main() {
         assert.equal(Number(await page.locator('.payment-metrics > div').nth(1).locator('strong').innerText()), amount);
         await page.screenshot({ path: path.join(output, label + '.png'), fullPage: true });
       };
-      await checkRemaining(0, 'remaining-new-player-zero');
+      await Player.updateOne({ _id: player._id }, { $set: { preservedRemainingBalance: 110 } });
+      await checkRemaining(0, 'remaining-legacy-automatic-zero');
       await update('/payments', { playerId: String(player._id), paidAmount: 20, paymentMethod: 'Cash' }, 'POST');
       await update(`/players/${player._id}`, { payment: 999, newSubscription: true, startDate: '2026-10-04' });
       await checkRemaining(0, 'remaining-after-payment-renewal-zero');
@@ -132,6 +133,25 @@ async function main() {
       await update(`/players/${player._id}`, { previousDueBalance: 0, dueAdjustment: 0 });
       await update(`/players/${player._id}`, { payment: 200, note: 'Unrelated edit' });
       await checkRemaining(0, 'remaining-manual-zero-persists');
+      await update(`/coaches/${coach._id}/attendance`, { action: 'arrived', date: '2026-09-20' }, 'POST');
+      await update(`/coaches/${coach._id}/attendance`, { action: 'note', date: '2026-09-21', dayNote: 'Other day' }, 'POST');
+      for (const width of [1440, 390]) {
+        await page.setViewportSize({ width, height: width === 390 ? 844 : 960 });
+        await visit(`/coaches/${coach._id}`, `coach-note-${width}`);
+        await page.getByRole('button', { name: 'Edit day note 9/20/2026', exact: true }).click();
+        const dialog = page.getByRole('dialog');
+        await dialog.getByLabel('Day note', { exact: true }).fill(`Past day note ${width}`);
+        await page.screenshot({ path: path.join(output, `coach-note-editor-${width}.png`), fullPage: true });
+        await dialog.getByRole('button', { name: 'Save note', exact: true }).click();
+        await dialog.waitFor({ state: 'hidden' });
+        await page.reload();
+        await page.waitForLoadState('networkidle');
+        const row = page.locator('.coach-history-row').filter({ hasText: '9/20/2026' });
+        assert.match(await row.innerText(), new RegExp(`Past day note ${width}`));
+        assert.match(await row.innerText(), /Present/);
+        assert.match(await page.locator('.coach-history-row').filter({ hasText: '9/21/2026' }).innerText(), /Other day/);
+        await page.screenshot({ path: path.join(output, `coach-note-saved-${width}.png`), fullPage: true });
+      }
       assert.deepEqual(errors, [], 'Browser/API errors');
       console.log(`Remaining browser audit passed; artifacts: ${output}`);
       return;

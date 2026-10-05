@@ -215,7 +215,9 @@ const formatPaymentsWithAttendanceCounts = async (payments) => {
   ]);
   const formattedRows = paymentRows.map((payment) => {
     const row = formatPaymentResponse(payment);
+    row.remainingAmount = 0;
     if (row.playerId && typeof row.playerId === 'object') {
+      row.playerId.preservedRemainingBalance = 0;
       const playerKey = getPlayerIdFromPayment(payment);
       const paymentSummary = paymentSummaryMap.get(playerKey);
       row.playerId.attendancePresentCount = countMap.get(playerKey) || 0;
