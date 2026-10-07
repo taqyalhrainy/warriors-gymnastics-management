@@ -18,6 +18,14 @@ import { attachAttendanceRecords, isAttendanceInCycle, getUnassignedAttendance, 
 const ATTENDANCE_BOARD_CACHE_TTL_MS = 5 * 60 * 1000;
 const LOCAL_ATTENDANCE_OVERRIDE_TTL_MS = 60 * 1000;
 const LOCAL_PLAYER_OVERRIDE_TTL_MS = 3 * 60 * 1000;
+const PLAYER_SKILL_LEVELS = [
+  { key: 'beam', label: 'Beam' },
+  { key: 'vault', label: 'Vault' },
+  { key: 'floor', label: 'Floor' },
+  { key: 'bars', label: 'Bars' }
+];
+const emptySkillLevels = () => Object.fromEntries(PLAYER_SKILL_LEVELS.map(({ key }) => [key, '']));
+const getSkillLevels = (player) => Object.fromEntries(PLAYER_SKILL_LEVELS.map(({ key }) => [key, player?.skillLevels?.[key] || '']));
 let attendanceBoardCache = null;
 let attendanceBoardCacheTimestamp = 0;
 let attendanceBoardCacheDate = '';
@@ -220,6 +228,9 @@ const mergeStablePlayerFields = (incomingPlayer, fallbackPlayer = null) => ({
   packageClasses: authoritativeField(incomingPlayer, fallbackPlayer, 'packageClasses', 0),
   packageHours: authoritativeField(incomingPlayer, fallbackPlayer, 'packageHours', 0),
   payment: authoritativeField(incomingPlayer, fallbackPlayer, 'payment', 0),
+  skillLevels: incomingPlayer?.skillLevels && typeof incomingPlayer.skillLevels === 'object'
+    ? { ...emptySkillLevels(), ...incomingPlayer.skillLevels }
+    : getSkillLevels(fallbackPlayer),
   makeupClassesNote: authoritativeField(incomingPlayer, fallbackPlayer, 'makeupClassesNote', ''),
   paymentRemainingAmount: authoritativeField(incomingPlayer, fallbackPlayer, 'paymentRemainingAmount', 0),
   attendancePresentCount: authoritativeField(incomingPlayer, fallbackPlayer, 'attendancePresentCount', 0),
@@ -313,6 +324,7 @@ const mapSnapshotPlayerToAttendancePlayer = (player) => {
     groupId: firstGroup ? { ...firstGroup } : null,
     groupIds: groups.map((group) => ({ ...group })),
     level: player.level || '',
+    skillLevels: getSkillLevels(player),
     startDate: player.startDate || null,
     endDate: player.endDate || null,
     packageName: player.packageName || '',
@@ -348,6 +360,10 @@ const AttendancePage = () => {
   const [showUnsavedExitConfirm, setShowUnsavedExitConfirm] = useState(false);
   const [pendingFrozenVisibilitySave, setPendingFrozenVisibilitySave] = useState(null);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [showLevelModal, setShowLevelModal] = useState(false);
+  const [levelForm, setLevelForm] = useState(emptySkillLevels);
+  const [levelMessage, setLevelMessage] = useState('');
+  const [isSavingLevel, setIsSavingLevel] = useState(false);
   const [isSubscriptionGroupPickerOpen, setIsSubscriptionGroupPickerOpen] = useState(false);
   const [subscriptionForm, setSubscriptionForm] = useState({
     startDate: '',
@@ -1874,7 +1890,42 @@ const AttendancePage = () => {
     setIsEditingSelectedPlayer(false);
     setSelectedPlayerForm(null);
     setPreviewProfileImage('');
+    setShowLevelModal(false);
     setSelectedPlayer(null);
+  };
+
+  const openLevelModal = () => {
+    setLevelForm(getSkillLevels(selectedPlayer));
+    setLevelMessage('');
+    setShowLevelModal(true);
+  };
+
+  const closeLevelModal = () => {
+    if (!isSavingLevel) setShowLevelModal(false);
+  };
+
+  const handleLevelSave = async (event) => {
+    event.preventDefault();
+    if (!selectedPlayer?._id || isSavingLevel || pendingSelectedPlayerMutationRef.current) return;
+    const previousPlayer = selectedPlayer;
+    const nextSkillLevels = Object.fromEntries(PLAYER_SKILL_LEVELS.map(({ key }) => [key, levelForm[key].trim()]));
+    const mutation = beginSelectedPlayerMutation('skill-levels');
+    setIsSavingLevel(true);
+    setLevelMessage('');
+    try {
+      const savedPlayer = await updatePlayer(selectedPlayer._id, { skillLevels: nextSkillLevels, __v: selectedPlayer.__v });
+      if (!isLatestSelectedPlayerMutation(mutation)) return;
+      const committedPlayer = mergeStablePlayerFields(savedPlayer, { ...previousPlayer, skillLevels: nextSkillLevels });
+      applyOptimisticSelectedPlayer(committedPlayer);
+      setShowLevelModal(false);
+      setMessage('Level saved');
+    } catch (error) {
+      if (isLatestSelectedPlayerMutation(mutation)) applyOptimisticSelectedPlayer(previousPlayer);
+      setLevelMessage(error.response?.data?.message || 'Unable to save level.');
+    } finally {
+      setIsSavingLevel(false);
+      finishSelectedPlayerMutation(mutation);
+    }
   };
 
   const openSubscriptionModal = () => {
@@ -3247,6 +3298,7 @@ const AttendancePage = () => {
                       <button type="button" className="new-subscription-button compact" onClick={openSubscriptionModal}>
                         <span>New Subscription</span>
                       </button>
+                      <button type="button" className="level-button compact" onClick={openLevelModal}>Level</button>
                       <button type="button" className="btn-primary" onClick={handleStartEditSelectedPlayer}>{t('edit')}</button>
                     </>
                   )}
@@ -3790,6 +3842,34 @@ const AttendancePage = () => {
                 </div>
               </form>
             </div>
+          </div>
+        )}
+
+        {showLevelModal && selectedPlayer && (
+          <div className="student-modal-backdrop level-modal-backdrop" role="presentation" onClick={closeLevelModal}>
+            <section className="student-modal level-modal" role="dialog" aria-modal="true" aria-labelledby="player-level-title" onClick={(event) => event.stopPropagation()}>
+              <div className="student-modal-header">
+                <div>
+                  <h2 id="player-level-title">Level</h2>
+                  <p>{selectedPlayer.fullName}</p>
+                </div>
+                <button type="button" className="btn-secondary" onClick={closeLevelModal} disabled={isSavingLevel}>Close</button>
+              </div>
+              <form className="level-form" onSubmit={handleLevelSave}>
+                {PLAYER_SKILL_LEVELS.map(({ key, label }) => (
+                  <label key={key}>
+                    <span>{label}</span>
+                    <input value={levelForm[key]} maxLength={120} disabled={isSavingLevel}
+                      onChange={(event) => setLevelForm((current) => ({ ...current, [key]: event.target.value }))} />
+                  </label>
+                ))}
+                {levelMessage && <p className="alert-error" role="alert">{levelMessage}</p>}
+                <div className="level-form-actions">
+                  <button type="submit" className="btn-primary" disabled={isSavingLevel}>{isSavingLevel ? 'Saving...' : 'Save'}</button>
+                  <button type="button" className="btn-secondary" onClick={closeLevelModal} disabled={isSavingLevel}>Cancel</button>
+                </div>
+              </form>
+            </section>
           </div>
         )}
 

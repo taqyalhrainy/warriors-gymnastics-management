@@ -53,12 +53,19 @@ const getChildGroups = (child) => {
 const getVisibleRemaining = (child) => Number(child?.visibleRemainingAmount ?? (child?.attendanceDueManual ? child.remainingAmount : 0) ?? 0);
 const getVisiblePaid = (child) => Number(child?.paidTotal ?? child?.currentSubscriptionPaidAmount ?? 0);
 const CHILDREN_PAGE_SIZE = 8;
+const SKILL_LEVELS = [
+  ['beam', 'Beam'],
+  ['vault', 'Vault'],
+  ['floor', 'Floor'],
+  ['bars', 'Bars']
+];
 
 const ParentChildrenPage = () => {
   const cached = getCachedParentDashboard();
   const [dashboard, setDashboard] = useState(() => cached || null);
   const [isLoading, setIsLoading] = useState(() => !cached);
   const [selectedChildId, setSelectedChildId] = useState('');
+  const [levelChildId, setLevelChildId] = useState('');
   const [visibleChildrenCount, setVisibleChildrenCount] = useState(CHILDREN_PAGE_SIZE);
   const [previewProfileImage, setPreviewProfileImage] = useState('');
   const navigate = useNavigate();
@@ -130,7 +137,10 @@ const ParentChildrenPage = () => {
               const isSelected = selectedChildId === child._id;
               return (
                 <div className="parent-child-summary-wrap" key={child._id}>
-                  <button type="button" className="parent-child-summary-card" onClick={() => setSelectedChildId(isSelected ? '' : child._id)}>
+                  <button type="button" className="parent-child-summary-card" onClick={() => {
+                    setSelectedChildId(isSelected ? '' : child._id);
+                    setLevelChildId('');
+                  }}>
                     {renderChildName(child)}
                     <span className={`parent-status-pill status-${child.status || 'active'}`}>{child.status || t('status')}</span>
                     <div><span>{t('paid')}</span><strong>{formatCurrency(getVisiblePaid(child))}</strong></div>
@@ -146,6 +156,16 @@ const ParentChildrenPage = () => {
                         <div><span>{t('paid')}</span><strong>{formatCurrency(getVisiblePaid(child))}</strong></div>
                         <div><span>{t('remaining')}</span><strong>{formatCurrency(getVisibleRemaining(child))}</strong></div>
                       </div>
+                      <button type="button" className="parent-level-button" onClick={() => setLevelChildId(levelChildId === child._id ? '' : child._id)}>
+                        {t('level')}
+                      </button>
+                      {levelChildId === child._id && (
+                        <div className="parent-level-grid">
+                          {SKILL_LEVELS.map(([key, label]) => (
+                            <div key={key}><span>{label}</span><strong>{child.skillLevels?.[key] || t('notAssigned')}</strong></div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

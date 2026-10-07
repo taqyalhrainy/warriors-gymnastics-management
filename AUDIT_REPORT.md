@@ -41,6 +41,13 @@ Date: 2026-09-30. Tests use disposable local databases, not club records.
 
 ## Ongoing Checks
 
+### Player Apparatus Levels (2026-10-07)
+
+- Admin attendance player view has a dedicated Level editor for Beam, Vault, Floor and Bars. Values are independently editable and do not alter attendance or subscription state.
+- The owning parent can view the four classifications from Children > Level; parent accounts cannot edit them or read another parent's child.
+- Skill levels are included in player history/snapshot restoration and XLSX backup exports.
+- Verification: 70 backend tests, 79 frontend tests and production build passed. Isolated Chrome verified admin entry/save and parent mobile display at 390px.
+
 ### Attendance-Only Remaining and Coach Notes (2026-10-05)
 
 - Supersedes the 2026-10-04 carried-balance policy below. Only explicit attendance manual balances contribute to Remaining. Legacy automatic balances are excluded, not deleted; the startup cutover is removed.

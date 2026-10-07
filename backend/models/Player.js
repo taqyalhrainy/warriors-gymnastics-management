@@ -11,6 +11,15 @@ const playerSchema = new mongoose.Schema({
   coachId: { type: mongoose.Schema.Types.ObjectId, ref: 'Coach' },
   subscriptionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Subscription' },
   level: { type: String, trim: true },
+  skillLevels: {
+    type: new mongoose.Schema({
+      beam: { type: String, trim: true, default: '' },
+      vault: { type: String, trim: true, default: '' },
+      floor: { type: String, trim: true, default: '' },
+      bars: { type: String, trim: true, default: '' }
+    }, { _id: false }),
+    default: () => ({})
+  },
   startDate: { type: Date },
   endDate: { type: Date },
   currentSubscriptionStartedAt: { type: Date },

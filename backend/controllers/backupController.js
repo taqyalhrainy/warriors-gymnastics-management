@@ -65,7 +65,7 @@ const exportPlayersBackup = async (req, res, next) => {
 
     const headers = [
       'Player ID', 'Player Name', 'Date of Birth', 'Status', 'Parent Name', 'Parent Phone',
-      'Parent Email', 'Program', 'Level', 'Coach', 'Groups', 'Package', 'Classes', 'Hours',
+      'Parent Email', 'Program', 'Level', 'Beam', 'Vault', 'Floor', 'Bars', 'Coach', 'Groups', 'Package', 'Classes', 'Hours',
       'Start Date', 'End Date', 'Price', 'Paid', 'Remaining', 'Note', 'Added At', 'Deleted'
     ];
 
@@ -85,6 +85,10 @@ const exportPlayersBackup = async (req, res, next) => {
         player.parentId?.email || '',
         player.programId?.name || '',
         player.level || player.programId?.level || '',
+        player.skillLevels?.beam || '',
+        player.skillLevels?.vault || '',
+        player.skillLevels?.floor || '',
+        player.skillLevels?.bars || '',
         player.coachId?.name || '',
         getPlayerGroups(player),
         player.packageName || '',

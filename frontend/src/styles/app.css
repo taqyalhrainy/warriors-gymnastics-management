@@ -5764,6 +5764,48 @@ body.rtl .new-subscription-summary-card[type='button'] {
   gap: 4px;
 }
 
+.parent-level-button,
+.level-button {
+  min-height: 44px;
+  padding: 10px 18px;
+  border: 1px solid #0f8f83;
+  border-radius: 8px;
+  background: #0f766e;
+  color: #fff;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.level-button.compact { min-height: 42px; }
+.parent-level-button { justify-self: start; }
+
+.parent-level-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.parent-level-grid div {
+  display: grid;
+  gap: 5px;
+  padding: 13px;
+  border: 1px solid rgba(15, 118, 110, 0.22);
+  border-radius: 8px;
+  background: rgba(15, 118, 110, 0.07);
+}
+
+.parent-level-grid span { color: #52606d; font-size: 0.8rem; font-weight: 850; }
+.parent-level-grid strong { color: #111827; overflow-wrap: anywhere; }
+
+.level-modal-backdrop { z-index: 230; }
+.level-modal { width: min(560px, 100%); }
+.level-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.level-form label { display: grid; gap: 7px; color: var(--muted); font-weight: 850; }
+.level-form input { width: 100%; box-sizing: border-box; }
+.level-form .alert-error,
+.level-form-actions { grid-column: 1 / -1; }
+.level-form-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
 .parent-child-summary-card div span,
 .parent-child-detail-grid span {
   color: #6b7280;
@@ -6294,6 +6336,16 @@ body.theme-light .parent-notifications-card .data-table th {
 }
 
 @media (max-width: 900px) {
+  .parent-level-grid,
+  .level-form {
+    grid-template-columns: 1fr;
+  }
+
+  .level-form .alert-error,
+  .level-form-actions {
+    grid-column: auto;
+  }
+
   .parent-app-layout .page-content,
   .dashboard-layout.parent-app-layout .page-content {
     width: 100%;
@@ -7688,6 +7740,7 @@ body.theme-dark .parent-home-summary strong,
 body.theme-dark .parent-home-child-details > strong,
 body.theme-dark .parent-child-summary-card div strong,
 body.theme-dark .parent-child-detail-grid strong,
+body.theme-dark .parent-level-grid strong,
 body.theme-dark .parent-child-card strong,
 body.theme-dark .parent-panel h2,
 body.theme-dark .parent-panel h3,
@@ -7701,6 +7754,7 @@ body.theme-dark .parent-home-summary span,
 body.theme-dark .parent-home-child-details span,
 body.theme-dark .parent-child-summary-card div span,
 body.theme-dark .parent-child-detail-grid span,
+body.theme-dark .parent-level-grid span,
 body.theme-dark .parent-child-card span,
 body.theme-dark .parent-panel .data-table td,
 body.theme-dark .parent-payment-card .data-table td,

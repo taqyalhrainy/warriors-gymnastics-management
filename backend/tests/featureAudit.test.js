@@ -89,6 +89,26 @@ test('inactive users lose existing sessions and parent mutations remain forbidde
   await call('/auth/me', { auth: parentToken, status: 401 });
 });
 
+test('admin skill levels persist, enter history, and only the owning parent can read them', async () => {
+  const player = await newPlayer();
+  const skillLevels = { beam: 'Level 3', vault: '8.5', floor: 'Working handspring', bars: 'Silver' };
+  const saved = await call(`/players/${player._id}`, {
+    method: 'PUT',
+    body: { skillLevels: { ...skillLevels, injected: 'ignored' } }
+  });
+  assert.deepEqual(saved.skillLevels, skillLevels);
+  const stored = (await Player.findById(player._id)).skillLevels.toObject();
+  assert.deepEqual(stored, skillLevels);
+  const dashboard = await call('/parents/me/dashboard', { auth: parentToken });
+  assert.deepEqual(dashboard.children[0].skillLevels, skillLevels);
+  assert.deepEqual((await call('/parents/me/children', { auth: parentToken }))[0].skillLevels, skillLevels);
+  assert.deepEqual((await History.findOne({ entityType: 'player', entityId: player._id }).sort({ createdAt: -1 })).after.skillLevels, skillLevels);
+  await call(`/players/${player._id}`, { method: 'PUT', auth: parentToken, body: { skillLevels: { beam: 'Changed' } }, status: 403 });
+  const foreign = await newPlayer({ fullName: 'Foreign levels', parentId: otherParent._id, skillLevels: { beam: 'Secret' } });
+  const visibleIds = (await call('/parents/me/dashboard', { auth: parentToken })).children.map((child) => child._id);
+  assert.ok(!visibleIds.includes(String(foreign._id)));
+});
+
 test('invalid player saves do not alter parent membership or group counts', async () => {
   await call('/players', { method: 'POST', body: { fullName: 'Invalid', parentId: String(parent._id), parentPhone: '123',
     groupIds: [String(group._id)], packageClasses: -1 }, status: 400 });

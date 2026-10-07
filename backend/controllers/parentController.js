@@ -539,7 +539,7 @@ const getParentChildren = async (req, res, next) => {
     }
     const children = await Player.find({ parentId: parent._id, isDeleted: { $ne: true } })
       .sort({ createdAt: -1, _id: -1 })
-      .select('_id fullName dateOfBirth profileImage status programId groupId groupIds subscriptionId')
+      .select('_id fullName dateOfBirth profileImage status programId groupId groupIds subscriptionId skillLevels')
       .populate('programId', 'name level')
       .populate('groupId', 'name')
       .populate('groupIds', 'name')
@@ -719,7 +719,7 @@ const getParentDashboard = async (req, res, next) => {
     }
     const children = await Player.find({ parentId: parent._id, isDeleted: { $ne: true } })
       .sort({ createdAt: -1, _id: -1 })
-      .select('_id fullName dateOfBirth profileImage status programId groupId groupIds coachId subscriptionId startDate endDate packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual currentSubscriptionStartedAt')
+      .select('_id fullName dateOfBirth profileImage status programId groupId groupIds coachId subscriptionId startDate endDate packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual currentSubscriptionStartedAt skillLevels')
       .populate('programId', 'name')
       .populate('groupId', 'name')
       .populate('groupIds', 'name')

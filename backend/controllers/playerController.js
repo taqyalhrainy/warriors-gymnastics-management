@@ -43,6 +43,12 @@ const formatPlayerResponse = (player) => {
 };
 
 const optionalObjectIdFields = ['programId', 'groupId', 'coachId', 'subscriptionId'];
+const SKILL_LEVEL_KEYS = ['beam', 'vault', 'floor', 'bars'];
+
+const normalizeSkillLevels = (value) => Object.fromEntries(SKILL_LEVEL_KEYS.map((key) => [
+  key,
+  typeof value?.[key] === 'string' ? value[key].trim().slice(0, 120) : ''
+]));
 
 const normalizeGroupIds = (payload) => {
   const rawGroupIds = Array.isArray(payload.groupIds)
@@ -101,6 +107,9 @@ const cleanPlayerPayload = (payload) => {
   }
   if (payload.packageHours === '') {
     payload.packageHours = 0;
+  }
+  if (payload.skillLevels !== undefined) {
+    payload.skillLevels = normalizeSkillLevels(payload.skillLevels);
   }
   return payload;
 };
@@ -266,7 +275,7 @@ const createPlayer = async (req, res, next) => {
   try {
     const data = cleanPlayerPayload(sanitizeObject(req.body));
     const groupIds = normalizeGroupIds(data);
-    const { fullName, dateOfBirth, parentId, parentPhone, programId, coachId, level, startDate, endDate, packageName, packageClasses, packageHours, payment, previousDueBalance, dueAdjustment, attendanceDueManual, subscriptionNeedsAttention, note, makeupClassesNote, profileImage, status = 'active' } = data;
+    const { fullName, dateOfBirth, parentId, parentPhone, programId, coachId, level, skillLevels, startDate, endDate, packageName, packageClasses, packageHours, payment, previousDueBalance, dueAdjustment, attendanceDueManual, subscriptionNeedsAttention, note, makeupClassesNote, profileImage, status = 'active' } = data;
     if (!fullName || !parentId) {
       return res.status(400).json({ message: 'Required player fields are missing.' });
     }
@@ -296,6 +305,7 @@ const createPlayer = async (req, res, next) => {
       groupIds,
       coachId,
       level,
+      skillLevels,
       startDate,
       endDate,
       packageName: packageName || '',

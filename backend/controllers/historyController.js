@@ -71,6 +71,12 @@ const buildPlayerRestorePayload = (snapshot) => ({
   coachId: asObjectId(snapshot.coachId) || null,
   subscriptionId: asObjectId(snapshot.subscriptionId) || null,
   level: snapshot.level || '',
+  skillLevels: {
+    beam: snapshot.skillLevels?.beam || '',
+    vault: snapshot.skillLevels?.vault || '',
+    floor: snapshot.skillLevels?.floor || '',
+    bars: snapshot.skillLevels?.bars || ''
+  },
   startDate: asDate(snapshot.startDate) || null,
   endDate: asDate(snapshot.endDate) || null,
   currentSubscriptionStartedAt: asDate(snapshot.currentSubscriptionStartedAt) || null,

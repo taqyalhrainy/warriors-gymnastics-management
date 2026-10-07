@@ -56,6 +56,12 @@ const snapshotPlayerDocument = (playerDocument) => {
     groupIds: groups,
     groupNames: groups.map((group) => group.name).filter(Boolean),
     level: player?.level || '',
+    skillLevels: {
+      beam: player?.skillLevels?.beam || '',
+      vault: player?.skillLevels?.vault || '',
+      floor: player?.skillLevels?.floor || '',
+      bars: player?.skillLevels?.bars || ''
+    },
     startDate: player?.startDate || null,
     endDate: player?.endDate || null,
     currentSubscriptionStartedAt: player?.currentSubscriptionStartedAt || null,

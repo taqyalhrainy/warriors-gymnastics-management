@@ -152,8 +152,35 @@ async function main() {
         assert.match(await page.locator('.coach-history-row').filter({ hasText: '9/21/2026' }).innerText(), /Other day/);
         await page.screenshot({ path: path.join(output, `coach-note-saved-${width}.png`), fullPage: true });
       }
+      await page.setViewportSize({ width: 1440, height: 960 });
+      await visit('/attendance', 'player-level-admin');
+      await page.locator('.attendance-player-main').filter({ hasText: player.fullName }).first().click();
+      await page.getByRole('button', { name: 'Level', exact: true }).click();
+      const levelDialog = page.getByRole('dialog', { name: 'Level' });
+      const expectedLevels = { Beam: 'Level 3', Vault: '8.5', Floor: 'Working handspring', Bars: 'Silver' };
+      for (const [label, value] of Object.entries(expectedLevels)) await levelDialog.getByLabel(label, { exact: true }).fill(value);
+      await page.screenshot({ path: path.join(output, 'player-level-admin-editor.png'), fullPage: true });
+      await levelDialog.getByRole('button', { name: 'Save', exact: true }).click();
+      await levelDialog.waitFor({ state: 'hidden' });
+      assert.deepEqual((await Player.findById(player._id)).skillLevels.toObject(), {
+        beam: expectedLevels.Beam, vault: expectedLevels.Vault, floor: expectedLevels.Floor, bars: expectedLevels.Bars
+      });
+      await page.locator('.student-modal').filter({ hasText: player.fullName }).getByRole('button', { name: 'Close', exact: true }).click();
+      await page.getByRole('button', { name: 'Logout', exact: true }).click();
+      await visit('/parent/login', 'player-level-parent-login');
+      await page.locator('form input').first().fill(parentUser.name);
+      await page.locator('input[type=password]').fill(password);
+      await page.getByRole('button', { name: 'Sign In', exact: true }).click();
+      await page.waitForURL(origin + '/parent');
+      await page.setViewportSize({ width: 390, height: 844 });
+      await visit('/parent/children', 'player-level-parent-children');
+      await page.locator('.parent-child-summary-card').filter({ hasText: player.fullName }).click();
+      await page.getByRole('button', { name: 'Level', exact: true }).click();
+      const levelPanel = page.locator('.parent-level-grid');
+      for (const value of Object.values(expectedLevels)) assert.match(await levelPanel.innerText(), new RegExp(value));
+      await page.screenshot({ path: path.join(output, 'player-level-parent-mobile.png'), fullPage: true });
       assert.deepEqual(errors, [], 'Browser/API errors');
-      console.log(`Remaining browser audit passed; artifacts: ${output}`);
+      console.log(`Targeted browser audit passed; artifacts: ${output}`);
       return;
     }
     for (const route of ['/admin', '/players', '/players/new', `/players/${player._id}`, `/players/${player._id}/edit`, '/parents', '/groups', '/attendance', '/coaches', `/coaches/${coach._id}`, '/payments', '/notifications', '/reports', '/history', '/security', '/owner-summary', '/media-gallery']) {
