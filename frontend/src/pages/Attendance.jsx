@@ -3286,7 +3286,7 @@ const AttendancePage = () => {
 
         {selectedPlayer && (
           <div className="student-modal-backdrop" role="presentation" onClick={() => closeSelectedPlayer()}>
-            <section className="student-modal" role="dialog" aria-modal="true" aria-label={t('studentDetails')} onClick={(event) => event.stopPropagation()}>
+            <section className="student-modal player-details-modal" role="dialog" aria-modal="true" aria-label={t('studentDetails')} onClick={(event) => event.stopPropagation()}>
               <div className="student-modal-header">
                 <div>
                   <h2>{selectedPlayer.fullName}</h2>

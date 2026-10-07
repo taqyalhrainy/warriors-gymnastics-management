@@ -3575,6 +3575,24 @@ body.attendance-touch-dragging {
   flex-wrap: wrap;
 }
 
+.player-details-modal {
+  width: min(920px, 100%);
+}
+
+.player-details-modal .student-modal-header > div:first-child {
+  min-width: 0;
+  flex: 1 1 220px;
+}
+
+.player-details-modal .student-modal-header-actions {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}
+
+.player-details-modal .student-modal-header-actions button {
+  white-space: nowrap;
+}
+
 .student-modal-edit-form {
   display: grid;
   gap: 16px;
@@ -7241,6 +7259,16 @@ body.rtl .payment-table-wrap {
 
   .student-modal-edit-grid {
     grid-template-columns: 1fr;
+  }
+
+  .player-details-modal .student-modal-header {
+    flex-direction: column;
+  }
+
+  .player-details-modal .student-modal-header-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .table-toolbar h2 {
