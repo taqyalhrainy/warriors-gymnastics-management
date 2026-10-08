@@ -42,7 +42,7 @@ const exportPlayersBackup = async (req, res, next) => {
         .populate('groupId', 'name')
         .populate('groupIds', 'name')
         .populate('coachId', 'name'),
-      Payment.find().sort({ paymentDate: 1, _id: 1 })
+      Payment.find({ isDeleted: { $ne: true } }).sort({ paymentDate: 1, _id: 1 })
     ]);
 
     const paymentsByPlayer = new Map();

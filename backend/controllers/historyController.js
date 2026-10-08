@@ -109,6 +109,9 @@ const buildPlayerRestorePayload = (snapshot) => ({
 });
 
 const buildPaymentRestorePayload = (snapshot) => ({
+  isDeleted: false,
+  deletedAt: null,
+  deletedBy: null,
   playerId: asObjectId(snapshot.playerId),
   playerNameSnapshot: snapshot.playerName || '',
   parentNameSnapshot: snapshot.parentName || '',
@@ -315,7 +318,7 @@ const restorePlayers = async (targetPlayers, req) => {
 
 const restorePayments = async (targetPayments, req) => {
   const targetById = new Map(targetPayments.map((payment) => [String(payment._id), payment]));
-  const currentPayments = await Payment.find({}).select('_id playerId').lean();
+  const currentPayments = await Payment.find({}).select('_id playerId isDeleted').lean();
   const operations = [];
   let restored = 0;
   let removed = 0;
@@ -326,9 +329,11 @@ const restorePayments = async (targetPayments, req) => {
     const target = targetById.get(paymentId);
 
     if (!target) {
+      if (payment.isDeleted) continue;
       operations.push({
-        deleteOne: {
-          filter: { _id: payment._id }
+        updateOne: {
+          filter: { _id: payment._id },
+          update: { $set: { isDeleted: true, deletedAt: new Date(), deletedBy: req.user._id } }
         }
       });
       removed += 1;

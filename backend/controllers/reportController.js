@@ -2,12 +2,12 @@ const Player = require('../models/Player');
 const Attendance = require('../models/Attendance');
 const Payment = require('../models/Payment');
 require('../models/Subscription');
-const { getAppDateKey, getAppDateOnly, dateKeyToUtc } = require('../utils/appDate');
+const { getAppDateKey, getAppDateOnly, getAppDayStartUtc } = require('../utils/appDate');
 const { getCurrentSubscriptionStart } = require('../utils/subscriptionCycle');
 const { getRemainingAmount } = require('../utils/manualRemaining');
 
 const clearDashboardReportCache = () => {};
-const monthStart = () => dateKeyToUtc(`${getAppDateKey().slice(0, 7)}-01`);
+const monthStart = () => getAppDayStartUtc(`${getAppDateKey().slice(0, 7)}-01`);
 
 const getCurrentPlayerSummaries = async () => {
   const players = await Player.find({ isDeleted: { $ne: true }, status: { $ne: 'left' } })
@@ -49,7 +49,7 @@ const getDashboardReport = async (req, res, next) => {
         { $group: { _id: { status: '$status', player: '$playerId' } } },
         { $group: { _id: '$_id.status', count: { $sum: 1 } } }
       ]),
-      Payment.aggregate([{ $match: { paymentDate: { $gte: monthStart() } } }, { $group: { _id: null, totalPaid: { $sum: '$paidAmount' } } }])
+      Payment.aggregate([{ $match: { isDeleted: { $ne: true }, paymentDate: { $gte: monthStart() } } }, { $group: { _id: null, totalPaid: { $sum: '$paidAmount' } } }])
     ]);
     const counts = Object.fromEntries(attendanceCounts.map((row) => [row._id, row.count]));
     res.json({
@@ -69,8 +69,8 @@ const getRevenueReport = async (req, res, next) => {
   try {
     const [players, totalRevenue, monthlyRevenue] = await Promise.all([
       getCurrentPlayerSummaries(),
-      Payment.aggregate([{ $group: { _id: null, totalPaid: { $sum: '$paidAmount' } } }]),
-      Payment.aggregate([{ $match: { paymentDate: { $gte: monthStart() } } }, { $group: { _id: null, totalPaid: { $sum: '$paidAmount' } } }])
+      Payment.aggregate([{ $match: { isDeleted: { $ne: true } } }, { $group: { _id: null, totalPaid: { $sum: '$paidAmount' } } }]),
+      Payment.aggregate([{ $match: { isDeleted: { $ne: true }, paymentDate: { $gte: monthStart() } } }, { $group: { _id: null, totalPaid: { $sum: '$paidAmount' } } }])
     ]);
     res.json({ totalPaid: totalRevenue[0]?.totalPaid || 0,
       totalRemaining: players.reduce((sum, row) => sum + row.remaining, 0),

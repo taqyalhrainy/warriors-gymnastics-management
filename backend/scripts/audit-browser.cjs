@@ -102,6 +102,52 @@ async function main() {
     await page.getByRole('button', { name: 'Sign In', exact: true }).click();
     await page.waitForURL(origin + '/admin');
     results.push('admin-login-submit');
+    if (process.env.AUDIT_PAYMENTS_ONLY === '1') {
+      const Payment = require('../models/Payment');
+      const { getAppDateKey } = require('../utils/appDate');
+      const day = getAppDateKey();
+      const old = await Payment.create({ playerNameSnapshot: 'Saved payer before 25 receipts', paidAmount: 110,
+        paymentDate: `${day}T00:00:00Z`, transactionType: 'Full payment' });
+      await Payment.create(Array.from({ length: 25 }, (_, i) => ({ playerNameSnapshot: `Later payer ${i}`,
+        paidAmount: 20, paymentDate: `${day}T12:00:00Z` })));
+      await visit('/payments', 'all-daily-payments');
+      assert.equal(await page.locator('tbody tr').count(), 26);
+      assert.match(await page.locator('tbody').innerText(), /Saved payer before 25 receipts/);
+      await page.getByRole('button', { name: 'All Payments', exact: true }).click();
+      const unlock = page.getByRole('dialog', { name: 'Unlock payment data' });
+      await unlock.locator('input[type=password]').fill('1234');
+      await unlock.getByRole('button', { name: 'Unlock', exact: true }).click();
+      await unlock.waitFor({ state: 'hidden' });
+      await page.waitForLoadState('networkidle');
+      assert.equal(Number(await page.locator('.payment-metrics > div').first().locator('strong').innerText()), 610);
+      const search = page.locator('.payment-search input');
+      await search.fill('Saved payer before 25 receipts');
+      await page.waitForResponse((response) => response.url().includes('/api/payments?') && response.url().includes('search='));
+      await page.waitForLoadState('networkidle');
+      assert.equal(await page.locator('tbody tr').count(), 1);
+      assert.match(await page.locator('tbody').innerText(), /Saved payer before 25 receipts/);
+      await page.locator('.payment-entry-grid select').first().selectOption('custom');
+      await page.getByPlaceholder('Write member name...').fill('Saved financial receipt');
+      await page.locator('.payment-entry-grid label').filter({ hasText: 'Paid Amount' }).locator('input').fill('75');
+      const saved = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/api/payments'));
+      await page.locator('.payment-entry-panel button[type=submit]').click();
+      const receipt = await (await saved).json();
+      await page.getByRole('status').filter({ hasText: 'Payment saved - Saved financial receipt' }).waitFor();
+      await page.waitForLoadState('networkidle');
+      assert.equal(await page.locator('tbody tr').count(), 27);
+      assert.match(await page.locator('tbody').innerText(), /Saved financial receipt/);
+      await page.reload();
+      await page.waitForLoadState('networkidle');
+      assert.equal(await page.locator('tbody tr').count(), 27);
+      assert.equal((await Payment.findById(receipt._id)).paidAmount, 75);
+      assert.equal((await Payment.findById(old._id)).paidAmount, 110);
+      await page.screenshot({ path: path.join(output, 'payment-receipts-after-refresh.png'), fullPage: true });
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.screenshot({ path: path.join(output, 'payment-receipts-mobile.png'), fullPage: true });
+      assert.deepEqual(errors, [], 'Browser/API errors');
+      console.log('Payment persistence browser checks passed: daily receipts, global search, totals, save and reload.');
+      return;
+    }
     if (process.env.AUDIT_REMAINING_ONLY === '1') {
       const token = require('jsonwebtoken').sign({ id: String(admin._id) }, process.env.JWT_SECRET);
       const update = async (route, body, method = 'PUT') => {

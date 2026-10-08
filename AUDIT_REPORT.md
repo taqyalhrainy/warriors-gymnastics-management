@@ -41,6 +41,15 @@ Date: 2026-09-30. Tests use disposable local databases, not club records.
 
 ## Ongoing Checks
 
+### Payment Visibility and Retention (2026-10-08)
+
+- Daily payments load the whole selected day. Server search scans all matching receipts before pagination; All Payments and a month picker make older receipts accessible. Paginated totals include every matching receipt, not just the first 20.
+- The frontend and backend use Amman day/month boundaries. Successful saves open the saved receipt's day and clear search filters. Pagination merges by ID.
+- Deletion and payment snapshot restoration archive receipts rather than erase their database records. Active lists, parent summaries, exports and revenue exclude archived receipts. Historical restoration reactivates the same ID and preserves later receipts in the archive.
+- A missing production database URI fails startup rather than silently storing financial writes in a temporary database.
+- Verification: 74 backend tests (run sequentially to fit available local disk), 81 frontend tests and production build passed. Isolated Chrome verified 26 daily receipts, search beyond page one, full totals, saving another receipt and 27 receipts after reload.
+- The customer-specific missing receipt has not been identified: the player's name, amount and booking date were not supplied, and local configuration did not provide access to the production database. No production customer records were modified during diagnosis.
+
 ### Player Apparatus Levels (2026-10-07)
 
 - Admin attendance player view has a dedicated Level editor for Beam, Vault, Floor and Bars. Values are independently editable and do not alter attendance or subscription state.

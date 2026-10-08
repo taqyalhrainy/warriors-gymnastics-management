@@ -228,7 +228,7 @@ const loadCurrentPlayerSnapshots = async () => {
 };
 
 const loadCurrentPaymentSnapshots = async () => {
-  const payments = await Payment.find({})
+  const payments = await Payment.find({ isDeleted: { $ne: true } })
     .sort({ paymentDate: -1, _id: -1 })
     .populate('createdBy', 'name')
     .populate('updatedBy', 'name');

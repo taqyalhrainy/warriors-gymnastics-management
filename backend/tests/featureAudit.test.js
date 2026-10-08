@@ -269,6 +269,71 @@ test('waiting/data list edits, saved messages and gallery activation survive fre
   assert.equal((await call('/clubMedia/public', { auth: null })).length, 0);
 });
 
+test('payment day/month ranges follow Amman midnight and reject invalid dates', async () => {
+  const player = await newPlayer();
+  const records = await Payment.create(['2026-09-30T20:59:59Z', '2026-09-30T21:00:00Z',
+    '2026-10-01T20:59:59Z', '2026-10-01T21:00:00Z'].map((paymentDate) => ({
+    playerId: player._id, paidAmount: 30, paymentDate, transactionType: 'Full payment'
+  })));
+  const day = await call('/payments?day=2026-10-01');
+  assert.deepEqual(day.map((row) => row._id).sort(), records.slice(1, 3).map((row) => String(row._id)).sort());
+  assert.equal((await call('/payments?month=2026-09')).length, 1);
+  assert.equal((await call('/payments?month=2026-10')).length, 3);
+  await call('/payments?day=2026-02-30', { status: 400 });
+  await call('/payments?month=2026-13', { status: 400 });
+});
+
+test('a saved receipt stays available after 25 later payments and search scans beyond page one', async () => {
+  const saved = await call('/payments', { method: 'POST', body: { customPlayerName: 'Old saved receipt [A]',
+    paidAmount: 110, paymentDate: '2026-10-08T00:00:00Z', paymentMethod: 'Cash' }, status: 201 });
+  await Payment.create(Array.from({ length: 25 }, (_, i) => ({ playerNameSnapshot: `Later payer ${i}`,
+    paidAmount: 20, paymentDate: '2026-10-08T12:00:00Z' })));
+  const firstPage = await call('/payments?day=2026-10-08&limit=20');
+  assert.equal(firstPage.total, 26);
+  assert.equal(firstPage.totals.paid, 610);
+  assert.ok(!firstPage.items.some((row) => row._id === saved._id));
+  const daily = await call('/payments?day=2026-10-08');
+  assert.equal(daily.length, 26);
+  assert.ok(daily.some((row) => row._id === saved._id && row.paidAmount === 110));
+  const searched = await call('/payments?search=' + encodeURIComponent('Old saved receipt [A]') + '&limit=20');
+  assert.equal(searched.total, 1);
+  assert.equal(searched.totals.paid, 110);
+  assert.equal(searched.items[0]._id, saved._id);
+  assert.deepEqual(await call('/payments?search=' + encodeURIComponent('Old saved receipt [A]'), { auth: parentToken }), []);
+  assert.equal((await Payment.findById(saved._id)).paidAmount, 110);
+});
+
+test('payment deletion archives the original receipt and snapshot can reactivate that same ID', async () => {
+  const player = await newPlayer();
+  const saved = await call('/payments', { method: 'POST', body: { playerId: String(player._id),
+    paidAmount: 110, paymentMethod: 'Cash' }, status: 201 });
+  const at = new Date();
+  await new Promise((resolve) => setTimeout(resolve, 15));
+  await call(`/payments/${saved._id}`, { method: 'DELETE' });
+  const archived = await Payment.findById(saved._id);
+  assert.equal(archived.paidAmount, 110);
+  assert.equal(archived.isDeleted, true);
+  assert.equal(String(archived.deletedBy), String(admin._id));
+  assert.equal((await call('/payments')).length, 0);
+  assert.equal((await call('/reports/revenue')).totalPaid, 0);
+  assert.equal((await call('/parents/me/payments', { auth: parentToken })).length, 0);
+  await call(`/payments/${saved._id}`, { method: 'PUT', body: { paidAmount: 90 }, status: 404 });
+  const later = await call('/payments', { method: 'POST', body: { customPlayerName: 'Receipt after snapshot',
+    paidAmount: 25, paymentMethod: 'Cash' }, status: 201 });
+  const job = await call('/history/restore', { method: 'POST', body: { at: at.toISOString(), confirm: 'RESTORE', scopes: ['payments'] }, status: 202 });
+  for (let i = 0; i < 100; i++) {
+    const state = await call(`/history/restore/${job.jobId}`);
+    if (state.status === 'failed') assert.fail(state.message);
+    if (state.status === 'complete') break;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.equal((await Payment.findById(saved._id)).isDeleted, false);
+  assert.equal((await Payment.findById(later._id)).isDeleted, true);
+  assert.equal((await Payment.findById(later._id)).paidAmount, 25);
+  assert.equal((await call('/payments'))[0]._id, saved._id);
+  assert.equal((await call('/reports/revenue')).totalPaid, 110);
+});
+
 test('snapshot restores custom DSR payments that have no player link', async () => {
   const saved = await call('/payments', { method: 'POST', body: { customPlayerName: 'Walk-in', paidAmount: 25, paymentMethod: 'Cash', transactionType: 'DSR' }, status: 201 });
   const at = new Date();

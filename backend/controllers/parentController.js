@@ -284,6 +284,7 @@ const getCurrentPaymentSummaryMap = async (players, existingPayments) => {
   if (!playerIds.length) return new Map();
 
   const paymentRows = existingPayments || await Payment.find({
+    isDeleted: { $ne: true },
     playerId: { $in: playerIds }
   }).select('playerId paidAmount paymentDate createdAt transactionType').lean();
 
@@ -647,7 +648,7 @@ const getParentPayments = async (req, res, next) => {
       .select('_id fullName profileImage startDate endDate packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual currentSubscriptionStartedAt currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId createdAt updatedAt')
       .populate('subscriptionId', 'totalSessions usedSessions remainingSessions startDate endDate status price');
     const childIds = children.map((child) => child._id);
-    const payments = await Payment.find({ playerId: { $in: childIds } })
+    const payments = await Payment.find({ playerId: { $in: childIds }, isDeleted: { $ne: true } })
       .sort({ paymentDate: -1, _id: -1 })
       .populate({
         path: 'playerId',

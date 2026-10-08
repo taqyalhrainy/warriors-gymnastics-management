@@ -8,6 +8,9 @@ const connectDB = async () => {
       dns.setServers((process.env.MONGO_DNS_SERVERS || '1.1.1.1,8.8.8.8').split(',').map((server) => server.trim()).filter(Boolean));
     }
     if (!uri) {
+      if (process.env.NODE_ENV === 'production' || process.env.RENDER === 'true') {
+        throw new Error('A persistent MongoDB URI is required in production.');
+      }
       const { MongoMemoryServer } = require('mongodb-memory-server');
       const mongod = await MongoMemoryServer.create();
       uri = mongod.getUri();

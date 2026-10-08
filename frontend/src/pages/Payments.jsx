@@ -10,10 +10,12 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
 import { attendanceCycleStart } from '../utils/attendanceRecords.js';
 import { getRemainingAmount, sumRemainingByPlayer } from '../utils/manualRemaining.js';
+import { PAYMENT_TIME_ZONE, getPaymentDayKey, getPaymentMonthKey, mergePaymentRows } from '../utils/paymentDates.js';
 
 const formatDate = (date) => {
   if (!date) return '-';
   return new Date(date).toLocaleDateString('en-GB', {
+    timeZone: PAYMENT_TIME_ZONE,
     year: 'numeric',
     month: 'short',
     day: 'numeric'
@@ -23,6 +25,7 @@ const formatDate = (date) => {
 const formatTime = (date) => {
   if (!date) return '-';
   return new Date(date).toLocaleTimeString('en-GB', {
+    timeZone: PAYMENT_TIME_ZONE,
     hour: '2-digit',
     minute: '2-digit'
   });
@@ -31,14 +34,7 @@ const formatTime = (date) => {
 const formatMoney = (value) => Number(value || 0).toLocaleString('en-US');
 const PAYMENT_PAGE_SIZE = 20;
 
-const getDateInputValue = (date = new Date()) => {
-  const value = new Date(date);
-  if (Number.isNaN(value.getTime())) return '';
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, '0');
-  const day = String(value.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+const getDateInputValue = getPaymentDayKey;
 
 const getTransactionLabel = (payment) => {
   if (payment.transactionType) return payment.transactionType;
@@ -51,17 +47,6 @@ const getMethodClass = (method) => {
   if (normalized.includes('cash')) return 'cash';
   if (normalized.includes('bank')) return 'bank';
   return 'click';
-};
-
-const getPaymentMonthKey = (date) => {
-  if (!date) return 'undated';
-  const value = new Date(date);
-  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`;
-};
-
-const getPaymentDayKey = (date) => {
-  if (!date) return 'undated';
-  return getDateInputValue(date);
 };
 
 const isPendingPayment = (payment) => String(payment._id || '').startsWith('temp-payment-');
@@ -147,10 +132,12 @@ const PaymentsPage = () => {
   const [selectedMonth, setSelectedMonth] = useState(getPaymentMonthKey(new Date()));
   const [selectedDay, setSelectedDay] = useState(getDateInputValue());
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [playerSearch, setPlayerSearch] = useState('');
   const [viewingPayment, setViewingPayment] = useState(null);
   const [paymentsPage, setPaymentsPage] = useState(1);
   const [paymentsTotal, setPaymentsTotal] = useState(0);
+  const [paymentTotals, setPaymentTotals] = useState(null);
   const [paymentsHasMore, setPaymentsHasMore] = useState(false);
   const paymentsLoadRequestIdRef = useRef(0);
   const paymentsRevisionRef = useRef(0);
@@ -166,21 +153,27 @@ const PaymentsPage = () => {
       const forceAll = Boolean(options.forceAll);
       const page = options.page || 1;
       const append = Boolean(options.append);
-      let params = { day: selectedDay || getDateInputValue(), fresh: Date.now(), page, limit: PAYMENT_PAGE_SIZE };
-      if ((isPaymentUnlocked || forceAll) && activeView === 'thisMonth') {
+      const view = options.view || activeView;
+      const query = options.search ?? debouncedSearch;
+      let params = { day: options.day || selectedDay || getDateInputValue(), fresh: Date.now() };
+      if ((isPaymentUnlocked || forceAll) && view === 'thisMonth') {
         params = { month: getPaymentMonthKey(new Date()), fresh: Date.now(), page, limit: PAYMENT_PAGE_SIZE };
-      } else if ((isPaymentUnlocked || forceAll) && activeView === 'month') {
+      } else if ((isPaymentUnlocked || forceAll) && view === 'month') {
         params = { month: selectedMonth, fresh: Date.now(), page, limit: PAYMENT_PAGE_SIZE };
-      } else if ((isPaymentUnlocked || forceAll) && activeView === 'pending') {
+      } else if ((isPaymentUnlocked || forceAll) && view === 'all') {
+        params = { fresh: Date.now(), page, limit: PAYMENT_PAGE_SIZE };
+      } else if ((isPaymentUnlocked || forceAll) && view === 'pending') {
         params = { fresh: Date.now() };
       }
+      if (view !== 'pending' && query.trim()) params.search = query.trim();
       await loadSection('payments', () => fetchPayments(params), (data) => {
         const rows = Array.isArray(data) ? data : (data?.items || []);
         const paymentRows = sortPaymentsNewestFirst(rows);
         if (requestId === paymentsLoadRequestIdRef.current && startedRevision === paymentsRevisionRef.current) {
-          setPayments((current) => (append ? sortPaymentsNewestFirst([...current, ...paymentRows]) : paymentRows));
+          setPayments((current) => (append ? sortPaymentsNewestFirst(mergePaymentRows(current, paymentRows)) : paymentRows));
           setPaymentsPage(Array.isArray(data) ? 1 : (data?.page || page));
           setPaymentsTotal(Array.isArray(data) ? rows.length : (data?.total || rows.length));
+          setPaymentTotals(Array.isArray(data) ? null : (data?.totals || null));
           setPaymentsHasMore(!Array.isArray(data) && Boolean(data?.hasMore));
         }
       });
@@ -198,8 +191,13 @@ const PaymentsPage = () => {
   }, []);
 
   useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 250);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
     loadPayments({ forceAll: isPaymentUnlocked, page: 1 });
-  }, [selectedDay, selectedMonth, activeView, isPaymentUnlocked]);
+  }, [selectedDay, selectedMonth, activeView, isPaymentUnlocked, debouncedSearch]);
 
   const handlePaymentUnlock = async (event) => {
     event.preventDefault();
@@ -339,13 +337,6 @@ const PaymentsPage = () => {
     .filter(Boolean)
     .sort((first, second) => second.remainingAmount - first.remainingAmount), [players, payments]);
 
-  const monthOptions = useMemo(() => {
-    const paymentMonths = payments.map((payment) => getPaymentMonthKey(payment.paymentDate));
-    const months = [...new Set(paymentMonths.filter((key) => key !== 'undated'))];
-    if (!months.includes(selectedMonth)) months.push(selectedMonth);
-    return months.sort().reverse();
-  }, [payments, selectedMonth]);
-
   const filteredPlayers = useMemo(() => {
     const query = playerSearch.trim().toLowerCase();
     return players
@@ -380,7 +371,7 @@ const PaymentsPage = () => {
 
   const searchedPayments = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return visiblePayments;
+    if (!query || activeView !== 'pending') return visiblePayments;
 
     return visiblePayments.filter((payment) => {
       const searchable = [
@@ -401,7 +392,7 @@ const PaymentsPage = () => {
 
       return searchable.includes(query);
     });
-  }, [visiblePayments, searchQuery]);
+  }, [visiblePayments, searchQuery, activeView]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -434,12 +425,13 @@ const PaymentsPage = () => {
       setForm({ ...initialPaymentForm, paymentDate: getDateInputValue() });
       setEditingPaymentId('');
       setPlayerSearch('');
-      setSaveMessage('Payment saved');
-      if (activeView === 'day' && selectedDay !== payload.paymentDate) {
-        setSelectedDay(payload.paymentDate);
-      } else {
-        refreshPaymentsInBackground();
-      }
+      const savedDay = getPaymentDayKey(savedPayment.paymentDate);
+      setSaveMessage(`Payment saved - ${getMemberName(savedPayment)} / ${formatMoney(savedPayment.paidAmount)} / ${savedDay}`);
+      setActiveView('day');
+      setSelectedDay(savedDay);
+      setSearchQuery('');
+      setDebouncedSearch('');
+      loadPayments({ view: 'day', day: savedDay, search: '' });
     } catch (err) {
       setError(err.response?.data?.message || 'Unable to save payment.');
     } finally {
@@ -497,15 +489,16 @@ const PaymentsPage = () => {
     { id: 'day', label: 'By Day' },
     { id: 'thisMonth', label: 'This Month' },
     { id: 'month', label: 'By Month' },
-    { id: 'pending', label: 'Pending Amounts' }
+    { id: 'pending', label: 'Pending Amounts' },
+    { id: 'all', label: 'All Payments' }
   ];
   const activeViewLabel = viewTabs.find((tab) => tab.id === activeView)?.label || 'payments';
   const activeRecordCount = searchedPayments.length;
   const viewTotals = useMemo(() => ({
-    paid: searchedPayments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0),
-    remaining: sumRemainingByPlayer(searchedPayments),
+    paid: activeView !== 'pending' && paymentTotals ? paymentTotals.paid : searchedPayments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0),
+    remaining: activeView !== 'pending' && paymentTotals ? paymentTotals.remaining : sumRemainingByPlayer(searchedPayments),
     fullPayments: searchedPayments.filter((payment) => Number(payment.remainingAmount || 0) <= 0).length
-  }), [searchedPayments]);
+  }), [searchedPayments, paymentTotals, activeView]);
   const viewingPaymentDetails = viewingPayment ? getPaymentSubscriptionDetails(viewingPayment) : null;
 
   return (
@@ -545,7 +538,7 @@ const PaymentsPage = () => {
             </div>
             <div>
               <span>{activeViewLabel} Records</span>
-              <strong>{loadStates.payments.ready ? searchedPayments.length : <DataStatus state={loadStates.payments} />}</strong>
+              <strong>{loadStates.payments.ready ? (activeView === 'pending' ? searchedPayments.length : paymentsTotal) : <DataStatus state={loadStates.payments} />}</strong>
             </div>
           </div>
 
@@ -700,9 +693,7 @@ const PaymentsPage = () => {
                   />
                 </label>
                 {activeView === 'month' && (
-                  <select value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}>
-                    {monthOptions.map((month) => <option key={month} value={month}>{month}</option>)}
-                  </select>
+                  <input type="month" aria-label="Payment month" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value || getPaymentMonthKey())} />
                 )}
                 {activeView === 'day' && (
                   <input
@@ -717,10 +708,10 @@ const PaymentsPage = () => {
             </div>
 
             <div className="payment-view-panel payment-month-banner">
-              <span>{activeView === 'pending' ? 'Players with remaining amounts' : activeView === 'thisMonth' ? 'Showing this month' : activeView === 'day' ? `Showing ${selectedDay}` : `Showing ${selectedMonth}`}</span>
+              <span>{activeView === 'pending' ? 'Players with remaining amounts' : activeView === 'all' ? 'All Payments' : activeView === 'thisMonth' ? 'Showing this month' : activeView === 'day' ? `Showing ${selectedDay}` : `Showing ${selectedMonth}`}</span>
               <strong>{activeView === 'pending'
                 ? `${searchedPayments.length} players / ${formatMoney(searchedPayments.reduce((sum, payment) => sum + Number(payment.remainingAmount || 0), 0))} remaining`
-                : `${searchedPayments.length} records / ${formatMoney(searchedPayments.reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0))}`}
+                : `${paymentsTotal} records / ${formatMoney(viewTotals.paid)}`}
               </strong>
             </div>
 

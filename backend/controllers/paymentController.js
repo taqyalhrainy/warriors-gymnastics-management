@@ -8,7 +8,7 @@ const { encrypt, decrypt } = require('../utils/encryption');
 const { parseLocalizedNumber } = require('../utils/numberInput');
 const { snapshotPaymentDocument, createHistoryEntry } = require('../utils/history');
 const { createNotification } = require('../utils/notificationDelivery');
-const { getAppDateOnly } = require('../utils/appDate');
+const { getAppDateOnly, getAppDayRangeUtc, getAppDayStartUtc, dateKeyToUtc } = require('../utils/appDate');
 const { getCurrentSubscriptionStart } = require('../utils/subscriptionCycle');
 const { getRemainingAmount } = require('../utils/manualRemaining');
 
@@ -135,6 +135,7 @@ const getCurrentPaymentSummaryMap = async (players) => {
 
   const playerById = new Map(players.map((player) => [String(player._id), player]));
   const paymentRows = await Payment.find({
+    isDeleted: { $ne: true },
     playerId: { $in: playerIds },
     transactionType: { $in: ['Full payment', 'Partial payment'] }
   }).select('playerId paidAmount paymentDate createdAt transactionType').lean();
@@ -233,7 +234,7 @@ const formatPaymentsWithAttendanceCounts = async (payments) => {
 };
 
 const getCurrentSubscriptionPaymentMatch = (player) => {
-  const match = { playerId: player._id };
+  const match = { playerId: player._id, isDeleted: { $ne: true } };
   const subscriptionStart = getCurrentSubscriptionStart(player);
   if (subscriptionStart) {
     match.$or = [
@@ -246,35 +247,59 @@ const getCurrentSubscriptionPaymentMatch = (player) => {
 
 const getPayments = async (req, res, next) => {
   try {
-    const filter = {};
+    const filter = { isDeleted: { $ne: true } };
     if (req.parentScope) filter.$and = [{ playerId: { $in: req.parentScope.playerIds } }];
     if (req.query.playerId && validateObjectId(req.query.playerId)) {
       filter.playerId = req.query.playerId;
     }
     if (req.query.day) {
-      const start = new Date(`${req.query.day}T00:00:00.000`);
-      const end = new Date(`${req.query.day}T23:59:59.999`);
-      if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
-        filter.paymentDate = { $gte: start, $lte: end };
+      const key = String(req.query.day);
+      const date = dateKeyToUtc(key);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(key) || Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== key) {
+        return res.status(400).json({ message: 'Invalid payment day.' });
       }
-    } else if (req.query.month && /^\d{4}-\d{2}$/.test(String(req.query.month))) {
+      const { start, end } = getAppDayRangeUtc(key);
+      filter.paymentDate = { $gte: start, $lt: end };
+    } else if (req.query.month) {
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(req.query.month))) {
+        return res.status(400).json({ message: 'Invalid payment month.' });
+      }
       const [year, month] = String(req.query.month).split('-').map(Number);
-      const start = new Date(year, month - 1, 1);
-      const end = new Date(year, month, 0, 23, 59, 59, 999);
-      filter.paymentDate = { $gte: start, $lte: end };
+      const next = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10);
+      filter.paymentDate = { $gte: getAppDayStartUtc(`${req.query.month}-01`), $lt: getAppDayStartUtc(next) };
+    }
+    const search = String(req.query.search || '').trim().slice(0, 120);
+    if (search) {
+      const pattern = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      const parents = await Parent.find({ name: pattern }).select('_id').lean();
+      const players = await Player.find({ $or: [{ fullName: pattern }, { parentId: { $in: parents.map((row) => row._id) } }] }).select('_id').lean();
+      const fields = ['playerNameSnapshot', 'parentNameSnapshot', 'parentPhoneSnapshot', 'transactionType', 'paymentMethod', 'packageNameSnapshot', 'receiptImage'];
+      const alternatives = fields.map((key) => ({ [key]: pattern }));
+      alternatives.push({ playerId: { $in: players.map((row) => row._id) } });
+      if (Number.isFinite(Number(search))) alternatives.push({ paidAmount: Number(search) });
+      filter.$and = [...(filter.$and || []), { $or: alternatives }];
     }
     const { limit, page, skip } = getPaginationOptions(req.query);
     const query = populatePaymentQuery(Payment.find(filter).sort({ paymentDate: -1, _id: -1 }));
     if (limit) query.skip(skip).limit(limit);
-    const [payments, total] = await Promise.all([
+    const [payments, summaryRows] = await Promise.all([
       query,
-      limit ? Payment.countDocuments(filter) : Promise.resolve(null)
+      limit ? Payment.find(filter).select('playerId paidAmount transactionType').lean() : Promise.resolve(null)
     ]);
     const items = await formatPaymentsWithAttendanceCounts(payments);
     if (limit) {
+      const balancePlayers = await Player.find({ _id: { $in: summaryRows
+        .filter((row) => isSubscriptionPaymentType(row.transactionType))
+        .map((row) => row.playerId).filter(Boolean) } })
+        .select('previousDueBalance dueAdjustment attendanceDueManual').lean();
+      const total = summaryRows.length;
       return res.json({
         items,
         total,
+        totals: {
+          paid: summaryRows.reduce((sum, row) => sum + Number(row.paidAmount || 0), 0),
+          remaining: balancePlayers.reduce((sum, row) => sum + getRemainingAmount(row), 0)
+        },
         page,
         limit,
         hasMore: skip + payments.length < total
@@ -396,7 +421,7 @@ const updatePayment = async (req, res, next) => {
       return res.status(400).json({ message: 'Invalid payment ID.' });
     }
     const payload = sanitizeObject(req.body);
-    const payment = await Payment.findById(id);
+    const payment = await Payment.findOne({ _id: id, isDeleted: { $ne: true } });
     if (!payment) {
       return res.status(404).json({ message: 'Payment not found.' });
     }
@@ -452,13 +477,16 @@ const deletePayment = async (req, res, next) => {
     if (!validateObjectId(id)) {
       return res.status(400).json({ message: 'Invalid payment ID.' });
     }
-    const payment = await Payment.findById(id);
+    const payment = await Payment.findOne({ _id: id, isDeleted: { $ne: true } });
     if (!payment) {
       return res.status(404).json({ message: 'Payment not found.' });
     }
     const paymentForHistory = await loadPaymentForHistory(id);
     const beforeSnapshot = snapshotPaymentDocument(paymentForHistory);
-    await payment.deleteOne();
+    payment.isDeleted = true;
+    payment.deletedAt = new Date();
+    payment.deletedBy = req.user._id;
+    await payment.save();
     await createHistoryEntry({
       entityType: 'payment',
       entityId: payment._id,
@@ -480,7 +508,7 @@ const getPaymentsByPlayer = async (req, res, next) => {
     if (!validateObjectId(playerId)) {
       return res.status(400).json({ message: 'Invalid player ID.' });
     }
-    const payments = await populatePaymentQuery(Payment.find({ playerId }).sort({ paymentDate: -1, _id: -1 }));
+    const payments = await populatePaymentQuery(Payment.find({ playerId, isDeleted: { $ne: true } }).sort({ paymentDate: -1, _id: -1 }));
     res.json(await formatPaymentsWithAttendanceCounts(payments));
   } catch (error) {
     next(error);
