@@ -262,6 +262,39 @@ test('reports include unlinked subscriptions and count a manual balance only onc
   assert.equal(revenue.totalRemaining, 50);
 });
 
+test('freeze notes survive status changes and owner summary returns current payment and attendance in one response', async () => {
+  const player = await newPlayer({ payment: 100, startDate: new Date(), currentSubscriptionStartedAt: new Date() });
+  await call(`/players/${player._id}`, {
+    method: 'PUT',
+    body: { status: 'frozen', note: 'Normal note', freezeNote: 'Medical freeze', showInAttendanceWhenFrozen: true }
+  });
+  const active = await call(`/players/${player._id}`, { method: 'PUT', body: { status: 'active' } });
+  assert.equal(active.note, 'Normal note');
+  assert.equal(active.freezeNote, 'Medical freeze');
+
+  await Payment.create({
+    playerId: player._id,
+    transactionType: 'Full payment',
+    paidAmount: 100,
+    paymentDate: new Date()
+  });
+  await Attendance.create({
+    playerId: player._id,
+    groupId: group._id,
+    date: dateKeyToUtc(getAppDateKey()),
+    status: 'present',
+    markedBy: admin._id
+  });
+
+  const summary = await call('/reports/owner-summary');
+  const summaryPlayer = summary.players.find((item) => item._id === String(player._id));
+  const summaryGroup = summary.board.find((item) => item._id === String(group._id));
+  assert.equal(summaryPlayer.currentSubscriptionPaidAmount, 100);
+  assert.equal(summaryGroup.presentCount, 1);
+  assert.equal(summaryGroup.players[0].todayAttendance.status, 'present');
+  await call('/reports/owner-summary', { auth: parentToken, status: 403 });
+});
+
 test('program and package changes persist without rewriting existing player packages', async () => {
   const player = await newPlayer();
   const program = await call('/programs', { method: 'POST', body: { name: 'Audit program', price: 100 }, status: 201 });

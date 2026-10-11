@@ -350,7 +350,6 @@ const AttendancePage = () => {
   const [openSubscriptionHistoryKey, setOpenSubscriptionHistoryKey] = useState('');
   const [previewProfileImage, setPreviewProfileImage] = useState('');
   const [showSelectedPlayerAttendanceHistory, setShowSelectedPlayerAttendanceHistory] = useState(false);
-  const [showFreezeNoteDetails, setShowFreezeNoteDetails] = useState(false);
   const [editingAttendanceHistoryId, setEditingAttendanceHistoryId] = useState(null);
   const [pendingAttendanceHistoryId, setPendingAttendanceHistoryId] = useState(null);
   const [dueAdjustmentForm, setDueAdjustmentForm] = useState('');
@@ -1657,7 +1656,6 @@ const AttendancePage = () => {
       setSelectedPlayerSubscriptionHistory([]);
       setOpenSubscriptionHistoryKey('');
       setShowSelectedPlayerAttendanceHistory(false);
-      setShowFreezeNoteDetails(false);
       setDueAdjustmentForm('');
       setEditingAttendanceHistoryId(null);
       setIsEditingSelectedPlayer(false);
@@ -2721,7 +2719,7 @@ const AttendancePage = () => {
       packageClasses: parseLocalizedNumber(selectedPlayerForm.packageClasses),
       packageHours: parseLocalizedNumber(selectedPlayerForm.packageHours),
       payment: parseLocalizedNumber(selectedPlayerForm.payment),
-      freezeNote: selectedPlayerForm.status === 'frozen' ? selectedPlayerForm.freezeNote : '',
+      freezeNote: selectedPlayerForm.freezeNote,
       showInAttendanceWhenFrozen
     };
     // A compact board has no image yet; only an explicit image edit may replace it.
@@ -2740,7 +2738,7 @@ const AttendancePage = () => {
       groupIds: selectedGroupRefs,
       note: selectedPlayerForm.note,
       makeupClassesNote: selectedPlayerForm.makeupClassesNote,
-      freezeNote: selectedPlayerForm.status === 'frozen' ? selectedPlayerForm.freezeNote : ''
+      freezeNote: selectedPlayerForm.freezeNote
     };
     let savedPlayer = null;
 
@@ -3412,6 +3410,12 @@ const AttendancePage = () => {
                       <span>{t('note')}</span>
                       <textarea name="note" value={selectedPlayerForm.note} onChange={handleSelectedPlayerFormChange} placeholder={t('discountNotePlaceholder')} />
                     </label>
+                    {(selectedPlayerForm.status === 'frozen' || selectedPlayerForm.freezeNote) && (
+                      <label className="student-modal-edit-grid-full">
+                        <span>Freeze</span>
+                        <textarea name="freezeNote" value={selectedPlayerForm.freezeNote} onChange={handleSelectedPlayerFormChange} />
+                      </label>
+                    )}
                   </div>
 
                   <div className="student-modal-edit-groups">
@@ -3463,23 +3467,22 @@ const AttendancePage = () => {
                     <div>
                       <span>{t('status')}</span>
                       <strong>{selectedPlayer.status || t('notSet')}</strong>
-                      {selectedPlayer.status === 'frozen' && selectedPlayer.freezeNote && (
-                        <button type="button" className="freeze-note-toggle" onClick={() => setShowFreezeNoteDetails((current) => !current)}>
-                          {showFreezeNoteDetails ? 'Hide freeze note' : 'Show freeze note'} ▾
-                        </button>
-                      )}
                     </div>
                     <div><span>{t('makeupClasses')}</span><strong>{decodeDisplayText(selectedPlayer.makeupClassesNote) || t('notSet')}</strong></div>
+                    <div className="student-info-grid-full">
+                      <span>{t('note')}</span>
+                      <strong>{decodeDisplayText(selectedPlayer.note) || t('notSet')}</strong>
+                    </div>
+                    {selectedPlayer.freezeNote && (
+                      <div className="student-info-grid-full freeze-note-panel">
+                        <span>Freeze</span>
+                        <strong>{decodeDisplayText(selectedPlayer.freezeNote)}</strong>
+                      </div>
+                    )}
                     <div className="student-info-date-row">
                       <div><span>{t('startDate')}</span><strong>{formatDate(selectedPlayer.startDate)}</strong></div>
                       <div><span>{t('endDate')}</span><strong>{formatDate(selectedPlayer.endDate)}</strong></div>
                     </div>
-                    {selectedPlayer.status === 'frozen' && selectedPlayer.freezeNote && showFreezeNoteDetails && (
-                      <div className="student-info-grid-full freeze-note-panel">
-                        <span>Freeze note</span>
-                        <strong>{decodeDisplayText(selectedPlayer.freezeNote)}</strong>
-                      </div>
-                    )}
                     <div><span>{t('package')}</span><strong>{selectedPlayer.packageName ? (selectedPlayer.packageName === 'custom' ? t('customPackage') : selectedPlayer.packageName) : t('notSet')}</strong></div>
                     <div><span>{t('payment')}</span><strong>{selectedPlayer.payment ?? 0}</strong></div>
                     <div><span>{t('classes')}</span><strong>{selectedPlayer.packageClasses ?? 0}</strong></div>
@@ -3533,9 +3536,6 @@ const AttendancePage = () => {
                         <button type="button" className="btn-secondary" onClick={() => handleAttendanceAlertToggle(true)} disabled={Boolean(pendingSelectedPlayerMutation)}>Enable alert dot</button>
                       )}
                     </div>
-                    {selectedPlayer.note && (
-                      <div className="student-info-grid-full"><span>{t('note')}</span><strong>{decodeDisplayText(selectedPlayer.note)}</strong></div>
-                    )}
                   </div>
                   <div className="student-modal-history-panel">
                     <div className="subscription-history-toolbar">

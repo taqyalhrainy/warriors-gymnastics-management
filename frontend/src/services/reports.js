@@ -22,6 +22,13 @@ export const fetchAttendanceReport = async () => {
   }, { ttlMs: 60 * 1000 });
 };
 
+export const fetchOwnerSummary = async (options = {}) => {
+  return fetchCached('reports:owner-summary', async () => {
+    const response = await api.get('/reports/owner-summary');
+    return response.data;
+  }, { ttlMs: 60 * 1000, force: Boolean(options.force) });
+};
+
 export const downloadPlayersBackup = async () => {
   const response = await api.get('/reports/players-backup', { responseType: 'blob' });
   const disposition = response.headers['content-disposition'] || '';

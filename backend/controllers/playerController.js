@@ -279,7 +279,7 @@ const createPlayer = async (req, res, next) => {
   try {
     const data = cleanPlayerPayload(sanitizeObject(req.body));
     const groupIds = normalizeGroupIds(data);
-    const { fullName, dateOfBirth, parentId, parentPhone, programId, coachId, level, skillLevels, startDate, endDate, packageName, packageClasses, packageHours, payment, previousDueBalance, dueAdjustment, attendanceDueManual, subscriptionNeedsAttention, note, makeupClassesNote, profileImage, status = 'active' } = data;
+    const { fullName, dateOfBirth, parentId, parentPhone, programId, coachId, level, skillLevels, startDate, endDate, packageName, packageClasses, packageHours, payment, previousDueBalance, dueAdjustment, attendanceDueManual, subscriptionNeedsAttention, note, makeupClassesNote, freezeNote, showInAttendanceWhenFrozen, profileImage, status = 'active' } = data;
     if (!fullName || !parentId) {
       return res.status(400).json({ message: 'Required player fields are missing.' });
     }
@@ -323,6 +323,8 @@ const createPlayer = async (req, res, next) => {
       subscriptionNeedsAttention: Boolean(subscriptionNeedsAttention),
       note: note || '',
       makeupClassesNote: makeupClassesNote || '',
+      freezeNote: freezeNote || '',
+      showInAttendanceWhenFrozen: showInAttendanceWhenFrozen !== false,
       status,
       profileImage: profileImage || ''
     };
@@ -451,7 +453,6 @@ const updatePlayer = async (req, res, next) => {
     }
     if (updates.status && updates.status !== 'frozen') {
       updates.showInAttendanceWhenFrozen = true;
-      updates.freezeNote = '';
     }
     if (startsNewSubscription) {
       updates.currentSubscriptionStartedAt = getDateAtStartOfDay(updates.startDate) || new Date();

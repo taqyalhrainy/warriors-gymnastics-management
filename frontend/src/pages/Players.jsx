@@ -44,6 +44,20 @@ const initialMovePlayerForm = {
   parentSearch: ''
 };
 
+const waitingDraftKey = (form) => JSON.stringify({
+  playerName: form.playerName || '',
+  playerAge: form.playerAge ?? '',
+  parentPhone: form.parentPhone || '',
+  desiredGroupIds: [...(form.desiredGroupIds || [])].map(String).sort(),
+  listType: form.listType || 'waiting',
+  notes: form.notes || ''
+});
+
+const movePlayerDraftKey = (form) => JSON.stringify({
+  ...form,
+  groupIds: [...(form.groupIds || [])].map(String).sort()
+});
+
 const PLAYER_PAGE_SIZE = 20;
 const DEFAULT_PLAYER_PAGE_PARAMS = {
   page: 1,
@@ -66,7 +80,9 @@ const PlayersPage = () => {
   const [packageOptions, setPackageOptions] = useState([]);
   const [waitingList, setWaitingList] = useState([]);
   const [waitingForm, setWaitingForm] = useState(initialWaitingForm);
+  const [waitingFormBaseline, setWaitingFormBaseline] = useState(initialWaitingForm);
   const [movePlayerForm, setMovePlayerForm] = useState(initialMovePlayerForm);
+  const [movePlayerFormBaseline, setMovePlayerFormBaseline] = useState(initialMovePlayerForm);
   const [movingWaitingEntry, setMovingWaitingEntry] = useState(null);
   const [editingWaitingEntryId, setEditingWaitingEntryId] = useState('');
   const [isWaitingFormOpen, setIsWaitingFormOpen] = useState(false);
@@ -76,6 +92,7 @@ const PlayersPage = () => {
   const [waitingMessage, setWaitingMessage] = useState('');
   const [movePlayerMessage, setMovePlayerMessage] = useState('');
   const [isMovingToPlayers, setIsMovingToPlayers] = useState(false);
+  const [pendingWaitingExit, setPendingWaitingExit] = useState('');
   const [waitingView, setWaitingView] = useState('waiting');
   const [waitingDayFilter, setWaitingDayFilter] = useState('all');
   const [waitingAgeFilter, setWaitingAgeFilter] = useState('');
@@ -292,6 +309,7 @@ const PlayersPage = () => {
         setWaitingMessage('Player added to the waiting list.');
       }
       setWaitingForm(initialWaitingForm);
+      setWaitingFormBaseline(initialWaitingForm);
       setEditingWaitingEntryId('');
     } catch (error) {
       setWaitingMessage(error.response?.data?.message || 'Unable to save waiting list entry.');
@@ -299,7 +317,7 @@ const PlayersPage = () => {
   };
 
   const handleWaitingEdit = (entry) => {
-    setWaitingForm({
+    const nextForm = {
       playerName: entry.playerName || '',
       playerAge: entry.playerAge ?? '',
       parentPhone: entry.parentPhone || '',
@@ -308,13 +326,16 @@ const PlayersPage = () => {
         .filter(Boolean),
       listType: entry.listType || 'waiting',
       notes: entry.notes || ''
-    });
+    };
+    setWaitingForm(nextForm);
+    setWaitingFormBaseline(nextForm);
     setEditingWaitingEntryId(entry._id);
     setWaitingMessage('');
   };
 
   const handleWaitingCancelEdit = () => {
     setWaitingForm(initialWaitingForm);
+    setWaitingFormBaseline(initialWaitingForm);
     setEditingWaitingEntryId('');
     setWaitingMessage('');
   };
@@ -326,6 +347,7 @@ const PlayersPage = () => {
       const entry = await updateWaitingListEntry(editingWaitingEntryId, { ...waitingForm, listType });
       setWaitingList((current) => current.map((item) => (item._id === entry._id ? entry : item)));
       setWaitingForm(initialWaitingForm);
+      setWaitingFormBaseline(initialWaitingForm);
       setEditingWaitingEntryId('');
       setWaitingMessage(listType === 'data' ? 'Moved to Data list.' : 'Moved to Waiting list.');
     } catch (error) {
@@ -337,24 +359,36 @@ const PlayersPage = () => {
     const groupIds = (entry.desiredGroupIds?.length ? entry.desiredGroupIds : [entry.desiredGroupId].filter(Boolean))
       .map((group) => group?._id || group)
       .filter(Boolean);
-    setMovingWaitingEntry(entry);
-    setMovePlayerForm({
+    const nextForm = {
       ...initialMovePlayerForm,
       fullName: entry.playerName || '',
       parentPhone: entry.parentPhone || '',
       groupIds,
       note: entry.notes || ''
-    });
+    };
+    setMovingWaitingEntry(entry);
+    setMovePlayerForm(nextForm);
+    setMovePlayerFormBaseline(nextForm);
     setMovePlayerMessage('');
     setIsMoveGroupPickerOpen(false);
   };
 
-  const closeMoveToPlayers = (force = false) => {
-    if (isMovingToPlayers && !force) return;
+  const closeMoveToPlayers = () => {
     setMovingWaitingEntry(null);
     setMovePlayerForm(initialMovePlayerForm);
+    setMovePlayerFormBaseline(initialMovePlayerForm);
     setMovePlayerMessage('');
     setIsMoveGroupPickerOpen(false);
+    setPendingWaitingExit('');
+  };
+
+  const requestCloseMoveToPlayers = () => {
+    if (isMovingToPlayers) return;
+    if (movePlayerDraftKey(movePlayerForm) !== movePlayerDraftKey(movePlayerFormBaseline)) {
+      setPendingWaitingExit('move');
+      return;
+    }
+    closeMoveToPlayers();
   };
 
   const findParentByPhone = (phone) => {
@@ -365,7 +399,11 @@ const PlayersPage = () => {
 
   const handleMoveToPlayersSubmit = async (event) => {
     event.preventDefault();
-    if (!movingWaitingEntry || isMovingToPlayers || !canShowEmpty(loadStates.parents)) return;
+    if (!movingWaitingEntry || isMovingToPlayers) return;
+    if (movePlayerForm.parentMode === 'existing' && !canShowEmpty(loadStates.parents)) {
+      setMovePlayerMessage('Wait for the parent list to finish loading, or choose New parent.');
+      return;
+    }
     setMovePlayerMessage('');
 
     if (!movePlayerForm.fullName.trim()) {
@@ -434,7 +472,7 @@ const PlayersPage = () => {
       setPlayers((current) => [player, ...current.filter((item) => item._id !== player._id)]);
       setWaitingList((current) => current.filter((entry) => entry._id !== movingWaitingEntry._id));
       setWaitingMessage('Moved to Players.');
-      closeMoveToPlayers(true);
+      closeMoveToPlayers();
     } catch (error) {
       setMovePlayerMessage(error.response?.data?.message || 'Unable to move this entry to Players.');
     } finally {
@@ -447,6 +485,15 @@ const PlayersPage = () => {
     setIsWaitingExpanded(false);
     setIsWaitingGroupPickerOpen(false);
     handleWaitingCancelEdit();
+    setPendingWaitingExit('');
+  };
+
+  const requestCloseWaitingListModal = () => {
+    if (waitingDraftKey(waitingForm) !== waitingDraftKey(waitingFormBaseline)) {
+      setPendingWaitingExit('list');
+      return;
+    }
+    closeWaitingListModal();
   };
 
   const handleWaitingDelete = async (id) => {
@@ -514,7 +561,10 @@ const PlayersPage = () => {
                 </button>
               ))}
             </div>
-            <button className="waiting-list-button" type="button" onClick={() => setIsWaitingFormOpen(true)}>
+            <button className="waiting-list-button" type="button" onClick={() => {
+              setWaitingFormBaseline(waitingForm);
+              setIsWaitingFormOpen(true);
+            }}>
               <span>Waiting List</span>
             </button>
             <Link className="btn-primary" to="/players/new">{t('addPlayer')}</Link>
@@ -598,7 +648,7 @@ const PlayersPage = () => {
           )}
         </div>
         {isWaitingFormOpen && (
-          <div className="student-modal-backdrop" role="presentation" onClick={closeWaitingListModal}>
+          <div className="student-modal-backdrop" role="presentation" onClick={requestCloseWaitingListModal}>
             <section className={`student-modal waiting-list-modal${isWaitingExpanded ? ' is-expanded' : ''}`} role="dialog" aria-modal="true" aria-label="Waiting List" onClick={(event) => event.stopPropagation()}>
               <div className="student-modal-header">
                 <div className="waiting-list-heading">
@@ -612,7 +662,7 @@ const PlayersPage = () => {
                   <button type="button" className="waiting-icon-button" onClick={() => setIsWaitingExpanded((current) => !current)}>
                     {isWaitingExpanded ? 'Exit full screen' : 'Full screen'}
                   </button>
-                  <button type="button" className="waiting-icon-button is-close" onClick={closeWaitingListModal}>{t('close')}</button>
+                  <button type="button" className="waiting-icon-button is-close" onClick={requestCloseWaitingListModal}>{t('close')}</button>
                 </div>
               </div>
 
@@ -745,19 +795,17 @@ const PlayersPage = () => {
           </div>
         )}
         {movingWaitingEntry && (
-          <div className="student-modal-backdrop" role="presentation" onClick={closeMoveToPlayers}>
+          <div className="student-modal-backdrop" role="presentation" onClick={requestCloseMoveToPlayers}>
             <section className="student-modal waiting-list-modal" role="dialog" aria-modal="true" aria-label="Move to Players" onClick={(event) => event.stopPropagation()}>
               <div className="student-modal-header">
                 <div>
                   <h2>Move to Players</h2>
                   <p>Complete the required player details before adding this entry to attendance.</p>
                 </div>
-                <button type="button" className="waiting-icon-button is-close" onClick={closeMoveToPlayers}>{t('close')}</button>
+                <button type="button" className="waiting-icon-button is-close" onClick={requestCloseMoveToPlayers}>{t('close')}</button>
               </div>
 
-              {movePlayerMessage && <p className="alert-error">{movePlayerMessage}</p>}
-
-              <form className="move-player-form" onSubmit={handleMoveToPlayersSubmit}>
+              <form className="move-player-form" onSubmit={handleMoveToPlayersSubmit} noValidate>
                 <div className="move-player-panel is-primary">
                   <div className="move-player-panel-title">
                     <span>01</span>
@@ -958,12 +1006,33 @@ const PlayersPage = () => {
                 <div className="move-player-actions">
                   <DataStatus state={loadStates.parents} retry={() => loadSection('parents', fetchParents, setParents)} />
                   <DataStatus state={loadStates.packages} retry={() => loadSection('packages', fetchPackageOptions, setPackageOptions)} />
-                  <button className="btn-primary" type="submit" disabled={isMovingToPlayers || !canShowEmpty(loadStates.parents)}>
+                  {movePlayerMessage && <p className="alert-error">{movePlayerMessage}</p>}
+                  <button className="btn-primary" type="submit" disabled={isMovingToPlayers || (movePlayerForm.parentMode === 'existing' && !canShowEmpty(loadStates.parents))}>
                     {isMovingToPlayers ? 'Moving...' : 'Add to Players'}
                   </button>
-                  <button className="btn-secondary" type="button" onClick={closeMoveToPlayers} disabled={isMovingToPlayers}>Cancel</button>
+                  <button className="btn-secondary" type="button" onClick={requestCloseMoveToPlayers} disabled={isMovingToPlayers}>Cancel</button>
                 </div>
               </form>
+            </section>
+          </div>
+        )}
+        {pendingWaitingExit && (
+          <div className="student-modal-backdrop unsaved-exit-backdrop" role="presentation" onClick={() => setPendingWaitingExit('')}>
+            <section className="unsaved-exit-dialog" role="dialog" aria-modal="true" aria-label="Unsaved changes" onClick={(event) => event.stopPropagation()}>
+              <div>
+                <h2>Edit in progress</h2>
+                <p>You have unsaved changes. Keep editing or exit without saving.</p>
+              </div>
+              <div className="unsaved-exit-actions">
+                <button type="button" className="btn-secondary" onClick={() => setPendingWaitingExit('')}>Keep editing</button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => (pendingWaitingExit === 'move' ? closeMoveToPlayers() : closeWaitingListModal())}
+                >
+                  Exit without saving
+                </button>
+              </div>
             </section>
           </div>
         )}

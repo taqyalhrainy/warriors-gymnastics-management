@@ -31,6 +31,7 @@ const PlayerFormPage = () => {
     payment: '',
     note: '',
     makeupClassesNote: '',
+    freezeNote: '',
     status: 'active'
   });
   const [parents, setParents] = useState([]);
@@ -85,6 +86,7 @@ const PlayerFormPage = () => {
           payment: data.payment ?? '',
           note: data.note || '',
           makeupClassesNote: data.makeupClassesNote || '',
+          freezeNote: data.freezeNote || '',
           status: data.status || 'active'
         });
       });
@@ -299,6 +301,13 @@ const PlayerFormPage = () => {
 
             <label>{t('note')}</label>
             <textarea name="note" value={player.note} onChange={handleChange} placeholder={t('discountNotePlaceholder')} />
+
+            {(player.status === 'frozen' || player.freezeNote) && (
+              <>
+                <label>Freeze</label>
+                <textarea name="freezeNote" value={player.freezeNote} onChange={handleChange} />
+              </>
+            )}
 
             <label>{t('makeupClasses')}</label>
             <textarea name="makeupClassesNote" value={player.makeupClassesNote} onChange={handleChange} />

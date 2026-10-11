@@ -2,10 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { getRemainingAmount } from '../utils/manualRemaining.js';
 import DataStatus from '../components/DataStatus.jsx';
 import { useSectionLoader, canShowEmpty } from '../hooks/useSectionLoader.js';
-import { fetchTodayAttendance } from '../services/attendance.js';
-import { fetchAttendanceBoard } from '../services/groups.js';
-import { fetchPayments } from '../services/payments.js';
-import { fetchPlayers } from '../services/players.js';
+import { fetchOwnerSummary } from '../services/reports.js';
 import { attendanceCycleStart } from '../utils/attendanceRecords.js';
 
 const NEW_SUBSCRIPTION_ALERT_READ_KEY = 'warriors-new-subscription-alert-read-ids';
@@ -38,9 +35,6 @@ const getSortableDateTime = (...dates) => {
   return 0;
 };
 
-const getEntityId = (value) => String(value?._id || value || '');
-const getAttendanceRecordKey = (playerId, groupId) => `${getEntityId(playerId)}:${getEntityId(groupId)}`;
-
 const getPlayerGroups = (player) => {
   const groups = player?.groupIds?.length ? player.groupIds : [player?.groupId].filter(Boolean);
   return groups.map((group) => group?.name).filter(Boolean).join(', ');
@@ -56,7 +50,6 @@ const getPackageName = (player) => {
 
 const getParentName = (player) => player?.parentId?.name || player?.parentName || '-';
 const getParentPhone = (player) => player?.parentId?.phone || player?.parentPhone || '-';
-const isPlayerVisibleInAttendance = (player) => !player?.isDeleted && player?.status !== 'left';
 const formatGroupTime = (group) => [group.startTime, group.endTime].filter(Boolean).join(' - ');
 
 const readNewSubscriptionAlertIds = () => {
@@ -80,7 +73,6 @@ const getNewSubscriptionAlertKey = (row) => {
 const OwnerDashboard = () => {
   const { states: loadStates, load: loadSection } = useSectionLoader(['players', 'payments', 'board']);
   const [players, setPlayers] = useState([]);
-  const [payments, setPayments] = useState([]);
   const [groupColumns, setGroupColumns] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState(getPaymentMonthKey(new Date()));
   const [selectedSummaryGroup, setSelectedSummaryGroup] = useState(null);
@@ -100,36 +92,11 @@ const OwnerDashboard = () => {
     setError('');
 
     try {
-      const playersRequest = loadSection('players', () => fetchPlayers({ fresh: Date.now(), ownerSummary: true }), setPlayers);
-      const paymentsRequest = loadSection('payments', () => fetchPayments({ fresh: Date.now() }), setPayments);
-      const boardRequest = loadSection('board', () => Promise.all([
-        fetchAttendanceBoard({ force: true }),
-        fetchTodayAttendance({ date: today }, { force: true })
-      ]), ([groups, todayRecords]) => {
-      const recordsByPlayerAndGroupId = new Map();
-      todayRecords.forEach((record) => {
-        recordsByPlayerAndGroupId.set(getAttendanceRecordKey(record.playerId, record.groupId), record);
-      });
-      const groupsWithPlayers = groups.map((group) => {
-        const groupPlayers = group.players
-          .filter(isPlayerVisibleInAttendance)
-          .map((player) => ({
-            ...player,
-            todayAttendance: recordsByPlayerAndGroupId.get(getAttendanceRecordKey(player._id, group._id)) || null
-          }));
-
-        return {
-          ...group,
-          players: groupPlayers,
-          markedCount: groupPlayers.filter((player) => Boolean(player.todayAttendance)).length,
-          presentCount: groupPlayers.filter((player) => player.todayAttendance?.status === 'present').length,
-          color: group.color || '#c83fcb'
-        };
-      });
-
-      if (requestId === dashboardLoadRequestIdRef.current) {
-        setGroupColumns(groupsWithPlayers);
-      }
+      const summaryRequest = fetchOwnerSummary({ force: true });
+      const playersRequest = loadSection('players', () => summaryRequest, (summary) => setPlayers(summary.players || []));
+      const paymentsRequest = loadSection('payments', () => summaryRequest, () => {});
+      const boardRequest = loadSection('board', () => summaryRequest, (summary) => {
+        if (requestId === dashboardLoadRequestIdRef.current) setGroupColumns(summary.board || []);
       });
       await Promise.all([playersRequest, paymentsRequest, boardRequest]);
     } catch (err) {
@@ -161,16 +128,8 @@ const OwnerDashboard = () => {
       .filter((player) => getPaymentMonthKey(getPlayerSubscriptionDate(player)) === selectedMonth)
       .map((player) => {
         const subscriptionStart = getPlayerSubscriptionDate(player);
-        const subscriptionTime = new Date(subscriptionStart || 0).getTime();
         const expectedAmount = Number(player.payment || 0);
-        const paidAmount = payments
-          .filter((payment) => String(payment.playerId?._id || payment.playerId) === String(player._id))
-          .filter((payment) => {
-            if (!subscriptionStart) return true;
-            const paymentTime = new Date(payment.createdAt || payment.paymentDate || 0).getTime();
-            return !Number.isNaN(paymentTime) && !Number.isNaN(subscriptionTime) && paymentTime >= subscriptionTime;
-          })
-          .reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
+        const paidAmount = Number(player.currentSubscriptionPaidAmount || 0);
 
         return {
           player,
@@ -185,7 +144,7 @@ const OwnerDashboard = () => {
         const firstTime = getSortableDateTime(first.subscriptionStart, first.player.createdAt);
         return secondTime - firstTime || first.player.fullName.localeCompare(second.player.fullName);
       });
-  }, [players, payments, selectedMonth]);
+  }, [players, selectedMonth]);
 
   const newSubscriptionSummary = useMemo(() => {
     return newSubscriptionRows.reduce((summary, row) => ({
