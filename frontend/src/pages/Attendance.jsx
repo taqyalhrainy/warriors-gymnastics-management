@@ -1135,7 +1135,7 @@ const AttendancePage = () => {
     }, 450);
   };
 
-  const setPlayerAttendanceInBoard = (playerId, targetGroupId, attendance) => {
+  const setPlayerAttendanceInBoard = (playerId, targetGroupId, attendance, attendanceUsage = null) => {
     attendanceBoardRevisionRef.current += 1;
     setGroupColumns((currentGroups) => {
       const currentPlayerRecords = currentGroups
@@ -1144,21 +1144,11 @@ const AttendancePage = () => {
           .map((player) => ({ player, groupId: getEntityId(group._id) })));
       const targetPlayerRecord = currentPlayerRecords
         .find((item) => item.groupId === getEntityId(targetGroupId))?.player || null;
-      const previousTargetAttendance = targetPlayerRecord?.todayAttendance || null;
-      const countsInCycle = (record, player) => record?.status === 'present'
-        && isAttendanceInCycle(record, player, attendanceCycleStart(player));
-      const hadPresentAttendance = currentPlayerRecords.some((item) => countsInCycle(item.player.todayAttendance, item.player));
-      const willHavePresentAttendance = currentPlayerRecords.some((item) => (
-        item.groupId === getEntityId(targetGroupId)
-          ? countsInCycle(attendance, item.player)
-          : countsInCycle(item.player.todayAttendance, item.player)
-      ));
-      const canSafelyAdjustCount = Boolean(previousTargetAttendance);
-      const presentDelta = canSafelyAdjustCount
-        ? Number(willHavePresentAttendance) - Number(hadPresentAttendance)
-        : 0;
       const basePresentCount = Number((targetPlayerRecord || currentPlayerRecords[0]?.player)?.attendancePresentCount || 0);
-      const nextPresentCount = Math.max(0, basePresentCount + presentDelta);
+      const authoritativePresentCount = Number(attendanceUsage?.attendancePresentCount);
+      const nextPresentCount = Number.isFinite(authoritativePresentCount)
+        ? Math.max(0, authoritativePresentCount)
+        : basePresentCount;
 
       const nextGroups = currentGroups.map((group) => {
         let changed = false;
@@ -1172,12 +1162,16 @@ const AttendancePage = () => {
           const nextAttendance = targetGroupId && isTargetGroup ? attendance : player.todayAttendance;
           const clearedAttendance = !attendance && (!targetGroupId || isTargetGroup) ? null : nextAttendance;
           const nextPlayerPresentCount = nextPresentCount;
+          const authoritativeUsedSessions = Number(attendanceUsage?.usedSessions);
+          const authoritativeRemainingSessions = Number(attendanceUsage?.remainingSessions);
           const subscription = player.subscriptionId && typeof player.subscriptionId === 'object'
             ? {
               ...player.subscriptionId,
-              usedSessions: Math.max(0, Number(player.subscriptionId.usedSessions || 0) + presentDelta),
-              remainingSessions: typeof player.subscriptionId.remainingSessions !== 'undefined'
-                ? Math.max(0, Number(player.subscriptionId.remainingSessions || 0) - presentDelta)
+              usedSessions: Number.isFinite(authoritativeUsedSessions)
+                ? authoritativeUsedSessions
+                : player.subscriptionId.usedSessions,
+              remainingSessions: Number.isFinite(authoritativeRemainingSessions)
+                ? authoritativeRemainingSessions
                 : player.subscriptionId.remainingSessions
             }
             : player.subscriptionId;
@@ -1554,7 +1548,7 @@ const AttendancePage = () => {
         return;
       }
       setLocalAttendanceOverride(selectedAttendanceDate, player._id, groupId, savedAttendance);
-      setPlayerAttendanceInBoard(player._id, groupId, savedAttendance);
+      setPlayerAttendanceInBoard(player._id, groupId, savedAttendance, savedAttendance);
       if (selectedPlayer?._id === player._id) {
         setSelectedPlayer((currentPlayer) => currentPlayer ? {
           ...currentPlayer,
@@ -1617,10 +1611,11 @@ const AttendancePage = () => {
 
     try {
       const attendanceGroupId = getEntityId(previousAttendance?.groupId) || groupId;
-      await cancelTodayAttendance({ playerId: player._id, groupId: attendanceGroupId, date: selectedAttendanceDate });
+      const cancellation = await cancelTodayAttendance({ playerId: player._id, groupId: attendanceGroupId, date: selectedAttendanceDate });
       if (latestAttendanceActionRef.current.get(playerDateKey) !== actionSequence) {
         return;
       }
+      setPlayerAttendanceInBoard(player._id, groupId, null, cancellation);
       await refreshPlayerAttendanceCount(player._id, attendanceGroupId);
       setMessage('Attendance cancelled');
     } catch (err) {

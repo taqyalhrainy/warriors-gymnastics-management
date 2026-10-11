@@ -196,6 +196,57 @@ test('repeated simultaneous attendance marks save one class and one parent notif
   assert.equal(await Attendance.countDocuments({ playerId: player._id }), 0);
 });
 
+test('attendance writes return the authoritative package count and parent attendance exposes payment state', async () => {
+  const todayKey = getAppDateKey();
+  const cycleStart = dateKeyToUtc(todayKey);
+  cycleStart.setUTCDate(cycleStart.getUTCDate() - 7);
+  const player = await newPlayer({
+    payment: 100,
+    startDate: cycleStart,
+    currentSubscriptionStartedAt: cycleStart
+  });
+  const subscription = await Subscription.create({
+    playerId: player._id,
+    type: 'sessions',
+    totalSessions: 8,
+    usedSessions: 3,
+    remainingSessions: 5,
+    startDate: cycleStart,
+    endDate: '2027-12-31'
+  });
+  player.subscriptionId = subscription._id;
+  await player.save();
+
+  for (const offset of [3, 2, 1]) {
+    const date = dateKeyToUtc(todayKey);
+    date.setUTCDate(date.getUTCDate() - offset);
+    await Attendance.create({ playerId: player._id, groupId: group._id, date, status: 'present', markedBy: admin._id });
+  }
+
+  const body = { playerId: String(player._id), groupId: String(group._id), status: 'present', date: todayKey };
+  const first = await call('/attendance/today', { method: 'PUT', body });
+  assert.equal(first.attendancePresentCount, 4);
+  assert.equal(first.usedSessions, 4);
+  assert.equal(first.remainingSessions, 4);
+
+  const repeated = await call('/attendance/today', { method: 'PUT', body });
+  assert.equal(repeated.attendancePresentCount, 4);
+  assert.equal((await Subscription.findById(subscription._id)).usedSessions, 4);
+
+  let parentAttendance = await call('/parents/me/attendance', { auth: parentToken });
+  assert.equal(parentAttendance.children[0].currentSubscriptionPaidAmount, 0);
+  await Payment.create({
+    playerId: player._id,
+    transactionType: 'Full payment',
+    paidAmount: 100,
+    totalAmount: 100,
+    remainingAmount: 0,
+    paymentDate: new Date()
+  });
+  parentAttendance = await call('/parents/me/attendance', { auth: parentToken });
+  assert.equal(parentAttendance.children[0].currentSubscriptionPaidAmount, 100);
+});
+
 test('reports include unlinked subscriptions and count a manual balance only once', async () => {
   const player = await newPlayer({ payment: 100, previousDueBalance: 50, attendanceDueManual: true });
   await newPlayer({ fullName: 'Expired player', endDate: '2026-01-01' });

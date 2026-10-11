@@ -562,18 +562,22 @@ const getParentAttendance = async (req, res, next) => {
       .select('_id fullName dateOfBirth profileImage status startDate endDate packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual currentSubscriptionStartedAt currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId')
       .populate('subscriptionId', 'totalSessions usedSessions remainingSessions startDate endDate status price');
     const childIds = children.map((child) => child._id);
-    const attendance = await Attendance.find({ playerId: { $in: childIds } })
-      .select('_id playerId groupId date checkInTime status')
-      .sort({ date: -1, _id: -1 })
-      .populate('playerId', 'fullName')
-      .lean();
+    const [attendance, paymentSummaryMap] = await Promise.all([
+      Attendance.find({ playerId: { $in: childIds } })
+        .select('_id playerId groupId date checkInTime status')
+        .sort({ date: -1, _id: -1 })
+        .populate('playerId', 'fullName')
+        .lean(),
+      getCurrentPaymentSummaryMap(children)
+    ]);
     const countMap = getAttendancePresentCountMapFromRecords(children, attendance);
     const childrenWithCounters = children.map((child) => {
       const childObject = child.toObject({ virtuals: true });
       const childKey = String(child._id);
       return {
         ...childObject,
-        attendancePresentCount: countMap.get(childKey) || 0
+        attendancePresentCount: countMap.get(childKey) || 0,
+        currentSubscriptionPaidAmount: paymentSummaryMap.get(childKey)?.paidAmount || 0
       };
     });
     res.json({ children: childrenWithCounters, attendance });

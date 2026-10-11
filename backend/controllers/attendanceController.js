@@ -36,11 +36,17 @@ const validateAttendanceDateInRange = (dateOnly) => {
 
 const safelyRunAttendanceSideEffect = async (label, callback) => {
   try {
-    await callback();
+    return await callback();
   } catch (error) {
     console.error(`Attendance ${label} failed:`, error);
+    return null;
   }
 };
+
+const formatAttendanceResponse = (attendance, usage) => ({
+  ...attendance.toObject(),
+  ...(usage || {})
+});
 
 const markPresent = async (req, res, next) => {
   try {
@@ -67,7 +73,7 @@ const markPresent = async (req, res, next) => {
       markedBy: req.user._id
     });
     const attendanceTime = today.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Amman' });
-    await Promise.all([
+    const [usage] = await Promise.all([
       safelyRunAttendanceSideEffect('subscription synchronization', () => synchronizeSubscriptionAttendanceUsage(player, today)),
       player.parentId?.userId ? safelyRunAttendanceSideEffect('notification', () => createNotification({
         recipientUserId: player.parentId.userId._id,
@@ -79,7 +85,7 @@ const markPresent = async (req, res, next) => {
       }, { waitForPush: false })) : Promise.resolve(),
       safelyRunAttendanceSideEffect('audit log', () => createAuditLog({ userId: req.user._id, action: 'attendance present', entity: 'Attendance', entityId: attendance._id, req }))
     ]);
-    res.json(attendance);
+    res.json(formatAttendanceResponse(attendance, usage));
   } catch (error) {
     next(error);
   }
@@ -108,11 +114,11 @@ const markAbsent = async (req, res, next) => {
       status: 'absent',
       markedBy: req.user._id
     });
-    await Promise.all([
+    const [usage] = await Promise.all([
       safelyRunAttendanceSideEffect('subscription synchronization', () => synchronizeSubscriptionAttendanceUsage(player, today)),
       safelyRunAttendanceSideEffect('audit log', () => createAuditLog({ userId: req.user._id, action: 'attendance absent', entity: 'Attendance', entityId: attendance._id, req }))
     ]);
-    res.json(attendance);
+    res.json(formatAttendanceResponse(attendance, usage));
   } catch (error) {
     next(error);
   }
@@ -152,7 +158,7 @@ const updateTodayAttendance = async (req, res, next) => {
 
     const shouldNotify = isCurrentDate && status === 'present' && previousStatus !== 'present' && player.parentId?.userId;
     const attendanceTime = today.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Amman' });
-    await Promise.all([
+    const [usage] = await Promise.all([
       safelyRunAttendanceSideEffect('subscription synchronization', () => synchronizeSubscriptionAttendanceUsage(player, today)),
       shouldNotify ? safelyRunAttendanceSideEffect('notification', () => createNotification({
         recipientUserId: player.parentId.userId._id,
@@ -164,7 +170,7 @@ const updateTodayAttendance = async (req, res, next) => {
       }, { waitForPush: false })) : Promise.resolve(),
       safelyRunAttendanceSideEffect('audit log', () => createAuditLog({ userId: req.user._id, action: `attendance ${status}`, entity: 'Attendance', entityId: attendance._id, req }))
     ]);
-    res.json(attendance);
+    res.json(formatAttendanceResponse(attendance, usage));
   } catch (error) {
     next(error);
   }
@@ -194,11 +200,11 @@ const cancelTodayAttendance = async (req, res, next) => {
 
     await attendance.deleteOne();
     const player = await Player.findById(playerId);
-    await Promise.all([
+    const [usage] = await Promise.all([
       safelyRunAttendanceSideEffect('subscription synchronization', () => synchronizeSubscriptionAttendanceUsage(player, today)),
       safelyRunAttendanceSideEffect('audit log', () => createAuditLog({ userId: req.user._id, action: 'attendance cancel', entity: 'Attendance', entityId: attendance._id, req }))
     ]);
-    res.json({ message: 'Attendance cancelled successfully.' });
+    res.json({ message: 'Attendance cancelled successfully.', ...(usage || {}) });
   } catch (error) {
     next(error);
   }

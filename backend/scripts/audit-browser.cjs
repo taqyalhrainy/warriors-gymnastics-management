@@ -49,6 +49,7 @@ async function main() {
     const Coach = require('../models/Coach');
     const Attendance = require('../models/Attendance');
     const Subscription = require('../models/Subscription');
+    const Payment = require('../models/Payment');
     const Notification = require('../models/Notification');
     const { encrypt } = require('../utils/encryption');
     const password = crypto.randomBytes(12).toString('hex');
@@ -73,7 +74,7 @@ async function main() {
     const notification = await Notification.create({ recipientUserId: parentUser._id, title: 'Audit message', message: 'Audit message body', type: 'announcement' });
     const ownerCycleCreatedAt = new Date();
     const ownerDate = ownerCycleCreatedAt.toISOString().slice(0, 10);
-    await Player.create([
+    const [ownerPaidPlayer] = await Player.create([
       { fullName: 'Owner Paid Student', parentId: parent._id, parentPhoneEncrypted: encrypt('0790000000'),
         groupId: group._id, groupIds: [group._id], packageClasses: 8, packageName: '8 classes', payment: 100,
         startDate: ownerDate, currentSubscriptionStartedAt: ownerDate, currentSubscriptionCreatedAt: ownerCycleCreatedAt,
@@ -83,6 +84,14 @@ async function main() {
         startDate: ownerDate, currentSubscriptionStartedAt: ownerDate, currentSubscriptionCreatedAt: ownerCycleCreatedAt,
         endDate: '2027-12-31' }
     ]);
+    await Payment.create({
+      playerId: ownerPaidPlayer._id,
+      transactionType: 'Full payment',
+      paidAmount: 100,
+      totalAmount: 100,
+      remainingAmount: 0,
+      paymentDate: ownerCycleCreatedAt
+    });
     browser = await chromium.launch({ channel: 'chrome', headless: true });
     const context = await browser.newContext({ viewport: { width: 1440, height: 960 }, serviceWorkers: 'block' });
     // Prevent test navigation or assets from reaching any production backend.
@@ -259,14 +268,26 @@ async function main() {
     await visit('/attendance', 'attendance-counter-before');
     assert.match(await page.locator('body').innerText(), /3\/8/);
     const auditedAttendancePlayer = page.locator('.attendance-player-main').filter({ hasText: player.fullName }).first();
+    const auditedAttendanceCard = auditedAttendancePlayer.locator('xpath=..');
+    const firstAttendanceSave = page.waitForResponse((response) => response.request().method() === 'PUT' && response.url().endsWith('/api/attendance/today'));
+    await auditedAttendanceCard.getByRole('button', { name: 'Present', exact: true }).click();
+    await firstAttendanceSave;
+    await page.waitForFunction((name) => {
+      const card = [...document.querySelectorAll('.attendance-player-card')].find((item) => item.textContent.includes(name));
+      return card?.textContent.includes('4/8');
+    }, player.fullName);
+    const repeatedAttendanceSave = page.waitForResponse((response) => response.request().method() === 'PUT' && response.url().endsWith('/api/attendance/today'));
+    await auditedAttendanceCard.getByRole('button', { name: 'Present', exact: true }).click();
+    await repeatedAttendanceSave;
+    assert.match(await auditedAttendancePlayer.innerText(), /4\/8/);
     await auditedAttendancePlayer.click();
     await page.waitForLoadState('networkidle');
-    assert.match(await auditedAttendancePlayer.innerText(), /3\/8/);
+    assert.match(await auditedAttendancePlayer.innerText(), /4\/8/);
     assert.doesNotMatch(await auditedAttendancePlayer.innerText(), /Expired/);
     await page.screenshot({ path: path.join(output, 'attendance-player-modal.png'), fullPage: true });
     await page.reload();
     await page.waitForLoadState('networkidle');
-    assert.match(await page.locator('body').innerText(), /3\/8/);
+    assert.match(await page.locator('body').innerText(), /4\/8/);
     results.push('attendance-counter-after-refresh');
     await page.getByRole('button', { name: 'Logout', exact: true }).click();
     await visit('/parent/login', 'parent-login');
@@ -275,6 +296,17 @@ async function main() {
     await page.getByRole('button', { name: 'Sign In', exact: true }).click();
     await page.waitForURL(origin + '/parent');
     results.push('parent-login-submit');
+    await visit('/parent/attendance', 'parent-payment-package-colors');
+    const paidPackageCard = page.locator('.parent-attendance-player-card').filter({ hasText: 'Owner Paid Student' });
+    await paidPackageCard.locator('.parent-attendance-player-summary').click();
+    await paidPackageCard.locator('.subscription-history-summary').waitFor();
+    assert.equal(await paidPackageCard.locator('.is-unpaid-subscription').count(), 0);
+    const unpaidPackageCard = page.locator('.parent-attendance-player-card').filter({ hasText: 'Owner Unpaid Student' });
+    await unpaidPackageCard.locator('.parent-attendance-player-summary').click();
+    const unpaidPackage = unpaidPackageCard.locator('.subscription-history-summary.is-unpaid-subscription');
+    await unpaidPackage.waitFor();
+    assert.equal(await unpaidPackage.evaluate((element) => getComputedStyle(element).borderTopColor), 'rgba(239, 68, 68, 0.58)');
+    results.push('parent-package-payment-colors');
     const parentRoutes = ['/parent', '/parent/children', '/parent/attendance', '/parent/payments', '/parent/subscriptions', '/parent/notifications', `/parent/notifications/${notification._id}`, '/parent/settings'];
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 960 });

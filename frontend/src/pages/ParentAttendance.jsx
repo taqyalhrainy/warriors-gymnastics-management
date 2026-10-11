@@ -226,7 +226,10 @@ const ParentAttendancePage = () => {
         used,
         total: Number(cycle.packageClasses || 0),
         records,
-        current
+        current,
+        paidInFull: !current
+          || Number(child.payment || 0) <= 0
+          || Number(child.currentSubscriptionPaidAmount || 0) >= Number(child.payment || 0)
       };
     });
 
@@ -287,7 +290,7 @@ const ParentAttendancePage = () => {
                       const isClassOpen = openClassKey === item.key;
                       return (
                         <section className="subscription-history-group parent-package-card" key={item.key}>
-                          <button type="button" className={`subscription-history-summary${item.current ? ' is-current-subscription' : ''}`} onClick={() => setOpenClassKey(isClassOpen ? '' : item.key)}>
+                          <button type="button" className={`subscription-history-summary${item.current ? ' is-current-subscription' : ''}${item.current && !item.paidInFull ? ' is-unpaid-subscription' : ''}`} onClick={() => setOpenClassKey(isClassOpen ? '' : item.key)}>
                             <span>
                               <strong>{item.title}</strong>
                               <small>{formatDate(item.startDate)} - {formatDate(item.endDate)}</small>

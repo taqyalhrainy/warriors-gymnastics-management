@@ -8,9 +8,7 @@ const synchronizeSubscriptionAttendanceUsage = async (player, today = new Date()
   const subscription = player.subscriptionId
     ? await Subscription.findOne({ _id: player.subscriptionId?._id || player.subscriptionId, playerId: player._id })
     : await Subscription.findOne({ playerId: player._id });
-  if (!subscription || subscription.type !== 'sessions') return;
-
-  const cycleStart = getCurrentSubscriptionStart(player, subscription.startDate);
+  const cycleStart = getCurrentSubscriptionStart(player, subscription?.startDate);
   const normalizedCycleStart = cycleStart && !Number.isNaN(cycleStart.getTime()) ? getAppDateOnly(cycleStart) : null;
 
   const explicitlyCountedIds = new Set((player.currentSubscriptionAttendanceIds || []).map(String));
@@ -37,10 +35,15 @@ const synchronizeSubscriptionAttendanceUsage = async (player, today = new Date()
     }
   });
 
+  const attendancePresentCount = countedDates.size;
+  if (!subscription || subscription.type !== 'sessions') {
+    return { attendancePresentCount };
+  }
+
   const totalSessions = Math.max(0, Number(subscription.totalSessions || 0));
   subscription.usedSessions = totalSessions
-    ? Math.min(totalSessions, countedDates.size)
-    : countedDates.size;
+    ? Math.min(totalSessions, attendancePresentCount)
+    : attendancePresentCount;
   subscription.remainingSessions = totalSessions
     ? Math.max(0, totalSessions - subscription.usedSessions)
     : Math.max(0, Number(subscription.remainingSessions || 0));
@@ -54,6 +57,11 @@ const synchronizeSubscriptionAttendanceUsage = async (player, today = new Date()
     subscription.status = 'active';
   }
   await subscription.save();
+  return {
+    attendancePresentCount: subscription.usedSessions,
+    usedSessions: subscription.usedSessions,
+    remainingSessions: subscription.remainingSessions
+  };
 };
 
 module.exports = { synchronizeSubscriptionAttendanceUsage };
