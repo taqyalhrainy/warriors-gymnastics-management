@@ -71,6 +71,18 @@ async function main() {
     await Attendance.create(['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04', '2026-09-05',
       '2026-09-21', '2026-09-22', '2026-09-23'].map((date) => ({ playerId: player._id, groupId: group._id, date, status: 'present', markedBy: admin._id })));
     const notification = await Notification.create({ recipientUserId: parentUser._id, title: 'Audit message', message: 'Audit message body', type: 'announcement' });
+    const ownerCycleCreatedAt = new Date();
+    const ownerDate = ownerCycleCreatedAt.toISOString().slice(0, 10);
+    await Player.create([
+      { fullName: 'Owner Paid Student', parentId: parent._id, parentPhoneEncrypted: encrypt('0790000000'),
+        groupId: group._id, groupIds: [group._id], packageClasses: 8, packageName: '8 classes', payment: 100,
+        startDate: ownerDate, currentSubscriptionStartedAt: ownerDate, currentSubscriptionCreatedAt: ownerCycleCreatedAt,
+        currentSubscriptionPaymentConfirmedAt: ownerCycleCreatedAt, endDate: '2027-12-31' },
+      { fullName: 'Owner Unpaid Student', parentId: parent._id, parentPhoneEncrypted: encrypt('0790000000'),
+        groupId: group._id, groupIds: [group._id], packageClasses: 8, packageName: '8 classes', payment: 100,
+        startDate: ownerDate, currentSubscriptionStartedAt: ownerDate, currentSubscriptionCreatedAt: ownerCycleCreatedAt,
+        endDate: '2027-12-31' }
+    ]);
     browser = await chromium.launch({ channel: 'chrome', headless: true });
     const context = await browser.newContext({ viewport: { width: 1440, height: 960 }, serviceWorkers: 'block' });
     // Prevent test navigation or assets from reaching any production backend.
@@ -232,12 +244,25 @@ async function main() {
     for (const route of ['/admin', '/players', '/players/new', `/players/${player._id}`, `/players/${player._id}/edit`, '/parents', '/groups', '/attendance', '/coaches', `/coaches/${coach._id}`, '/payments', '/notifications', '/reports', '/history', '/security', '/owner-summary', '/media-gallery']) {
       await visit(route, 'admin-' + route.replace(/\//g, '_'), ['/admin', '/attendance', '/reports'].includes(route));
     }
+    await visit('/owner-summary', 'owner-payment-proof');
+    await page.getByRole('button', { name: /New Subscription Alert/ }).click();
+    const ownerDialog = page.getByRole('dialog', { name: 'New subscription details' });
+    await ownerDialog.waitFor();
+    const paidDot = ownerDialog.locator('tr', { hasText: 'Owner Paid Student' }).locator('.owner-subscription-payment-dot');
+    const unpaidDot = ownerDialog.locator('tr', { hasText: 'Owner Unpaid Student' }).locator('.owner-subscription-payment-dot');
+    assert.equal(await paidDot.count(), 1);
+    assert.equal(await unpaidDot.count(), 1);
+    assert.equal(await paidDot.evaluate((element) => getComputedStyle(element).backgroundColor), 'rgb(22, 163, 74)');
+    assert.equal(await unpaidDot.evaluate((element) => getComputedStyle(element).backgroundColor), 'rgb(239, 68, 68)');
+    await page.screenshot({ path: path.join(output, 'owner-payment-proof.png'), fullPage: true });
+    results.push('owner-payment-proof-colors');
     await visit('/attendance', 'attendance-counter-before');
     assert.match(await page.locator('body').innerText(), /3\/8/);
-    await page.locator('.attendance-player-main').first().click();
+    const auditedAttendancePlayer = page.locator('.attendance-player-main').filter({ hasText: player.fullName }).first();
+    await auditedAttendancePlayer.click();
     await page.waitForLoadState('networkidle');
-    assert.match(await page.locator('.attendance-player-main').first().innerText(), /3\/8/);
-    assert.doesNotMatch(await page.locator('.attendance-player-main').first().innerText(), /Expired/);
+    assert.match(await auditedAttendancePlayer.innerText(), /3\/8/);
+    assert.doesNotMatch(await auditedAttendancePlayer.innerText(), /Expired/);
     await page.screenshot({ path: path.join(output, 'attendance-player-modal.png'), fullPage: true });
     await page.reload();
     await page.waitForLoadState('networkidle');

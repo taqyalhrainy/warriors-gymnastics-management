@@ -408,10 +408,10 @@ test('owner subscription payment proof stays green after receipt deletion and re
 });
 
 test('owner summary repairs a same-day payment proof from an archived receipt', async () => {
-  const cycleCreatedAt = new Date('2026-10-10T08:00:00.000Z');
   const player = await newPlayer({
     payment: 100,
-    currentSubscriptionCreatedAt: cycleCreatedAt,
+    startDate: '2026-10-10',
+    currentSubscriptionStartedAt: '2026-10-10',
     currentSubscriptionPaymentConfirmedAt: null
   });
   const receipt = await Payment.create({
@@ -424,6 +424,7 @@ test('owner summary repairs a same-day payment proof from an archived receipt', 
 
   const rows = await call('/players?ownerSummary=true');
   const repaired = rows.find((row) => row._id === String(player._id));
+  assert.ok(repaired.currentSubscriptionCreatedAt);
   assert.ok(repaired.currentSubscriptionPaymentConfirmedAt);
   assert.equal(String((await Player.findById(player._id)).currentSubscriptionPaymentId), String(receipt._id));
 });

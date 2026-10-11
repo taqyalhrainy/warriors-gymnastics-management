@@ -426,12 +426,12 @@ const OwnerDashboard = () => {
                       <tr className={isNewAlert ? 'owner-new-subscription-row is-new-alert' : 'owner-new-subscription-row'} key={row.player._id}>
                         <td>
                           <span>
-                            {row.player.fullName}
                             <i
                               className={`owner-subscription-payment-dot ${row.player.currentSubscriptionPaymentConfirmedAt ? 'is-paid' : 'is-unpaid'}`}
                               aria-label={row.player.currentSubscriptionPaymentConfirmedAt ? 'Payment recorded on subscription day' : 'No payment recorded on subscription day'}
                               title={row.player.currentSubscriptionPaymentConfirmedAt ? 'Payment recorded on subscription day' : 'No payment recorded on subscription day'}
                             />
+                            {row.player.fullName}
                           </span>
                         </td>
                       <td>{getParentName(row.player)}</td>

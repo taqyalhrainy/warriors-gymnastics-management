@@ -1,7 +1,7 @@
 const HistoryEntry = require('../models/HistoryEntry');
 const Payment = require('../models/Payment');
 const Player = require('../models/Player');
-const { getAppDateKey } = require('./appDate');
+const { getAppDateKey, getAppDayStartUtc } = require('./appDate');
 
 const SUBSCRIPTION_PAYMENT_TYPES = ['Full payment', 'Partial payment'];
 
@@ -87,7 +87,10 @@ const reconcileOwnerSubscriptionPaymentProofs = async () => {
     const cycleEntry = player.currentSubscriptionCreatedAt
       ? null
       : findCycleHistoryEntry(player, historyByPlayer.get(playerKey) || []);
-    const cycleCreatedAt = player.currentSubscriptionCreatedAt || cycleEntry?.changedAt;
+    const legacyStartKey = getAppDateKey(player.currentSubscriptionStartedAt || player.startDate);
+    const cycleCreatedAt = player.currentSubscriptionCreatedAt
+      || cycleEntry?.changedAt
+      || (legacyStartKey ? getAppDayStartUtc(legacyStartKey) : null);
     if (!cycleCreatedAt) return;
 
     const matchingPayment = (paymentsByPlayer.get(playerKey) || [])
