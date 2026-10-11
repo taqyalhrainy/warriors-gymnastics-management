@@ -13,6 +13,7 @@ const { snapshotPlayerDocument, createHistoryEntry } = require('../utils/history
 const { synchronizeSubscriptionAttendanceUsage } = require('../utils/subscriptionAttendance');
 const { getAppDateKey, getAppDateOnly } = require('../utils/appDate');
 const { getCurrentSubscriptionStart, isLaterSubscriptionStart } = require('../utils/subscriptionCycle');
+const { beginSubscriptionPaymentProof, reconcileOwnerSubscriptionPaymentProofs } = require('../utils/subscriptionPaymentProof');
 
 const formatPlayerResponse = (player) => {
   const obj = player.toObject({ virtuals: true });
@@ -205,6 +206,9 @@ const reconcileLinkedSubscriptions = async () => {
 
 const getPlayers = async (req, res, next) => {
   try {
+    if (req.query.ownerSummary === 'true') {
+      await reconcileOwnerSubscriptionPaymentProofs();
+    }
     const filter = { isDeleted: { $ne: true } };
     const compact = req.query.compact === 'true';
     if (req.parentScope) filter._id = { $in: req.parentScope.playerIds };
@@ -308,6 +312,7 @@ const createPlayer = async (req, res, next) => {
       skillLevels,
       startDate,
       endDate,
+      currentSubscriptionCreatedAt: new Date(),
       packageName: packageName || '',
       packageClasses: parseLocalizedNumber(packageClasses),
       packageHours: parseLocalizedNumber(packageHours),
@@ -377,7 +382,7 @@ const updatePlayer = async (req, res, next) => {
     }
     const updates = cleanPlayerPayload(sanitizeObject(req.body));
     const expectedVersion = updates.expectedVersion;
-    for (const key of ['expectedVersion', '__v', '_id', 'createdAt', 'isDeleted', 'deletedAt', 'preservedRemainingBalance', 'remainingBalancePolicyVersion', 'remainingBalancePreservedAt']) delete updates[key];
+    for (const key of ['expectedVersion', '__v', '_id', 'createdAt', 'isDeleted', 'deletedAt', 'preservedRemainingBalance', 'remainingBalancePolicyVersion', 'remainingBalancePreservedAt', 'currentSubscriptionCreatedAt', 'currentSubscriptionPaymentConfirmedAt', 'currentSubscriptionPaymentId']) delete updates[key];
     const requestedNewSubscription = Boolean(updates.newSubscription);
     delete updates.newSubscription;
     const player = await Player.findById(id);
@@ -452,6 +457,7 @@ const updatePlayer = async (req, res, next) => {
       updates.currentSubscriptionStartedAt = getDateAtStartOfDay(updates.startDate) || new Date();
       updates.currentSubscriptionAttendanceIds = [];
       updates.currentSubscriptionExcludedAttendanceIds = [];
+      beginSubscriptionPaymentProof(player);
     }
     Object.assign(player, updates);
     await player.save();

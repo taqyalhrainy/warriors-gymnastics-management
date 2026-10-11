@@ -6,6 +6,7 @@ const { createAuditLog } = require('../utils/audit');
 const { parseLocalizedNumber } = require('../utils/numberInput');
 const { getAppDateKey, dateKeyToUtc } = require('../utils/appDate');
 const { synchronizeSubscriptionAttendanceUsage } = require('../utils/subscriptionAttendance');
+const { beginSubscriptionPaymentProof } = require('../utils/subscriptionPaymentProof');
 
 const daysBetweenDateKeys = (first, second) => Math.ceil((dateKeyToUtc(first) - dateKeyToUtc(second)) / 86400000);
 
@@ -21,6 +22,7 @@ const applySubscriptionToPlayer = async (player, subscription, { resetCycle = fa
     player.currentSubscriptionStartedAt = subscription.startDate;
     player.currentSubscriptionAttendanceIds = [];
     player.currentSubscriptionExcludedAttendanceIds = [];
+    beginSubscriptionPaymentProof(player);
   }
   if (subscription.status !== 'expired' && player.status === 'expired') player.status = 'active';
   await player.save();

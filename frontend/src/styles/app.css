@@ -4580,6 +4580,33 @@ body.attendance-touch-dragging {
   white-space: nowrap;
 }
 
+.owner-new-subscription-row td:first-child > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.owner-subscription-payment-dot {
+  --owner-payment-dot-rgb: 239, 68, 68;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: rgb(var(--owner-payment-dot-rgb));
+  box-shadow: 0 0 0 1px rgba(var(--owner-payment-dot-rgb), 0.35);
+  animation: owner-payment-dot-pulse 1.15s ease-in-out infinite;
+}
+
+.owner-subscription-payment-dot.is-paid {
+  --owner-payment-dot-rgb: 22, 163, 74;
+}
+
+@keyframes owner-payment-dot-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(var(--owner-payment-dot-rgb), 0.35), 0 0 4px rgba(var(--owner-payment-dot-rgb), 0.35); }
+  50% { box-shadow: 0 0 0 5px rgba(var(--owner-payment-dot-rgb), 0.12), 0 0 12px rgba(var(--owner-payment-dot-rgb), 0.85); }
+}
+
 .owner-new-subscription-row.is-new-alert td:first-child span {
   display: inline-flex;
   align-items: center;

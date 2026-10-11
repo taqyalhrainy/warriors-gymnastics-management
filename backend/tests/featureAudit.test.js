@@ -368,6 +368,66 @@ test('price changes, renewals and payment edits never rewrite existing stored ba
   assert.equal((await Player.findById(player._id)).previousDueBalance, 70);
 });
 
+test('owner subscription payment proof stays green after receipt deletion and resets only for a new cycle', async () => {
+  const player = await newPlayer({ payment: 100 });
+  await call(`/players/${player._id}`, {
+    method: 'PUT',
+    body: { newSubscription: true, startDate: getAppDateKey(), payment: 100 }
+  });
+  const openedCycle = await Player.findById(player._id);
+  assert.ok(openedCycle.currentSubscriptionCreatedAt);
+  assert.equal(openedCycle.currentSubscriptionPaymentConfirmedAt ?? null, null);
+
+  const receipt = await call('/payments', {
+    method: 'POST',
+    body: { playerId: String(player._id), paidAmount: 100, paymentMethod: 'Cash' },
+    status: 201
+  });
+  const paidCycle = await Player.findById(player._id);
+  assert.ok(paidCycle.currentSubscriptionPaymentConfirmedAt);
+  assert.equal(String(paidCycle.currentSubscriptionPaymentId), receipt._id);
+
+  await call(`/payments/${receipt._id}`, { method: 'DELETE' });
+  const afterDelete = await Player.findById(player._id);
+  assert.ok(afterDelete.currentSubscriptionPaymentConfirmedAt);
+  assert.equal(String(afterDelete.currentSubscriptionPaymentId), receipt._id);
+
+  await call(`/players/${player._id}`, {
+    method: 'PUT',
+    body: {
+      newSubscription: true,
+      startDate: getAppDateKey(),
+      currentSubscriptionPaymentConfirmedAt: new Date(),
+      currentSubscriptionPaymentId: receipt._id
+    }
+  });
+  const nextCycle = await Player.findById(player._id);
+  assert.ok(nextCycle.currentSubscriptionCreatedAt);
+  assert.equal(nextCycle.currentSubscriptionPaymentConfirmedAt ?? null, null);
+  assert.equal(nextCycle.currentSubscriptionPaymentId ?? null, null);
+});
+
+test('owner summary repairs a same-day payment proof from an archived receipt', async () => {
+  const cycleCreatedAt = new Date('2026-10-10T08:00:00.000Z');
+  const player = await newPlayer({
+    payment: 100,
+    currentSubscriptionCreatedAt: cycleCreatedAt,
+    currentSubscriptionPaymentConfirmedAt: null
+  });
+  const receipt = await Payment.create({
+    playerId: player._id,
+    paidAmount: 100,
+    transactionType: 'Full payment',
+    createdAt: new Date('2026-10-10T09:00:00.000Z'),
+    isDeleted: true
+  });
+
+  const rows = await call('/players?ownerSummary=true');
+  const repaired = rows.find((row) => row._id === String(player._id));
+  assert.ok(repaired.currentSubscriptionPaymentConfirmedAt);
+  assert.equal(String((await Player.findById(player._id)).currentSubscriptionPaymentId), String(receipt._id));
+});
+
 test('new players never acquire remaining automatically; manual amounts persist until manually replaced', async () => {
   const player = await newPlayer({ payment: 100 });
   assert.equal((await call('/reports/dashboard')).pendingAmounts, 0);

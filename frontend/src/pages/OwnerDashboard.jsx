@@ -100,7 +100,7 @@ const OwnerDashboard = () => {
     setError('');
 
     try {
-      const playersRequest = loadSection('players', () => fetchPlayers({ fresh: Date.now() }), setPlayers);
+      const playersRequest = loadSection('players', () => fetchPlayers({ fresh: Date.now(), ownerSummary: true }), setPlayers);
       const paymentsRequest = loadSection('payments', () => fetchPayments({ fresh: Date.now() }), setPayments);
       const boardRequest = loadSection('board', () => Promise.all([
         fetchAttendanceBoard({ force: true }),
@@ -424,7 +424,16 @@ const OwnerDashboard = () => {
                     const isNewAlert = highlightedNewSubscriptionIds.includes(getNewSubscriptionAlertKey(row));
                     return (
                       <tr className={isNewAlert ? 'owner-new-subscription-row is-new-alert' : 'owner-new-subscription-row'} key={row.player._id}>
-                        <td><span>{row.player.fullName}</span></td>
+                        <td>
+                          <span>
+                            {row.player.fullName}
+                            <i
+                              className={`owner-subscription-payment-dot ${row.player.currentSubscriptionPaymentConfirmedAt ? 'is-paid' : 'is-unpaid'}`}
+                              aria-label={row.player.currentSubscriptionPaymentConfirmedAt ? 'Payment recorded on subscription day' : 'No payment recorded on subscription day'}
+                              title={row.player.currentSubscriptionPaymentConfirmedAt ? 'Payment recorded on subscription day' : 'No payment recorded on subscription day'}
+                            />
+                          </span>
+                        </td>
                       <td>{getParentName(row.player)}</td>
                       <td>{getParentPhone(row.player)}</td>
                       <td>{row.subscriptionStart ? row.subscriptionStart.split('T')[0] : '-'}</td>

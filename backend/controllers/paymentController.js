@@ -11,6 +11,7 @@ const { createNotification } = require('../utils/notificationDelivery');
 const { getAppDateOnly, getAppDayRangeUtc, getAppDayStartUtc, dateKeyToUtc } = require('../utils/appDate');
 const { getCurrentSubscriptionStart } = require('../utils/subscriptionCycle');
 const { getRemainingAmount } = require('../utils/manualRemaining');
+const { confirmSubscriptionPaymentProof } = require('../utils/subscriptionPaymentProof');
 
 const populatePaymentQuery = (query) => query
   .populate({
@@ -356,6 +357,7 @@ const createPayment = async (req, res, next) => {
       return res.status(404).json({ message: 'Player not found.' });
     }
     const subscriptionPayment = !transactionType || isSubscriptionPaymentType(transactionType);
+    const parsedPaidAmount = parseLocalizedNumber(paidAmount);
     const previousPaid = subscriptionPayment ? await Payment.aggregate([
       { $match: getCurrentSubscriptionPaymentMatch(player) },
       { $match: { transactionType: { $in: ['Full payment', 'Partial payment'] } } },
@@ -363,7 +365,7 @@ const createPayment = async (req, res, next) => {
     ]) : [];
     const playerTotalAmount = getPlayerSubscriptionAmount(player);
     const totalPaidBefore = previousPaid[0]?.totalPaid || 0;
-    const totalPaidAfter = totalPaidBefore + parseLocalizedNumber(paidAmount);
+    const totalPaidAfter = totalPaidBefore + parsedPaidAmount;
     const remainingAmount = subscriptionPayment && playerTotalAmount ? Math.max(0, playerTotalAmount - totalPaidAfter) : 0;
     const displayRemainingAmount = subscriptionPayment ? getRemainingAmount(player) : 0;
     const parentRecord = await Parent.findById(player.parentId).populate('userId');
@@ -376,7 +378,7 @@ const createPayment = async (req, res, next) => {
       packageClassesSnapshot: parseLocalizedNumber(player.packageClasses),
       packageHoursSnapshot: parseLocalizedNumber(player.packageHours),
       totalAmount: subscriptionPayment ? playerTotalAmount : 0,
-      paidAmount: parseLocalizedNumber(paidAmount),
+      paidAmount: parsedPaidAmount,
       remainingAmount: displayRemainingAmount,
       transactionType: subscriptionPayment ? getSubscriptionTransactionType(remainingAmount) : getTransactionType(transactionType, 0),
       paymentMethod,
@@ -385,6 +387,9 @@ const createPayment = async (req, res, next) => {
       notesEncrypted: encrypt(notes || ''),
       createdBy: req.user._id
     });
+    if (subscriptionPayment && parsedPaidAmount > 0) {
+      await confirmSubscriptionPaymentProof(player, payment);
+    }
     if (parentRecord?.userId) {
       await createNotification({
         recipientUserId: parentRecord.userId._id,
@@ -452,6 +457,10 @@ const updatePayment = async (req, res, next) => {
     payment.updatedBy = req.user._id;
     payment.updatedAt = new Date();
     await payment.save();
+    if (payment.playerId && isSubscriptionPaymentType(payment.transactionType) && Number(payment.paidAmount || 0) > 0) {
+      const player = await Player.findById(payment.playerId);
+      await confirmSubscriptionPaymentProof(player, payment, payment.updatedAt);
+    }
     const afterPayment = await loadPaymentForHistory(id);
     await createHistoryEntry({
       entityType: 'payment',
