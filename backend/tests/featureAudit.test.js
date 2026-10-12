@@ -271,6 +271,11 @@ test('freeze notes survive status changes and owner summary returns current paym
   const active = await call(`/players/${player._id}`, { method: 'PUT', body: { status: 'active' } });
   assert.equal(active.note, 'Normal note');
   assert.equal(active.freezeNote, 'Medical freeze');
+  await call(`/players/${player._id}`, { method: 'PUT', body: { note: 'Still not a date audit event' } });
+  await call(`/players/${player._id}`, {
+    method: 'PUT',
+    body: { startDate: '2026-10-10', endDate: '2026-11-20' }
+  });
 
   await Payment.create({
     playerId: player._id,
@@ -292,6 +297,13 @@ test('freeze notes survive status changes and owner summary returns current paym
   assert.equal(summaryPlayer.currentSubscriptionPaidAmount, 100);
   assert.equal(summaryGroup.presentCount, 1);
   assert.equal(summaryGroup.players[0].todayAttendance.status, 'present');
+  assert.equal(summary.dateAuditLogs.length, 1);
+  assert.equal(summary.dateAuditLogs[0].playerName, player.fullName);
+  assert.equal(summary.dateAuditLogs[0].changedBy.name, admin.name);
+  assert.deepEqual(summary.dateAuditLogs[0].changes.map((change) => change.field), ['startDate', 'endDate']);
+  assert.equal(summary.dateAuditLogs[0].changes[0].after.slice(0, 10), '2026-10-10');
+  assert.equal(summary.dateAuditLogs[0].changes[1].before.slice(0, 10), '2027-12-31');
+  assert.deepEqual(Object.keys(summary.dateAuditLogs[0]).sort(), ['_id', 'changedAt', 'changedBy', 'changes', 'playerId', 'playerName']);
   await call('/reports/owner-summary', { auth: parentToken, status: 403 });
 });
 

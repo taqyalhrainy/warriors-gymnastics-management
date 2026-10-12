@@ -2,6 +2,7 @@ const Player = require('../models/Player');
 const Attendance = require('../models/Attendance');
 const Payment = require('../models/Payment');
 const TrainingGroup = require('../models/TrainingGroup');
+const HistoryEntry = require('../models/HistoryEntry');
 require('../models/Subscription');
 const { getAppDateKey, getAppDateOnly, getAppDayStartUtc } = require('../utils/appDate');
 const { getCurrentSubscriptionStart } = require('../utils/subscriptionCycle');
@@ -94,7 +95,7 @@ const safeDecrypt = (value) => {
 const getOwnerSummary = async (req, res, next) => {
   try {
     const today = getAppDateOnly();
-    const [players, groups, todayAttendance] = await Promise.all([
+    const [players, groups, todayAttendance, dateHistory] = await Promise.all([
       Player.find({ isDeleted: { $ne: true } })
         .select('_id fullName parentId parentPhoneEncrypted groupId groupIds status showInAttendanceWhenFrozen packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual startDate currentSubscriptionStartedAt currentSubscriptionCreatedAt currentSubscriptionPaymentConfirmedAt createdAt')
         .sort({ createdAt: -1, _id: -1 })
@@ -103,7 +104,17 @@ const getOwnerSummary = async (req, res, next) => {
         .populate('groupIds', 'name days startTime endTime color')
         .lean(),
       TrainingGroup.find().select('name days startTime endTime color displayOrder').sort({ displayOrder: 1, _id: -1 }).lean(),
-      Attendance.find({ date: today }).select('_id playerId groupId date checkInTime status').lean()
+      Attendance.find({ date: today }).select('_id playerId groupId date checkInTime status').lean(),
+      HistoryEntry.find({
+        entityType: 'player',
+        action: 'update',
+        changedFields: { $in: ['startDate', 'endDate'] }
+      })
+        .select('_id entityId changedFields changedAt changedBy before.fullName before.startDate before.endDate after.fullName after.startDate after.endDate')
+        .sort({ changedAt: -1, _id: -1 })
+        .limit(200)
+        .populate('changedBy', 'name email role')
+        .lean()
     ]);
 
     const playerIds = players.map((player) => player._id);
@@ -188,7 +199,30 @@ const getOwnerSummary = async (req, res, next) => {
       };
     });
 
-    res.json({ players: formattedPlayers, board });
+    const dateAuditLogs = dateHistory.map((entry) => {
+      const changes = ['startDate', 'endDate']
+        .filter((field) => entry.changedFields?.includes(field))
+        .filter((field) => JSON.stringify(entry.before?.[field] ?? null) !== JSON.stringify(entry.after?.[field] ?? null))
+        .map((field) => ({
+          field,
+          before: entry.before?.[field] || null,
+          after: entry.after?.[field] || null
+        }));
+      return {
+        _id: entry._id,
+        playerId: entry.entityId,
+        playerName: entry.after?.fullName || entry.before?.fullName || 'Unknown player',
+        changedAt: entry.changedAt,
+        changedBy: entry.changedBy ? {
+          name: entry.changedBy.name || '',
+          email: entry.changedBy.email || '',
+          role: entry.changedBy.role || ''
+        } : null,
+        changes
+      };
+    }).filter((entry) => entry.changes.length);
+
+    res.json({ players: formattedPlayers, board, dateAuditLogs });
   } catch (error) { next(error); }
 };
 

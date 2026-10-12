@@ -4526,6 +4526,28 @@ body.attendance-touch-dragging {
   box-shadow: none;
 }
 
+.owner-date-audit-button {
+  min-width: 142px;
+}
+
+.owner-date-audit-table td:nth-child(5) small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: capitalize;
+}
+
+.owner-date-audit-row.is-new-alert td {
+  background: color-mix(in srgb, #fef08a 34%, var(--surface));
+}
+
+.owner-date-audit-row.is-new-alert td:first-child {
+  border-left: 4px solid #ef4444;
+  color: var(--text);
+  font-weight: 950;
+}
+
 .owner-new-subscription-dashboard {
   padding: 18px 0 12px;
 }
@@ -4683,6 +4705,7 @@ body.rtl .new-subscription-summary-card[type='button'] {
   }
 
   .owner-panel-tools select,
+  .owner-date-audit-button,
   .owner-dashboard-actions .btn-secondary,
   .owner-subscription-footer .btn-primary {
     width: 100%;

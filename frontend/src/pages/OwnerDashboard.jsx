@@ -6,6 +6,7 @@ import { fetchOwnerSummary } from '../services/reports.js';
 import { attendanceCycleStart } from '../utils/attendanceRecords.js';
 
 const NEW_SUBSCRIPTION_ALERT_READ_KEY = 'warriors-new-subscription-alert-read-ids';
+const OWNER_DATE_AUDIT_READ_KEY = 'warriors-owner-date-audit-read-ids';
 
 const formatMoney = (value) => Number(value || 0).toLocaleString('en-US');
 
@@ -70,6 +71,31 @@ const getNewSubscriptionAlertKey = (row) => {
   return `${row.player._id}:${dateKey}`;
 };
 
+const readOwnerDateAuditIds = () => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(OWNER_DATE_AUDIT_READ_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch (error) {
+    return [];
+  }
+};
+
+const writeOwnerDateAuditIds = (ids) => {
+  localStorage.setItem(OWNER_DATE_AUDIT_READ_KEY, JSON.stringify([...new Set(ids.map(String))]));
+};
+
+const formatAuditDate = (value) => value ? String(value).slice(0, 10) : 'Not set';
+const formatAuditDateTime = (value) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Amman',
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    hour12: true
+  }).format(date);
+};
+
 const OwnerDashboard = () => {
   const { states: loadStates, load: loadSection } = useSectionLoader(['players', 'payments', 'board']);
   const [players, setPlayers] = useState([]);
@@ -80,6 +106,10 @@ const OwnerDashboard = () => {
   const [showSubscriptionDetails, setShowSubscriptionDetails] = useState(false);
   const [newSubscriptionAlertReadIds, setNewSubscriptionAlertReadIds] = useState(() => readNewSubscriptionAlertIds());
   const [highlightedNewSubscriptionIds, setHighlightedNewSubscriptionIds] = useState([]);
+  const [dateAuditLogs, setDateAuditLogs] = useState([]);
+  const [dateAuditReadIds, setDateAuditReadIds] = useState(() => readOwnerDateAuditIds());
+  const [highlightedDateAuditIds, setHighlightedDateAuditIds] = useState([]);
+  const [isDateAuditOpen, setIsDateAuditOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const dashboardLoadRequestIdRef = useRef(0);
@@ -93,7 +123,10 @@ const OwnerDashboard = () => {
 
     try {
       const summaryRequest = fetchOwnerSummary({ force: true });
-      const playersRequest = loadSection('players', () => summaryRequest, (summary) => setPlayers(summary.players || []));
+      const playersRequest = loadSection('players', () => summaryRequest, (summary) => {
+        setPlayers(summary.players || []);
+        setDateAuditLogs(summary.dateAuditLogs || []);
+      });
       const paymentsRequest = loadSection('payments', () => summaryRequest, () => {});
       const boardRequest = loadSection('board', () => summaryRequest, (summary) => {
         if (requestId === dashboardLoadRequestIdRef.current) setGroupColumns(summary.board || []);
@@ -164,6 +197,7 @@ const OwnerDashboard = () => {
     ? Math.min(100, Math.round((newSubscriptionSummary.paidAmount / newSubscriptionSummary.expectedAmount) * 100))
     : 0;
   const unreadNewSubscriptionCount = newSubscriptionRows.filter((row) => !newSubscriptionAlertReadIds.includes(getNewSubscriptionAlertKey(row))).length;
+  const unreadDateAuditCount = dateAuditLogs.filter((entry) => !dateAuditReadIds.includes(String(entry._id))).length;
 
   const openSubscriptionDetails = () => {
     const currentIds = newSubscriptionRows.map(getNewSubscriptionAlertKey);
@@ -178,6 +212,21 @@ const OwnerDashboard = () => {
   const closeSubscriptionDetails = () => {
     setShowSubscriptionDetails(false);
     setHighlightedNewSubscriptionIds([]);
+  };
+
+  const openDateAudit = () => {
+    const currentIds = dateAuditLogs.map((entry) => String(entry._id));
+    const unreadIds = currentIds.filter((id) => !dateAuditReadIds.includes(id));
+    const nextReadIds = [...new Set([...dateAuditReadIds, ...currentIds])];
+    setHighlightedDateAuditIds(unreadIds);
+    writeOwnerDateAuditIds(nextReadIds);
+    setDateAuditReadIds(nextReadIds);
+    setIsDateAuditOpen(true);
+  };
+
+  const closeDateAudit = () => {
+    setIsDateAuditOpen(false);
+    setHighlightedDateAuditIds([]);
   };
 
   const attendedGroups = groupColumns.filter((group) => group.markedCount > 0);
@@ -211,6 +260,14 @@ const OwnerDashboard = () => {
         </div>
         <div className="owner-dashboard-actions">
           <span>Private link</span>
+          <button
+            type="button"
+            className={`expired-alert-button owner-new-subscription-alert owner-date-audit-button${unreadDateAuditCount ? '' : ' is-read'}`}
+            onClick={openDateAudit}
+          >
+            <span>Audit Logs</span>
+            {unreadDateAuditCount > 0 && <strong>{unreadDateAuditCount}</strong>}
+          </button>
           <button type="button" className="btn-secondary" onClick={loadOwnerDashboard} disabled={isLoading}>
             {isLoading ? 'Refreshing...' : 'Refresh'}
           </button>
@@ -405,6 +462,59 @@ const OwnerDashboard = () => {
                     );
                   }) : (
                     <tr><td colSpan="9">No new subscriptions in this month.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {isDateAuditOpen && (
+        <div className="student-modal-backdrop" role="presentation" onClick={closeDateAudit}>
+          <section className="student-modal owner-subscription-modal owner-date-audit-modal" role="dialog" aria-modal="true" aria-label="Date audit logs" onClick={(event) => event.stopPropagation()}>
+            <div className="student-modal-header">
+              <div>
+                <h2>Start & End Date Audit Logs</h2>
+                <p>Only player subscription date changes are shown here.</p>
+              </div>
+              <button type="button" className="btn-secondary" onClick={closeDateAudit}>Close</button>
+            </div>
+            <div className="owner-subscription-detail-summary">
+              <span>Total logs <strong>{dateAuditLogs.length}</strong></span>
+            </div>
+            <div className="owner-table-wrap">
+              <table className="data-table owner-subscription-table owner-date-audit-table">
+                <thead>
+                  <tr>
+                    <th>Player</th>
+                    <th>Changed Field</th>
+                    <th>Before</th>
+                    <th>After</th>
+                    <th>Changed By</th>
+                    <th>Date & Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dateAuditLogs.length ? dateAuditLogs.flatMap((entry) => entry.changes.map((change) => (
+                    <tr
+                      className={highlightedDateAuditIds.includes(String(entry._id)) ? 'owner-date-audit-row is-new-alert' : 'owner-date-audit-row'}
+                      key={`${entry._id}:${change.field}`}
+                    >
+                      <td>{entry.playerName}</td>
+                      <td>{change.field === 'startDate' ? 'Start Date' : 'End Date'}</td>
+                      <td>{formatAuditDate(change.before)}</td>
+                      <td>{formatAuditDate(change.after)}</td>
+                      <td>
+                        {entry.changedBy?.name || entry.changedBy?.email || 'System'}
+                        {(entry.changedBy?.role || entry.changedBy?.email) && (
+                          <small>{[entry.changedBy.role, entry.changedBy.email].filter(Boolean).join(' / ')}</small>
+                        )}
+                      </td>
+                      <td>{formatAuditDateTime(entry.changedAt)}</td>
+                    </tr>
+                  ))) : (
+                    <tr><td colSpan="6">No start or end date changes recorded.</td></tr>
                   )}
                 </tbody>
               </table>
