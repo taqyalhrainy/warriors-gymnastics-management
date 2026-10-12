@@ -200,7 +200,7 @@ const createBaselineEntries = async (entityType, snapshots) => {
   return changedAt;
 };
 
-const createHistoryEntry = async ({ entityType, entityId, action, before = null, after = null, userId, req }) => {
+const createHistoryEntry = async ({ entityType, entityId, action, before = null, after = null, userId, source = '', req }) => {
   try {
     await HistoryEntry.create({
       entityType,
@@ -210,6 +210,7 @@ const createHistoryEntry = async ({ entityType, entityId, action, before = null,
       after,
       changedFields: diffChangedFields(before || {}, after || {}),
       changedBy: userId,
+      source,
       ipAddress: req?.ip || req?.headers?.['x-forwarded-for'] || '',
       userAgent: req?.headers?.['user-agent'] || ''
     });

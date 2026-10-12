@@ -108,6 +108,7 @@ const getOwnerSummary = async (req, res, next) => {
       HistoryEntry.find({
         entityType: 'player',
         action: 'update',
+        source: 'player-edit',
         changedFields: { $in: ['startDate', 'endDate'] }
       })
         .select('_id entityId changedFields changedAt changedBy before.fullName before.startDate before.endDate after.fullName after.startDate after.endDate')

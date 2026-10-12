@@ -304,6 +304,13 @@ test('freeze notes survive status changes and owner summary returns current paym
   assert.equal(summary.dateAuditLogs[0].changes[0].after.slice(0, 10), '2026-10-10');
   assert.equal(summary.dateAuditLogs[0].changes[1].before.slice(0, 10), '2027-12-31');
   assert.deepEqual(Object.keys(summary.dateAuditLogs[0]).sort(), ['_id', 'changedAt', 'changedBy', 'changes', 'playerId', 'playerName']);
+  await call(`/players/${player._id}`, {
+    method: 'PUT',
+    body: { newSubscription: true, startDate: '2026-10-25', endDate: '2026-11-25' }
+  });
+  const summaryAfterNewSubscription = await call('/reports/owner-summary');
+  assert.equal(summaryAfterNewSubscription.dateAuditLogs.length, 1);
+  assert.equal((await History.findOne({ entityId: player._id, source: 'new-subscription' })).source, 'new-subscription');
   await call('/reports/owner-summary', { auth: parentToken, status: 403 });
 });
 

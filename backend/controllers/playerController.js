@@ -497,6 +497,7 @@ const updatePlayer = async (req, res, next) => {
       before: beforeSnapshot,
       after: snapshotPlayerDocument(afterPlayer),
       userId: req.user._id,
+      source: requestedNewSubscription ? 'new-subscription' : 'player-edit',
       req
     });
     await createAuditLog({ userId: req.user._id, action: 'edit player', entity: 'Player', entityId: player._id, req });
