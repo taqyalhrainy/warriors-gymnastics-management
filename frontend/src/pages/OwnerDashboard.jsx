@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import DataStatus from '../components/DataStatus.jsx';
 import { useSectionLoader, canShowEmpty } from '../hooks/useSectionLoader.js';
-import { fetchOwnerSummary } from '../services/reports.js';
+import { fetchOwnerDateAudits, fetchOwnerSummary } from '../services/reports.js';
 
 const NEW_SUBSCRIPTION_ALERT_READ_KEY = 'warriors-new-subscription-alert-read-ids';
 const OWNER_DATE_AUDIT_READ_KEY = 'warriors-owner-date-audit-read-ids';
@@ -95,7 +95,7 @@ const formatAuditDateTime = (value) => {
 };
 
 const OwnerDashboard = () => {
-  const { states: loadStates, load: loadSection } = useSectionLoader(['players', 'payments', 'board']);
+  const { states: loadStates, load: loadSection } = useSectionLoader(['players', 'payments', 'board', 'audits']);
   const [players, setPlayers] = useState([]);
   const [groupColumns, setGroupColumns] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState(getPaymentMonthKey(new Date()));
@@ -113,17 +113,22 @@ const OwnerDashboard = () => {
   const dashboardLoadRequestIdRef = useRef(0);
   const today = getDateInputValue();
 
-  const loadOwnerDashboard = async () => {
+  const loadDateAudits = (options = {}) => loadSection(
+    'audits',
+    () => fetchOwnerDateAudits(options),
+    (logs) => setDateAuditLogs(logs || [])
+  );
+
+  const loadOwnerDashboard = async (options = {}) => {
     const requestId = dashboardLoadRequestIdRef.current + 1;
     dashboardLoadRequestIdRef.current = requestId;
     setIsLoading(true);
     setError('');
 
     try {
-      const summaryRequest = fetchOwnerSummary({ force: true });
+      const summaryRequest = fetchOwnerSummary(options);
       const playersRequest = loadSection('players', () => summaryRequest, (summary) => {
         setPlayers(summary.players || []);
-        setDateAuditLogs(summary.dateAuditLogs || []);
       });
       const paymentsRequest = loadSection('payments', () => summaryRequest, () => {});
       const boardRequest = loadSection('board', () => summaryRequest, (summary) => {
@@ -137,6 +142,7 @@ const OwnerDashboard = () => {
     } finally {
       if (requestId === dashboardLoadRequestIdRef.current) {
         setIsLoading(false);
+        loadDateAudits(options).catch(console.error);
       }
     }
   };
@@ -266,7 +272,7 @@ const OwnerDashboard = () => {
             <span>Audit Logs</span>
             {unreadDateAuditCount > 0 && <strong>{unreadDateAuditCount}</strong>}
           </button>
-          <button type="button" className="btn-secondary" onClick={loadOwnerDashboard} disabled={isLoading}>
+          <button type="button" className="btn-secondary" onClick={() => loadOwnerDashboard({ force: true })} disabled={isLoading}>
             {isLoading ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>

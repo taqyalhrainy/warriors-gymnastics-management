@@ -92,31 +92,65 @@ const safeDecrypt = (value) => {
   try { return decrypt(value); } catch (error) { return ''; }
 };
 
+const formatOwnerDateAuditLogs = (dateHistory) => dateHistory.map((entry) => {
+  const changes = ['startDate', 'endDate']
+    .filter((field) => entry.changedFields?.includes(field))
+    .filter((field) => JSON.stringify(entry.before?.[field] ?? null) !== JSON.stringify(entry.after?.[field] ?? null))
+    .map((field) => ({
+      field,
+      before: entry.before?.[field] || null,
+      after: entry.after?.[field] || null
+    }));
+  return {
+    _id: entry._id,
+    playerId: entry.entityId,
+    playerName: entry.after?.fullName || entry.before?.fullName || 'Unknown player',
+    changedAt: entry.changedAt,
+    changedBy: entry.changedBy ? {
+      name: entry.changedBy.name || '',
+      email: entry.changedBy.email || '',
+      role: entry.changedBy.role || ''
+    } : null,
+    changes
+  };
+}).filter((entry) => entry.changes.length);
+
+const getOwnerDateAudits = async (req, res, next) => {
+  try {
+    const dateHistory = await HistoryEntry.find({
+      entityType: 'player',
+      action: 'update',
+      source: 'player-edit',
+      changedFields: { $in: ['startDate', 'endDate'] }
+    })
+      .select('_id entityId changedFields changedAt changedBy before.fullName before.startDate before.endDate after.fullName after.startDate after.endDate')
+      .sort({ changedAt: -1, _id: -1 })
+      .limit(200)
+      .populate('changedBy', 'name email role')
+      .lean();
+    res.json(formatOwnerDateAuditLogs(dateHistory));
+  } catch (error) { next(error); }
+};
+
 const getOwnerSummary = async (req, res, next) => {
   try {
     const today = getAppDateOnly();
-    const [players, groups, todayAttendance, dateHistory] = await Promise.all([
+    const [players, groups, todayAttendance] = await Promise.all([
       Player.find({ isDeleted: { $ne: true } })
         .select('_id fullName parentId parentPhoneEncrypted groupId groupIds status showInAttendanceWhenFrozen packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual startDate currentSubscriptionStartedAt currentSubscriptionCreatedAt currentSubscriptionPaymentConfirmedAt createdAt')
         .sort({ createdAt: -1, _id: -1 })
         .populate('parentId', 'name phoneEncrypted')
-        .populate('groupId', 'name days startTime endTime color')
-        .populate('groupIds', 'name days startTime endTime color')
         .lean(),
       TrainingGroup.find().select('name days startTime endTime color displayOrder').sort({ displayOrder: 1, _id: -1 }).lean(),
-      Attendance.find({ date: today }).select('_id playerId groupId date checkInTime status').lean(),
-      HistoryEntry.find({
-        entityType: 'player',
-        action: 'update',
-        source: 'player-edit',
-        changedFields: { $in: ['startDate', 'endDate'] }
-      })
-        .select('_id entityId changedFields changedAt changedBy before.fullName before.startDate before.endDate after.fullName after.startDate after.endDate')
-        .sort({ changedAt: -1, _id: -1 })
-        .limit(200)
-        .populate('changedBy', 'name email role')
-        .lean()
+      Attendance.find({ date: today }).select('_id playerId groupId date checkInTime status').lean()
     ]);
+
+    const groupsById = new Map(groups.map((group) => [String(group._id), group]));
+    const resolveGroup = (group) => groupsById.get(String(group?._id || group)) || group;
+    players.forEach((player) => {
+      player.groupId = resolveGroup(player.groupId);
+      player.groupIds = (player.groupIds || []).map(resolveGroup);
+    });
 
     const playerIds = players.map((player) => player._id);
     const subscriptionStarts = players
@@ -132,32 +166,38 @@ const getOwnerSummary = async (req, res, next) => {
       playerId: { $in: playerIds },
       transactionType: { $in: ['Full payment', 'Partial payment'] }
     };
-    if (earliestStart) {
-      paymentFilter.$or = [
-        { createdAt: { $gte: earliestStart } },
-        { paymentDate: { $gte: earliestStart } }
-      ];
-    }
-    const payments = playerIds.length
-      ? await Payment.find(paymentFilter).select('playerId paidAmount paymentDate createdAt').lean()
+    if (earliestStart) paymentFilter.createdAt = { $gte: earliestStart };
+    const paymentSummaries = playerIds.length
+      ? await Payment.aggregate([
+        { $match: paymentFilter },
+        {
+          $lookup: {
+            from: Player.collection.name,
+            localField: 'playerId',
+            foreignField: '_id',
+            as: 'ownerPlayer'
+          }
+        },
+        { $unwind: '$ownerPlayer' },
+        {
+          $set: {
+            cycleCreatedAt: {
+              $ifNull: [
+                '$ownerPlayer.currentSubscriptionCreatedAt',
+                { $ifNull: ['$ownerPlayer.currentSubscriptionStartedAt', { $ifNull: ['$ownerPlayer.startDate', '$ownerPlayer.createdAt'] }] }
+              ]
+            }
+          }
+        },
+        { $match: { $expr: { $gte: ['$createdAt', '$cycleCreatedAt'] } } },
+        { $group: { _id: '$playerId', paidAmount: { $sum: '$paidAmount' } } }
+      ])
       : [];
-
-    const paymentsByPlayer = new Map();
-    for (const payment of payments) {
-      const playerId = String(payment.playerId || '');
-      if (!paymentsByPlayer.has(playerId)) paymentsByPlayer.set(playerId, []);
-      paymentsByPlayer.get(playerId).push(payment);
-    }
+    const paidByPlayer = new Map(paymentSummaries.map((row) => [String(row._id), Number(row.paidAmount || 0)]));
 
     const formattedPlayers = players.map((player) => {
       const subscriptionCreatedAt = player.currentSubscriptionCreatedAt || getCurrentSubscriptionStart(player) || player.createdAt;
-      const cycleCreatedTime = new Date(subscriptionCreatedAt || 0).getTime();
-      const currentSubscriptionPaidAmount = (paymentsByPlayer.get(String(player._id)) || [])
-        .filter((payment) => {
-          const paymentTime = new Date(payment.createdAt || payment.paymentDate || 0).getTime();
-          return !Number.isNaN(paymentTime) && !Number.isNaN(cycleCreatedTime) && paymentTime >= cycleCreatedTime;
-        })
-        .reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
+      const currentSubscriptionPaidAmount = paidByPlayer.get(String(player._id)) || 0;
       const currentSubscriptionExpectedAmount = Number(player.payment || 0);
       const currentSubscriptionRemainingAmount = Math.max(
         0,
@@ -196,7 +236,9 @@ const getOwnerSummary = async (req, res, next) => {
           return ids.some((item) => String(item?._id || item) === groupId);
         })
         .map((player) => ({
-          ...player,
+          _id: player._id,
+          fullName: player.fullName,
+          parentId: player.parentId ? { _id: player.parentId._id, name: player.parentId.name } : null,
           todayAttendance: attendanceByPlayerAndGroup.get(`${String(player._id)}:${groupId}`) || null
         }));
       return {
@@ -208,31 +250,8 @@ const getOwnerSummary = async (req, res, next) => {
       };
     });
 
-    const dateAuditLogs = dateHistory.map((entry) => {
-      const changes = ['startDate', 'endDate']
-        .filter((field) => entry.changedFields?.includes(field))
-        .filter((field) => JSON.stringify(entry.before?.[field] ?? null) !== JSON.stringify(entry.after?.[field] ?? null))
-        .map((field) => ({
-          field,
-          before: entry.before?.[field] || null,
-          after: entry.after?.[field] || null
-        }));
-      return {
-        _id: entry._id,
-        playerId: entry.entityId,
-        playerName: entry.after?.fullName || entry.before?.fullName || 'Unknown player',
-        changedAt: entry.changedAt,
-        changedBy: entry.changedBy ? {
-          name: entry.changedBy.name || '',
-          email: entry.changedBy.email || '',
-          role: entry.changedBy.role || ''
-        } : null,
-        changes
-      };
-    }).filter((entry) => entry.changes.length);
-
-    res.json({ players: formattedPlayers, board, dateAuditLogs });
+    res.json({ players: formattedPlayers, board });
   } catch (error) { next(error); }
 };
 
-module.exports = { getDashboardReport, getRevenueReport, getAttendanceReport, getOwnerSummary, clearDashboardReportCache };
+module.exports = { getDashboardReport, getRevenueReport, getAttendanceReport, getOwnerSummary, getOwnerDateAudits, clearDashboardReportCache };

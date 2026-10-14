@@ -27,5 +27,6 @@ const paymentSchema = new mongoose.Schema({
 });
 
 paymentSchema.index({ playerId: 1, isDeleted: 1, createdAt: -1 });
+paymentSchema.index({ playerId: 1, transactionType: 1, isDeleted: 1, createdAt: 1 });
 
 module.exports = mongoose.model('Payment', paymentSchema);

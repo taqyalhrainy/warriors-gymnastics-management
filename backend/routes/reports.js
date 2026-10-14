@@ -1,6 +1,6 @@
 const express = require('express');
 const { protect, authorize } = require('../middleware/auth');
-const { getDashboardReport, getRevenueReport, getAttendanceReport, getOwnerSummary } = require('../controllers/reportController');
+const { getDashboardReport, getRevenueReport, getAttendanceReport, getOwnerSummary, getOwnerDateAudits } = require('../controllers/reportController');
 const { exportPlayersBackup } = require('../controllers/backupController');
 
 const router = express.Router();
@@ -9,6 +9,7 @@ router.get('/dashboard', authorize('admin', 'coach', 'receptionist'), getDashboa
 router.get('/revenue', authorize('admin', 'coach', 'receptionist'), getRevenueReport);
 router.get('/attendance', authorize('admin', 'coach', 'receptionist'), getAttendanceReport);
 router.get('/owner-summary', authorize('admin', 'coach', 'receptionist'), getOwnerSummary);
+router.get('/owner-date-audits', authorize('admin', 'coach', 'receptionist'), getOwnerDateAudits);
 router.get('/players-backup', authorize('admin'), exportPlayersBackup);
 
 module.exports = router;
