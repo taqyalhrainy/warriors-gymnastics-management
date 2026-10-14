@@ -151,15 +151,6 @@ const OwnerDashboard = () => {
     loadOwnerDashboard();
   }, []);
 
-  const monthOptions = useMemo(() => {
-    const months = players
-      .map((player) => getPaymentMonthKey(getPlayerSubscriptionDate(player)))
-      .filter((month) => month !== 'undated');
-    const uniqueMonths = [...new Set(months)];
-    if (!uniqueMonths.includes(selectedMonth)) uniqueMonths.push(selectedMonth);
-    return uniqueMonths.sort().reverse();
-  }, [players, selectedMonth]);
-
   const newSubscriptionRows = useMemo(() => {
     return players
       .filter((player) => getPaymentMonthKey(getPlayerSubscriptionDate(player)) === selectedMonth)
@@ -297,9 +288,14 @@ const OwnerDashboard = () => {
                 <span>New Subscription Alert</span>
                 {unreadNewSubscriptionCount > 0 && <strong>{unreadNewSubscriptionCount}</strong>}
               </button>
-              <select value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}>
-                {monthOptions.map((month) => <option key={month} value={month}>{month}</option>)}
-              </select>
+              <label className="owner-month-picker">
+                <span>Month</span>
+                <input
+                  type="month"
+                  value={selectedMonth}
+                  onChange={(event) => setSelectedMonth(event.target.value || getPaymentMonthKey(new Date()))}
+                />
+              </label>
             </div>
           </div>
 

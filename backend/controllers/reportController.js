@@ -135,41 +135,21 @@ const getOwnerDateAudits = async (req, res, next) => {
 const getOwnerSummary = async (req, res, next) => {
   try {
     const today = getAppDateOnly();
-    const [players, groups, todayAttendance] = await Promise.all([
+    const [players, groups, todayAttendance, paymentSummaries] = await Promise.all([
       Player.find({ isDeleted: { $ne: true } })
-        .select('_id fullName parentId parentPhoneEncrypted groupId groupIds status showInAttendanceWhenFrozen packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual startDate currentSubscriptionStartedAt currentSubscriptionCreatedAt currentSubscriptionPaymentConfirmedAt createdAt')
+        .select('_id fullName parentId parentPhoneEncrypted groupId groupIds status showInAttendanceWhenFrozen packageName packageClasses packageHours payment startDate currentSubscriptionStartedAt currentSubscriptionCreatedAt currentSubscriptionPaymentConfirmedAt createdAt')
         .sort({ createdAt: -1, _id: -1 })
         .populate('parentId', 'name phoneEncrypted')
         .lean(),
       TrainingGroup.find().select('name days startTime endTime color displayOrder').sort({ displayOrder: 1, _id: -1 }).lean(),
-      Attendance.find({ date: today }).select('_id playerId groupId date checkInTime status').lean()
-    ]);
-
-    const groupsById = new Map(groups.map((group) => [String(group._id), group]));
-    const resolveGroup = (group) => groupsById.get(String(group?._id || group)) || group;
-    players.forEach((player) => {
-      player.groupId = resolveGroup(player.groupId);
-      player.groupIds = (player.groupIds || []).map(resolveGroup);
-    });
-
-    const playerIds = players.map((player) => player._id);
-    const subscriptionStarts = players
-      .map((player) => player.currentSubscriptionCreatedAt || getCurrentSubscriptionStart(player) || player.createdAt)
-      .filter(Boolean)
-      .map((date) => new Date(date))
-      .filter((date) => !Number.isNaN(date.getTime()));
-    const earliestStart = subscriptionStarts.length
-      ? new Date(Math.min(...subscriptionStarts.map((date) => date.getTime())))
-      : null;
-    const paymentFilter = {
-      isDeleted: { $ne: true },
-      playerId: { $in: playerIds },
-      transactionType: { $in: ['Full payment', 'Partial payment'] }
-    };
-    if (earliestStart) paymentFilter.createdAt = { $gte: earliestStart };
-    const paymentSummaries = playerIds.length
-      ? await Payment.aggregate([
-        { $match: paymentFilter },
+      Attendance.find({ date: today }).select('_id playerId groupId date checkInTime status').lean(),
+      Payment.aggregate([
+        {
+          $match: {
+            isDeleted: { $ne: true },
+            transactionType: { $in: ['Full payment', 'Partial payment'] }
+          }
+        },
         {
           $lookup: {
             from: Player.collection.name,
@@ -179,6 +159,7 @@ const getOwnerSummary = async (req, res, next) => {
           }
         },
         { $unwind: '$ownerPlayer' },
+        { $match: { 'ownerPlayer.isDeleted': { $ne: true } } },
         {
           $set: {
             cycleCreatedAt: {
@@ -192,7 +173,15 @@ const getOwnerSummary = async (req, res, next) => {
         { $match: { $expr: { $gte: ['$createdAt', '$cycleCreatedAt'] } } },
         { $group: { _id: '$playerId', paidAmount: { $sum: '$paidAmount' } } }
       ])
-      : [];
+    ]);
+
+    const groupsById = new Map(groups.map((group) => [String(group._id), group]));
+    const resolveGroup = (group) => groupsById.get(String(group?._id || group)) || group;
+    players.forEach((player) => {
+      player.groupId = resolveGroup(player.groupId);
+      player.groupIds = (player.groupIds || []).map(resolveGroup);
+    });
+
     const paidByPlayer = new Map(paymentSummaries.map((row) => [String(row._id), Number(row.paidAmount || 0)]));
 
     const formattedPlayers = players.map((player) => {

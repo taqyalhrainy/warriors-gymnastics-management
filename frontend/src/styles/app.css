@@ -4595,7 +4595,16 @@ body.attendance-touch-dragging {
   padding: 18px;
 }
 
-.owner-panel-tools select {
+.owner-month-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.owner-month-picker input {
   width: auto;
   min-height: 36px;
   padding: 6px 12px;
@@ -4795,11 +4804,17 @@ body.rtl .new-subscription-summary-card[type='button'] {
     width: 100%;
   }
 
-  .owner-panel-tools select,
+  .owner-month-picker,
+  .owner-month-picker input,
   .owner-date-audit-button,
   .owner-dashboard-actions .btn-secondary,
   .owner-subscription-footer .btn-primary {
     width: 100%;
+  }
+
+  .owner-month-picker {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .new-subscription-side-grid {
