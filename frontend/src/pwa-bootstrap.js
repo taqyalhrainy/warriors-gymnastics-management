@@ -2,7 +2,7 @@
 const adminPaths = [
   '/admin', '/admin-login', '/players', '/groups', '/attendance',
   '/coaches', '/payments', '/notifications', '/parents', '/reports',
-  '/history', '/security', '/audit-logs', '/owner-summary', '/media-gallery'
+  '/history', '/settings', '/security', '/audit-logs', '/owner-summary', '/media-gallery'
 ];
 const isAdminApp = adminPaths.some((path) => (
   window.location.pathname === path || window.location.pathname.startsWith(`${path}/`)

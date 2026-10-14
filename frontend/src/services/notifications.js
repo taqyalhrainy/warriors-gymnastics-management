@@ -181,3 +181,9 @@ export const announceGroupParents = async (data) => {
   invalidateCache(['notifications:', 'parent:']);
   return response.data;
 };
+
+export const announceParentsByStatus = async (data) => {
+  const response = await api.post('/notifications/announce-status', data);
+  invalidateCache(['notifications:', 'parent:']);
+  return response.data;
+};

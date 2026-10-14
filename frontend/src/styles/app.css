@@ -4401,6 +4401,97 @@ body.attendance-touch-dragging {
   box-shadow: var(--shadow);
 }
 
+.settings-preferences {
+  display: grid;
+  gap: 18px;
+  max-width: 880px;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--primary);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.settings-preferences-heading h2,
+.settings-preferences-heading p {
+  margin: 0;
+}
+
+.settings-preferences-heading p {
+  margin-top: 6px;
+  color: var(--muted);
+}
+
+.settings-preference-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-preference-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(260px, auto);
+  align-items: center;
+  gap: 18px;
+  min-height: 82px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-alt);
+}
+
+.settings-preference-row > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.settings-preference-row span {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.settings-segmented-control {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(105px, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.settings-segmented-control button {
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+  font-weight: 850;
+}
+
+.settings-segmented-control button:hover,
+.settings-segmented-control button.is-selected {
+  background: var(--primary);
+  color: #ffffff;
+  transform: none;
+}
+
+@media (max-width: 640px) {
+  .settings-preferences {
+    padding: 16px;
+  }
+
+  .settings-preference-row {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-segmented-control {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .security-card-heading {
   display: flex;
   justify-content: space-between;

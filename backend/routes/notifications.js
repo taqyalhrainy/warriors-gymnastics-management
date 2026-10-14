@@ -14,7 +14,8 @@ const {
   deleteSavedMessage,
   createNotification,
   announceAllParents,
-  announceGroupParents
+  announceGroupParents,
+  announceParentsByPlayerStatus
 } = require('../controllers/notificationController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -36,5 +37,6 @@ router.get('/:id', authorize('admin', 'coach', 'receptionist', 'parent'), getNot
 router.post('/', authorize('admin', 'coach', 'receptionist'), createNotification);
 router.post('/announce-all', authorize('admin', 'coach', 'receptionist'), announceAllParents);
 router.post('/announce-group', authorize('admin', 'coach', 'receptionist'), announceGroupParents);
+router.post('/announce-status', authorize('admin', 'coach', 'receptionist'), announceParentsByPlayerStatus);
 
 module.exports = router;

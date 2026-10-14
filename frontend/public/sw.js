@@ -49,7 +49,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (event.request.mode === 'navigate') {
-    const adminPaths = /^\/(admin(?:\/|$)|admin-login$|players|groups|attendance|coaches|payments|notifications|parents|reports|history|security|audit-logs|owner-summary|media-gallery)/;
+    const adminPaths = /^\/(admin(?:\/|$)|admin-login$|players|groups|attendance|coaches|payments|notifications|parents|reports|history|settings|security|audit-logs|owner-summary|media-gallery)/;
     const shellUrl = adminPaths.test(requestUrl.pathname)
       ? '/admin/login?source=admin-pwa' : '/parent/login?source=parent-pwa';
     const cacheReady = caches.open(CACHE_NAME);

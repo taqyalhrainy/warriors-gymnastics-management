@@ -106,7 +106,7 @@ const Sidebar = () => {
     { path: '/notifications', key: 'notifications' },
     ...(user?.role === 'admin' ? [{ path: '/media-gallery', key: 'mediaGallery', label: 'Media Gallery' }] : []),
     { path: '/history', key: 'history' },
-    { path: '/security', key: 'security' }
+    { path: '/settings', key: 'settings' }
   ];
 
   const links = isParentArea

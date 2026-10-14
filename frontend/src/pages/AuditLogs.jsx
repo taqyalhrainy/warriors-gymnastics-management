@@ -14,18 +14,45 @@ const initialPasswordForm = {
   confirmPassword: ''
 };
 
-const AuditLogsPage = () => {
+const AuditLogsPage = ({ theme, changeTheme }) => {
   const { states: loadStates, load: loadSection } = useSectionLoader(["logs"]);
   const [logs, setLogs] = useState([]);
   const [search, setSearch] = useState('');
-  const [activeSecurityTab, setActiveSecurityTab] = useState('audit');
+  const [activeSecurityTab, setActiveSecurityTab] = useState('general');
   const [passwordForm, setPasswordForm] = useState(initialPasswordForm);
   const [showPaymentPasswords, setShowPaymentPasswords] = useState(false);
   const [securityMessage, setSecurityMessage] = useState('');
   const [securityError, setSecurityError] = useState('');
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
-  const { t } = useLanguage();
+  const { language, changeLanguage, t } = useLanguage();
   const { user } = useAuth();
+  const copy = language === 'ar' ? {
+    general: 'عام',
+    accountSecurity: 'أمان الحساب',
+    paymentSecurity: 'أمان الدفعات',
+    preferences: 'تفضيلات العرض',
+    preferencesDescription: 'اختر لغة لوحة الإدارة ومظهرها على هذا الجهاز.',
+    language: 'اللغة',
+    english: 'English',
+    arabic: 'العربية',
+    appearance: 'المظهر',
+    light: 'فاتح',
+    dark: 'داكن',
+    selected: 'محدد'
+  } : {
+    general: 'General',
+    accountSecurity: 'Account Security',
+    paymentSecurity: 'Payment Security',
+    preferences: 'Display preferences',
+    preferencesDescription: 'Choose the admin dashboard language and appearance for this device.',
+    language: 'Language',
+    english: 'English',
+    arabic: 'العربية',
+    appearance: 'Appearance',
+    light: 'Light',
+    dark: 'Dark',
+    selected: 'Selected'
+  };
 
   const formatEntity = (log) => {
     if (log.entity === 'User' && log.userId?.role) {
@@ -76,12 +103,38 @@ const AuditLogsPage = () => {
     <div className="dashboard-layout">
       <Sidebar />
       <main className="page-content">
-        <div className="page-header"><h1>{t('security')}</h1></div>
+        <div className="page-header"><h1>{t('settings')}</h1></div>
         <div className="security-tabs">
-          {user?.role === 'admin' && <button type="button" className={activeSecurityTab === 'account' ? 'active' : ''} onClick={() => setActiveSecurityTab('account')}>Admin Settings</button>}
+          <button type="button" className={activeSecurityTab === 'general' ? 'active' : ''} onClick={() => setActiveSecurityTab('general')}>{copy.general}</button>
+          {user?.role === 'admin' && <button type="button" className={activeSecurityTab === 'account' ? 'active' : ''} onClick={() => setActiveSecurityTab('account')}>{copy.accountSecurity}</button>}
+          <button type="button" className={activeSecurityTab === 'paymentPassword' ? 'active' : ''} onClick={() => setActiveSecurityTab('paymentPassword')}>{copy.paymentSecurity}</button>
           <button type="button" className={activeSecurityTab === 'audit' ? 'active' : ''} onClick={() => setActiveSecurityTab('audit')}>{t('auditLogs')}</button>
-          <button type="button" className={activeSecurityTab === 'paymentPassword' ? 'active' : ''} onClick={() => setActiveSecurityTab('paymentPassword')}>Payment Password</button>
         </div>
+
+        {activeSecurityTab === 'general' && (
+          <section className="settings-preferences" aria-label={copy.preferences}>
+            <div className="settings-preferences-heading">
+              <h2>{copy.preferences}</h2>
+              <p>{copy.preferencesDescription}</p>
+            </div>
+            <div className="settings-preference-grid">
+              <div className="settings-preference-row">
+                <div><strong>{copy.language}</strong><span>{language === 'en' ? copy.english : copy.arabic}</span></div>
+                <div className="settings-segmented-control" role="group" aria-label={copy.language}>
+                  <button type="button" className={language === 'en' ? 'is-selected' : ''} onClick={() => changeLanguage('en')} aria-pressed={language === 'en'}>{copy.english}</button>
+                  <button type="button" className={language === 'ar' ? 'is-selected' : ''} onClick={() => changeLanguage('ar')} aria-pressed={language === 'ar'}>{copy.arabic}</button>
+                </div>
+              </div>
+              <div className="settings-preference-row">
+                <div><strong>{copy.appearance}</strong><span>{theme === 'dark' ? copy.dark : copy.light}</span></div>
+                <div className="settings-segmented-control" role="group" aria-label={copy.appearance}>
+                  <button type="button" className={theme === 'light' ? 'is-selected' : ''} onClick={() => changeTheme('light')} aria-pressed={theme === 'light'}>{copy.light}</button>
+                  <button type="button" className={theme === 'dark' ? 'is-selected' : ''} onClick={() => changeTheme('dark')} aria-pressed={theme === 'dark'}>{copy.dark}</button>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
 
         {activeSecurityTab === 'account' && user?.role === 'admin' && <AdminAccountSecurity />}
         {activeSecurityTab === 'paymentPassword' && (

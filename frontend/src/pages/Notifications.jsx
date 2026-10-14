@@ -8,6 +8,7 @@ import {
   sendNotification,
   announceAllParents,
   announceGroupParents,
+  announceParentsByStatus,
   fetchSavedNotificationMessages,
   createSavedNotificationMessage,
   updateSavedNotificationMessage,
@@ -166,6 +167,10 @@ const NotificationsPage = () => {
       } else if (form.recipientUserId === 'group') {
         const result = await announceGroupParents({ groupId: form.groupId, title: form.title, message: form.message, type: form.type });
         setMessage(`Announcement sent to ${result.count} parents in this session.`);
+      } else if (form.recipientUserId.startsWith('status:')) {
+        const status = form.recipientUserId.slice('status:'.length);
+        const result = await announceParentsByStatus({ status, title: form.title, message: form.message, type: form.type });
+        setMessage(`Announcement sent to ${result.count} parents of ${status} players.`);
       } else {
         await sendNotification(form);
         setMessage('Notification sent successfully.');
@@ -267,11 +272,20 @@ const NotificationsPage = () => {
               />
               <select value={form.recipientUserId} onChange={(e) => setForm({ ...form, recipientUserId: e.target.value, groupId: '' })} required>
                 <option value="">{t('selectParent')}</option>
-                <option value="all">{t('allParents')}</option>
-                <option value="group">Parents by session</option>
-                {filteredParents.map((parent) => (
-                  <option key={parent._id} value={parent.userId?._id || ''}>{parent.name}</option>
-                ))}
+                <optgroup label="Parent audiences">
+                  <option value="all">{t('allParents')}</option>
+                  <option value="status:active">Parents of active players</option>
+                  <option value="status:frozen">Parents of frozen players</option>
+                  <option value="status:expired">Parents of expired players</option>
+                  <option value="status:tryout">Parents of tryout players</option>
+                  <option value="status:left">Parents of players who left</option>
+                  <option value="group">Parents by session</option>
+                </optgroup>
+                <optgroup label="Individual parents">
+                  {filteredParents.map((parent) => (
+                    <option key={parent._id} value={parent.userId?._id || ''}>{parent.name}</option>
+                  ))}
+                </optgroup>
               </select>
               {form.recipientUserId === 'group' && (
                 <>

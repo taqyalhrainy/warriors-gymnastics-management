@@ -314,6 +314,51 @@ test('freeze notes survive status changes and owner summary returns current paym
   await call('/reports/owner-summary', { auth: parentToken, status: 403 });
 });
 
+test('owner subscription totals use the cycle creation time and only subscription payments', async () => {
+  const cycleCreatedAt = new Date('2026-10-14T08:00:00.000Z');
+  const player = await newPlayer({
+    fullName: 'Owner total player',
+    payment: 100,
+    startDate: '2026-11-01',
+    currentSubscriptionStartedAt: '2026-11-01',
+    currentSubscriptionCreatedAt: cycleCreatedAt
+  });
+  await Payment.create([
+    {
+      playerId: player._id,
+      transactionType: 'Partial payment',
+      paidAmount: 40,
+      paymentDate: new Date('2026-09-01T09:00:00.000Z'),
+      createdAt: new Date('2026-10-14T09:00:00.000Z')
+    },
+    {
+      playerId: player._id,
+      transactionType: 'Full payment',
+      paidAmount: 10,
+      createdAt: new Date('2026-10-14T10:00:00.000Z')
+    },
+    {
+      playerId: player._id,
+      transactionType: 'T-shirt',
+      paidAmount: 25,
+      createdAt: new Date('2026-10-14T11:00:00.000Z')
+    },
+    {
+      playerId: player._id,
+      transactionType: 'Partial payment',
+      paidAmount: 30,
+      createdAt: new Date('2026-10-13T11:00:00.000Z')
+    }
+  ]);
+
+  const summary = await call('/reports/owner-summary');
+  const row = summary.players.find((item) => item._id === String(player._id));
+  assert.equal(row.currentSubscriptionCreatedAt, cycleCreatedAt.toISOString());
+  assert.equal(row.currentSubscriptionExpectedAmount, 100);
+  assert.equal(row.currentSubscriptionPaidAmount, 50);
+  assert.equal(row.currentSubscriptionRemainingAmount, 50);
+});
+
 test('program and package changes persist without rewriting existing player packages', async () => {
   const player = await newPlayer();
   const program = await call('/programs', { method: 'POST', body: { name: 'Audit program', price: 100 }, status: 201 });
@@ -357,6 +402,32 @@ test('notification read state and unread count belong only to the recipient', as
   await call(`/notifications/${notification._id}`, { auth: token(otherUser), status: 403 });
   await call(`/notifications/${notification._id}`, { auth: parentToken });
   assert.equal((await call('/notifications/count', { auth: parentToken })).count, 0);
+});
+
+test('status announcements target each parent once and keep player audiences separate', async () => {
+  await newPlayer({ fullName: 'Active one', status: 'active' });
+  await newPlayer({ fullName: 'Active two', status: 'active' });
+  await newPlayer({ fullName: 'Frozen other', parentId: otherParent._id, status: 'frozen' });
+
+  const active = await call('/notifications/announce-status', {
+    method: 'POST',
+    body: { status: 'active', title: 'Active', message: 'Active message' }
+  });
+  assert.equal(active.count, 1);
+  assert.equal((await call('/notifications/count', { auth: parentToken })).count, 1);
+  assert.equal((await call('/notifications/count', { auth: token(otherUser) })).count, 0);
+
+  const frozen = await call('/notifications/announce-status', {
+    method: 'POST',
+    body: { status: 'frozen', title: 'Frozen', message: 'Frozen message' }
+  });
+  assert.equal(frozen.count, 1);
+  assert.equal((await call('/notifications/count', { auth: token(otherUser) })).count, 1);
+  await call('/notifications/announce-status', {
+    method: 'POST',
+    body: { status: 'unknown', title: 'No', message: 'No' },
+    status: 400
+  });
 });
 
 test('waiting/data list edits, saved messages and gallery activation survive fresh reads', async () => {

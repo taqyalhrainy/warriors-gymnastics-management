@@ -12,6 +12,7 @@ const { isNativePushConfigured, sendNativePushToUser } = require('../utils/nativ
 const { createNotification: createAndPushNotification, createNotifications } = require('../utils/notificationDelivery');
 
 const adminNotificationRoles = ['admin', 'coach', 'receptionist'];
+const playerAudienceStatuses = ['active', 'frozen', 'expired', 'tryout', 'left'];
 const getPaginationOptions = (query) => {
   const limit = Math.min(Math.max(parseInt(query.limit, 10) || 0, 0), 100);
   const page = Math.max(parseInt(query.page, 10) || 1, 1);
@@ -455,6 +456,50 @@ const announceGroupParents = async (req, res, next) => {
   }
 };
 
+const announceParentsByPlayerStatus = async (req, res, next) => {
+  try {
+    const payload = sanitizeObject(req.body);
+    const status = String(payload.status || '').trim().toLowerCase();
+    const { title, message, type } = payload;
+    if (!playerAudienceStatuses.includes(status) || !title || !message) {
+      return res.status(400).json({ message: 'Valid player status, title, and message are required.' });
+    }
+
+    const players = await Player.find({
+      isDeleted: { $ne: true },
+      status
+    }).populate({
+      path: 'parentId',
+      populate: { path: 'userId', select: 'isActive' }
+    });
+
+    const recipients = new Map();
+    players.forEach((player) => {
+      const user = player.parentId?.userId;
+      if (user?.isActive) recipients.set(String(user._id), user._id);
+    });
+    const notifications = [...recipients.values()].map((recipientUserId) => ({
+      recipientUserId,
+      title,
+      message,
+      type: type || 'announcement',
+      isRead: false
+    }));
+
+    if (notifications.length) await createNotifications(notifications);
+    await createAuditLog({
+      userId: req.user._id,
+      action: `announce ${status} player parents`,
+      entity: 'Notification',
+      entityId: null,
+      req
+    });
+    res.json({ count: notifications.length, status });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getNotifications,
   getNotificationById,
@@ -474,6 +519,7 @@ module.exports = {
   deleteSavedMessage,
   createNotification,
   announceAllParents,
-  announceGroupParents
+  announceGroupParents,
+  announceParentsByPlayerStatus
 };
 

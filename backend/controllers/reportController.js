@@ -120,7 +120,7 @@ const getOwnerSummary = async (req, res, next) => {
 
     const playerIds = players.map((player) => player._id);
     const subscriptionStarts = players
-      .map((player) => getCurrentSubscriptionStart(player) || player.createdAt)
+      .map((player) => player.currentSubscriptionCreatedAt || getCurrentSubscriptionStart(player) || player.createdAt)
       .filter(Boolean)
       .map((date) => new Date(date))
       .filter((date) => !Number.isNaN(date.getTime()));
@@ -150,14 +150,19 @@ const getOwnerSummary = async (req, res, next) => {
     }
 
     const formattedPlayers = players.map((player) => {
-      const subscriptionStart = getCurrentSubscriptionStart(player) || player.createdAt;
-      const startTime = new Date(subscriptionStart || 0).getTime();
+      const subscriptionCreatedAt = player.currentSubscriptionCreatedAt || getCurrentSubscriptionStart(player) || player.createdAt;
+      const cycleCreatedTime = new Date(subscriptionCreatedAt || 0).getTime();
       const currentSubscriptionPaidAmount = (paymentsByPlayer.get(String(player._id)) || [])
         .filter((payment) => {
           const paymentTime = new Date(payment.createdAt || payment.paymentDate || 0).getTime();
-          return !Number.isNaN(paymentTime) && !Number.isNaN(startTime) && paymentTime >= startTime;
+          return !Number.isNaN(paymentTime) && !Number.isNaN(cycleCreatedTime) && paymentTime >= cycleCreatedTime;
         })
         .reduce((sum, payment) => sum + Number(payment.paidAmount || 0), 0);
+      const currentSubscriptionExpectedAmount = Number(player.payment || 0);
+      const currentSubscriptionRemainingAmount = Math.max(
+        0,
+        currentSubscriptionExpectedAmount - currentSubscriptionPaidAmount
+      );
       const parentPhone = safeDecrypt(player.parentPhoneEncrypted) || safeDecrypt(player.parentId?.phoneEncrypted);
       const parent = player.parentId ? { ...player.parentId, phone: parentPhone } : null;
       if (parent) delete parent.phoneEncrypted;
@@ -165,7 +170,10 @@ const getOwnerSummary = async (req, res, next) => {
         ...player,
         parentId: parent,
         parentPhone,
+        currentSubscriptionCreatedAt: subscriptionCreatedAt,
+        currentSubscriptionExpectedAmount,
         currentSubscriptionPaidAmount,
+        currentSubscriptionRemainingAmount,
         preservedRemainingBalance: 0
       };
       delete result.parentPhoneEncrypted;

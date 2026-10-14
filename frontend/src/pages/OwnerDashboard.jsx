@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { getRemainingAmount } from '../utils/manualRemaining.js';
 import DataStatus from '../components/DataStatus.jsx';
 import { useSectionLoader, canShowEmpty } from '../hooks/useSectionLoader.js';
 import { fetchOwnerSummary } from '../services/reports.js';
-import { attendanceCycleStart } from '../utils/attendanceRecords.js';
 
 const NEW_SUBSCRIPTION_ALERT_READ_KEY = 'warriors-new-subscription-alert-read-ids';
 const OWNER_DATE_AUDIT_READ_KEY = 'warriors-owner-date-audit-read-ids';
@@ -26,7 +24,7 @@ const getPaymentMonthKey = (date) => {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`;
 };
 
-const getPlayerSubscriptionDate = (player) => attendanceCycleStart(player) || player?.createdAt || null;
+const getPlayerSubscriptionDate = (player) => player?.currentSubscriptionCreatedAt || player?.currentSubscriptionStartedAt || player?.startDate || player?.createdAt || null;
 
 const getSortableDateTime = (...dates) => {
   for (const date of dates) {
@@ -161,7 +159,7 @@ const OwnerDashboard = () => {
       .filter((player) => getPaymentMonthKey(getPlayerSubscriptionDate(player)) === selectedMonth)
       .map((player) => {
         const subscriptionStart = getPlayerSubscriptionDate(player);
-        const expectedAmount = Number(player.payment || 0);
+        const expectedAmount = Number(player.currentSubscriptionExpectedAmount ?? player.payment ?? 0);
         const paidAmount = Number(player.currentSubscriptionPaidAmount || 0);
 
         return {
@@ -169,7 +167,7 @@ const OwnerDashboard = () => {
           subscriptionStart,
           expectedAmount,
           paidAmount,
-          remainingAmount: getRemainingAmount(player)
+          remainingAmount: Number(player.currentSubscriptionRemainingAmount ?? Math.max(0, expectedAmount - paidAmount))
         };
       })
       .sort((first, second) => {

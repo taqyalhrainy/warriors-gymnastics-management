@@ -148,6 +148,7 @@ const adminSpaPaths = [
   /^\/parents(?:\/.*)?$/,
   /^\/reports(?:\/.*)?$/,
   /^\/history(?:\/.*)?$/,
+  /^\/settings(?:\/.*)?$/,
   /^\/security(?:\/.*)?$/,
   /^\/audit-logs(?:\/.*)?$/,
   /^\/owner-summary(?:\/.*)?$/,

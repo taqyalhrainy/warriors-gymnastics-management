@@ -1,7 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
-import { useLanguage } from './context/LanguageContext.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import ParentMessageNotifier from './components/ParentMessageNotifier.jsx';
 import ParentNotificationPermissionPrompt from './components/ParentNotificationPermissionPrompt.jsx';
@@ -41,7 +40,6 @@ const parentRoles = ['parent'];
 
 function App() {
   const { user } = useAuth();
-  const { language, toggleLanguage } = useLanguage();
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
 
   useEffect(() => {
@@ -111,22 +109,14 @@ function App() {
     setTheme((current) => (current === 'dark' ? 'light' : 'dark'));
   };
 
+  const changeTheme = (nextTheme) => {
+    if (nextTheme === 'light' || nextTheme === 'dark') setTheme(nextTheme);
+  };
+
   return (
     <div className={`app-shell${user?.role === 'parent' ? ' parent-app-shell' : ''}`}>
       <ParentMessageNotifier />
       <ParentNotificationPermissionPrompt user={user} />
-      {user?.role === 'parent' ? (
-        null
-      ) : (
-        <>
-          <button className={`theme-toggle-btn ${language === 'ar' ? 'left' : 'right'}`} type="button" onClick={toggleTheme}>
-            <span>{theme === 'dark' ? 'LIGHT' : 'DARK'}</span>
-          </button>
-          <button className={`language-toggle-btn ${language === 'ar' ? 'left' : 'right'}`} type="button" onClick={toggleLanguage}>
-            <span>{language === 'en' ? 'AR' : 'EN'}</span>
-          </button>
-        </>
-      )}
       <Suspense fallback={<div className="route-loading"><img src={warriorsLogo} alt="" /><span className="loading-spinner" />Loading...</div>}>
         <NativeAppLifecycle />
         <Routes>
@@ -152,8 +142,9 @@ function App() {
               <Route path="/parents" element={<ParentsPage />} />
               <Route path="/reports" element={<ReportsPage />} />
               <Route path="/history" element={<HistoryPage />} />
-              <Route path="/security" element={<AuditLogsPage />} />
-              <Route path="/audit-logs" element={<Navigate to="/security" replace />} />
+              <Route path="/settings" element={<AuditLogsPage theme={theme} changeTheme={changeTheme} />} />
+              <Route path="/security" element={<Navigate to="/settings" replace />} />
+              <Route path="/audit-logs" element={<Navigate to="/settings" replace />} />
             </Route>
             <Route element={<ProtectedRoute roles={['admin']} />}>
               <Route path="/owner-summary" element={<OwnerDashboardPage />} />

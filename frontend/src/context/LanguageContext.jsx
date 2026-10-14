@@ -18,9 +18,13 @@ export const LanguageProvider = ({ children }) => {
     setLanguage((current) => (current === 'en' ? 'ar' : 'en'));
   };
 
+  const changeLanguage = (nextLanguage) => {
+    if (nextLanguage === 'en' || nextLanguage === 'ar') setLanguage(nextLanguage);
+  };
+
   const t = (key) => translations[language]?.[key] || key;
 
-  const value = useMemo(() => ({ language, toggleLanguage, t }), [language]);
+  const value = useMemo(() => ({ language, toggleLanguage, changeLanguage, t }), [language]);
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 };

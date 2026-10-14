@@ -60,7 +60,7 @@ test('even a 200 hosting page is never displayed or cached as the app', async ()
 
 test('valid shell refresh stays separate for parent and admin; offline startup keeps branding', async () => {
   const app = setup(async () => shell('New Admin'), { '/parent/login?source=parent-pwa': shell('Parent') });
-  const result = app.navigate('/security');
+  const result = app.navigate('/settings');
   await result.background;
   assert.match(await app.stored.get('/admin/login?source=admin-pwa').text(), /New Admin/);
   assert.match(await app.stored.get('/parent/login?source=parent-pwa').text(), /Parent/);
