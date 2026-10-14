@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getPaymentDayKey, getPaymentMonthKey, mergePaymentRows } from '../src/utils/paymentDates.js';
+import { getPaymentDayKey, getPaymentMonthKey, mergePaymentRows, rollPaymentDayForward } from '../src/utils/paymentDates.js';
 
 test('payment calendar follows Amman across day, month and year rollover regardless of device timezone', () => {
   const before = process.env.TZ;
@@ -24,4 +24,27 @@ test('a payment moving between pagination boundaries remains one row with its la
   const merged = mergePaymentRows([{ _id: 'a', paidAmount: 10 }, { _id: 'b', paidAmount: 20 }],
     [{ _id: 'b', paidAmount: 25 }, { _id: 'c', paidAmount: 30 }]);
   assert.deepEqual(merged, [{ _id: 'a', paidAmount: 10 }, { _id: 'b', paidAmount: 25 }, { _id: 'c', paidAmount: 30 }]);
+});
+
+test('an open payment screen advances to the new Amman day without overwriting a manually selected date', () => {
+  assert.deepEqual(rollPaymentDayForward({
+    previousToday: '2026-10-13',
+    formDay: '2026-10-13',
+    selectedDay: '2026-10-13'
+  }, '2026-10-13T21:01:00Z'), {
+    today: '2026-10-14',
+    formDay: '2026-10-14',
+    selectedDay: '2026-10-14'
+  });
+
+  assert.deepEqual(rollPaymentDayForward({
+    previousToday: '2026-10-13',
+    formDay: '2026-10-10',
+    selectedDay: '2026-10-13',
+    preserveFormDay: true
+  }, '2026-10-13T21:01:00Z'), {
+    today: '2026-10-14',
+    formDay: '2026-10-10',
+    selectedDay: '2026-10-14'
+  });
 });

@@ -13,6 +13,15 @@ export const getPaymentDayKey = (value = new Date()) => {
 
 export const getPaymentMonthKey = (value = new Date()) => getPaymentDayKey(value).slice(0, 7);
 
+export const rollPaymentDayForward = ({ previousToday, formDay, selectedDay, preserveFormDay = false }, value = new Date()) => {
+  const today = getPaymentDayKey(value);
+  return {
+    today,
+    formDay: !preserveFormDay && formDay === previousToday ? today : formDay,
+    selectedDay: selectedDay === previousToday ? today : selectedDay
+  };
+};
+
 export const mergePaymentRows = (current, incoming) => [...new Map(
   [...current, ...incoming].map((row) => [String(row._id), row])
 ).values()];

@@ -10,7 +10,7 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
 import { attendanceCycleStart } from '../utils/attendanceRecords.js';
 import { getRemainingAmount, sumRemainingByPlayer } from '../utils/manualRemaining.js';
-import { PAYMENT_TIME_ZONE, getPaymentDayKey, getPaymentMonthKey, mergePaymentRows } from '../utils/paymentDates.js';
+import { PAYMENT_TIME_ZONE, getPaymentDayKey, getPaymentMonthKey, mergePaymentRows, rollPaymentDayForward } from '../utils/paymentDates.js';
 
 const formatDate = (date) => {
   if (!date) return '-';
@@ -103,7 +103,7 @@ const getPlayerGroups = (player) => {
   return groups.map((group) => group?.name).filter(Boolean).join(', ');
 };
 
-const initialPaymentForm = {
+const createInitialPaymentForm = () => ({
   payerMode: 'player',
   playerId: '',
   customPlayerName: '',
@@ -113,13 +113,13 @@ const initialPaymentForm = {
   paymentMethod: 'Cash',
   paymentDate: getDateInputValue(),
   notes: ''
-};
+});
 
 const PaymentsPage = () => {
   const { states: loadStates, load: loadSection } = useSectionLoader(["payments","players"]);
   const [payments, setPayments] = useState([]);
   const [players, setPlayers] = useState([]);
-  const [form, setForm] = useState(initialPaymentForm);
+  const [form, setForm] = useState(createInitialPaymentForm);
   const [isPaymentUnlocked, setIsPaymentUnlocked] = useState(false);
   const [showPaymentUnlock, setShowPaymentUnlock] = useState(false);
   const [pendingPaymentView, setPendingPaymentView] = useState('');
@@ -142,6 +142,9 @@ const PaymentsPage = () => {
   const paymentsLoadRequestIdRef = useRef(0);
   const paymentsRevisionRef = useRef(0);
   const submittingRef = useRef(false);
+  const currentPaymentDayRef = useRef(getDateInputValue());
+  const paymentDateWasChosenRef = useRef(false);
+  const selectedDayWasChosenRef = useRef(false);
   const [saveMessage, setSaveMessage] = useState('');
   const { t } = useLanguage();
 
@@ -198,6 +201,38 @@ const PaymentsPage = () => {
   useEffect(() => {
     loadPayments({ forceAll: isPaymentUnlocked, page: 1 });
   }, [selectedDay, selectedMonth, activeView, isPaymentUnlocked, debouncedSearch]);
+
+  useEffect(() => {
+    const synchronizePaymentDay = () => {
+      const previousToday = currentPaymentDayRef.current;
+      const next = rollPaymentDayForward({
+        previousToday,
+        formDay: form.paymentDate,
+        selectedDay,
+        preserveFormDay: paymentDateWasChosenRef.current
+      });
+      if (!next.today || next.today === previousToday) return;
+      currentPaymentDayRef.current = next.today;
+      setForm((current) => current.paymentDate === next.formDay
+        ? current
+        : { ...current, paymentDate: next.formDay });
+      if (!selectedDayWasChosenRef.current) {
+        setSelectedDay((current) => current === next.selectedDay ? current : next.selectedDay);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') synchronizePaymentDay();
+    };
+    const timer = window.setInterval(synchronizePaymentDay, 60 * 1000);
+    window.addEventListener('focus', synchronizePaymentDay);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', synchronizePaymentDay);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [form.paymentDate, selectedDay]);
 
   const handlePaymentUnlock = async (event) => {
     event.preventDefault();
@@ -422,7 +457,8 @@ const PaymentsPage = () => {
       setPayments((current) => sortPaymentsNewestFirst(
         [savedPayment, ...current.filter((payment) => payment._id !== savedPayment._id)]
       ));
-      setForm({ ...initialPaymentForm, paymentDate: getDateInputValue() });
+      setForm(createInitialPaymentForm());
+      paymentDateWasChosenRef.current = false;
       setEditingPaymentId('');
       setPlayerSearch('');
       const savedDay = getPaymentDayKey(savedPayment.paymentDate);
@@ -441,6 +477,7 @@ const PaymentsPage = () => {
   };
 
   const handleEditPayment = (payment) => {
+    paymentDateWasChosenRef.current = true;
     setEditingPaymentId(payment._id);
     setForm({
       payerMode: payment.playerId ? 'player' : 'custom',
@@ -459,7 +496,8 @@ const PaymentsPage = () => {
 
   const handleCancelEdit = () => {
     setEditingPaymentId('');
-    setForm({ ...initialPaymentForm, paymentDate: getDateInputValue() });
+    setForm(createInitialPaymentForm());
+    paymentDateWasChosenRef.current = false;
     setPlayerSearch('');
   };
 
@@ -650,7 +688,10 @@ const PaymentsPage = () => {
                     <input
                       type="date"
                       value={form.paymentDate}
-                      onChange={(e) => setForm({ ...form, paymentDate: e.target.value || getDateInputValue() })}
+                      onChange={(e) => {
+                        paymentDateWasChosenRef.current = Boolean(e.target.value);
+                        setForm({ ...form, paymentDate: e.target.value || getDateInputValue() });
+                      }}
                       required
                     />
                   </label>
@@ -700,7 +741,10 @@ const PaymentsPage = () => {
                     className="payment-date-filter"
                     type="date"
                     value={selectedDay}
-                    onChange={(event) => setSelectedDay(event.target.value || getDateInputValue())}
+                    onChange={(event) => {
+                      selectedDayWasChosenRef.current = Boolean(event.target.value);
+                      setSelectedDay(event.target.value || getDateInputValue());
+                    }}
                   />
                 )}
               </div>
