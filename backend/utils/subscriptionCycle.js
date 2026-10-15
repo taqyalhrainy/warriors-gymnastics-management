@@ -17,6 +17,24 @@ const getCurrentSubscriptionStart = (player, fallbackStart = null) => (
   || getLatestDate(player?.subscriptionId?.startDate, fallbackStart)
 );
 
+const isPaymentInCurrentSubscription = (payment, player) => {
+  const paymentId = String(payment?._id || '');
+  const confirmedPaymentId = String(player?.currentSubscriptionPaymentId || '');
+  if (paymentId && confirmedPaymentId && paymentId === confirmedPaymentId) return true;
+
+  const cycleCreatedAt = toValidDate(player?.currentSubscriptionCreatedAt);
+  const paymentCreatedAt = toValidDate(payment?.createdAt);
+  if (cycleCreatedAt) return Boolean(paymentCreatedAt && paymentCreatedAt >= cycleCreatedAt);
+
+  const subscriptionStart = getCurrentSubscriptionStart(player);
+  if (!subscriptionStart) return true;
+  const paymentDate = toValidDate(payment?.paymentDate);
+  return Boolean(
+    (paymentCreatedAt && paymentCreatedAt >= subscriptionStart)
+    || (paymentDate && paymentDate >= subscriptionStart)
+  );
+};
+
 const isLaterSubscriptionStart = (candidate, player, fallbackStart = null) => {
   const next = toValidDate(candidate);
   const current = getCurrentSubscriptionStart(player, fallbackStart);
@@ -25,4 +43,10 @@ const isLaterSubscriptionStart = (candidate, player, fallbackStart = null) => {
   return getAppDateOnly(next) > getAppDateOnly(current);
 };
 
-module.exports = { getCurrentSubscriptionStart, getLatestDate, isLaterSubscriptionStart, toValidDate };
+module.exports = {
+  getCurrentSubscriptionStart,
+  getLatestDate,
+  isLaterSubscriptionStart,
+  isPaymentInCurrentSubscription,
+  toValidDate
+};

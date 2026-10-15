@@ -9,14 +9,14 @@ const { parseLocalizedNumber } = require('../utils/numberInput');
 const { snapshotPaymentDocument, createHistoryEntry } = require('../utils/history');
 const { createNotification } = require('../utils/notificationDelivery');
 const { getAppDateOnly, getAppDayRangeUtc, getAppDayStartUtc, dateKeyToUtc } = require('../utils/appDate');
-const { getCurrentSubscriptionStart } = require('../utils/subscriptionCycle');
+const { getCurrentSubscriptionStart, isPaymentInCurrentSubscription, toValidDate } = require('../utils/subscriptionCycle');
 const { getRemainingAmount } = require('../utils/manualRemaining');
 const { confirmSubscriptionPaymentProof } = require('../utils/subscriptionPaymentProof');
 
 const populatePaymentQuery = (query) => query
   .populate({
     path: 'playerId',
-    select: 'fullName parentId parentPhoneEncrypted isDeleted deletedAt packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual preservedRemainingBalance startDate endDate currentSubscriptionStartedAt currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId',
+    select: 'fullName parentId parentPhoneEncrypted isDeleted deletedAt packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual preservedRemainingBalance startDate endDate currentSubscriptionStartedAt currentSubscriptionCreatedAt currentSubscriptionPaymentId currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId',
     populate: [
       {
         path: 'parentId',
@@ -52,18 +52,6 @@ const getPaginationOptions = (query) => {
   const limit = Math.min(Math.max(parseInt(query.limit, 10) || 0, 0), 100);
   const page = Math.max(parseInt(query.page, 10) || 1, 1);
   return { limit, page, skip: limit ? (page - 1) * limit : 0 };
-};
-
-const isOnOrAfter = (value, date) => {
-  if (!value || !date) return false;
-  const parsed = new Date(value);
-  return !Number.isNaN(parsed.getTime()) && parsed >= date;
-};
-
-const isPaymentInPlayerCurrentSubscription = (payment, player) => {
-  const subscriptionStart = getCurrentSubscriptionStart(player);
-  if (!subscriptionStart) return true;
-  return isOnOrAfter(payment.paymentDate, subscriptionStart) || isOnOrAfter(payment.createdAt, subscriptionStart);
 };
 
 const formatPaymentResponse = (payment) => {
@@ -156,7 +144,7 @@ const getCurrentPaymentSummaryMap = async (players) => {
     const playerId = String(payment.playerId);
     const player = playerById.get(playerId);
     const summary = summaryMap.get(playerId);
-    if (!player || !summary || !isPaymentInPlayerCurrentSubscription(payment, player)) return;
+    if (!player || !summary || !isPaymentInCurrentSubscription(payment, player)) return;
     summary.paidAmount += Number(payment.paidAmount || 0);
   });
 
@@ -236,6 +224,12 @@ const formatPaymentsWithAttendanceCounts = async (payments) => {
 
 const getCurrentSubscriptionPaymentMatch = (player) => {
   const match = { playerId: player._id, isDeleted: { $ne: true } };
+  const cycleCreatedAt = toValidDate(player.currentSubscriptionCreatedAt);
+  if (cycleCreatedAt) {
+    match.$or = [{ createdAt: { $gte: cycleCreatedAt } }];
+    if (player.currentSubscriptionPaymentId) match.$or.push({ _id: player.currentSubscriptionPaymentId });
+    return match;
+  }
   const subscriptionStart = getCurrentSubscriptionStart(player);
   if (subscriptionStart) {
     match.$or = [

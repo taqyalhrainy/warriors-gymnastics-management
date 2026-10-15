@@ -40,24 +40,6 @@ const paginateRows = (rows, query) => {
   };
 };
 
-const isOnOrAfter = (value, date) => {
-  if (!value || !date) return false;
-  const parsed = new Date(value);
-  return !Number.isNaN(parsed.getTime()) && parsed >= date;
-};
-
-const getCurrentSubscriptionPaymentMatch = (player) => {
-  const match = { playerId: player._id, transactionType: { $in: ['Full payment', 'Partial payment'] } };
-  const subscriptionStart = getCurrentSubscriptionStart(player);
-  if (subscriptionStart) {
-    match.$or = [
-      { paymentDate: { $gte: subscriptionStart } },
-      { createdAt: { $gte: subscriptionStart } }
-    ];
-  }
-  return match;
-};
-
 const getParentVisibleRemaining = (player) => (
   player?.attendanceDueManual
     ? Math.max(0, Number(player.previousDueBalance || 0) - Number(player.dueAdjustment || 0))
@@ -559,7 +541,7 @@ const getParentAttendance = async (req, res, next) => {
     }
     const children = await Player.find({ parentId: parent._id, isDeleted: { $ne: true } })
       .sort({ createdAt: -1, _id: -1 })
-      .select('_id fullName dateOfBirth profileImage status startDate endDate packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual currentSubscriptionStartedAt currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId')
+      .select('_id fullName dateOfBirth profileImage status startDate endDate packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual currentSubscriptionStartedAt currentSubscriptionCreatedAt currentSubscriptionPaymentId currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId')
       .populate('subscriptionId', 'totalSessions usedSessions remainingSessions startDate endDate status price');
     const childIds = children.map((child) => child._id);
     const [attendance, paymentSummaryMap] = await Promise.all([
@@ -649,14 +631,14 @@ const getParentPayments = async (req, res, next) => {
     }
     const children = await Player.find({ parentId: parent._id, isDeleted: { $ne: true } })
       .sort({ createdAt: -1, _id: -1 })
-      .select('_id fullName profileImage startDate endDate packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual currentSubscriptionStartedAt currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId createdAt updatedAt')
+      .select('_id fullName profileImage startDate endDate packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual currentSubscriptionStartedAt currentSubscriptionCreatedAt currentSubscriptionPaymentId currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId createdAt updatedAt')
       .populate('subscriptionId', 'totalSessions usedSessions remainingSessions startDate endDate status price');
     const childIds = children.map((child) => child._id);
     const payments = await Payment.find({ playerId: { $in: childIds }, isDeleted: { $ne: true } })
       .sort({ paymentDate: -1, _id: -1 })
       .populate({
         path: 'playerId',
-        select: 'fullName profileImage startDate endDate packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual currentSubscriptionStartedAt currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId',
+        select: 'fullName profileImage startDate endDate packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual currentSubscriptionStartedAt currentSubscriptionCreatedAt currentSubscriptionPaymentId currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds subscriptionId',
         populate: { path: 'subscriptionId', select: 'totalSessions usedSessions remainingSessions startDate endDate status price' }
       })
       .populate('subscriptionId', 'price startDate endDate totalSessions usedSessions remainingSessions status')
@@ -724,7 +706,7 @@ const getParentDashboard = async (req, res, next) => {
     }
     const children = await Player.find({ parentId: parent._id, isDeleted: { $ne: true } })
       .sort({ createdAt: -1, _id: -1 })
-      .select('_id fullName dateOfBirth profileImage status programId groupId groupIds coachId subscriptionId startDate endDate packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual currentSubscriptionStartedAt skillLevels')
+      .select('_id fullName dateOfBirth profileImage status programId groupId groupIds coachId subscriptionId startDate endDate packageName packageClasses packageHours payment previousDueBalance dueAdjustment attendanceDueManual currentSubscriptionStartedAt currentSubscriptionCreatedAt currentSubscriptionPaymentId skillLevels')
       .populate('programId', 'name')
       .populate('groupId', 'name')
       .populate('groupIds', 'name')

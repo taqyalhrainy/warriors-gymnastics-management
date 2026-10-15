@@ -247,6 +247,31 @@ test('attendance writes return the authoritative package count and parent attend
   assert.equal(parentAttendance.children[0].currentSubscriptionPaidAmount, 100);
 });
 
+test('parent screens count a payment recorded before a future subscription start date', async () => {
+  const futureStart = new Date();
+  futureStart.setDate(futureStart.getDate() + 3);
+  const player = await newPlayer({ payment: 100 });
+  await call(`/players/${player._id}`, {
+    method: 'PUT',
+    body: { newSubscription: true, startDate: getAppDateKey(futureStart), payment: 100 }
+  });
+  const cycle = await Player.findById(player._id);
+  assert.ok(cycle.currentSubscriptionCreatedAt < cycle.currentSubscriptionStartedAt);
+
+  await call('/payments', {
+    method: 'POST',
+    body: { playerId: String(player._id), paidAmount: 100, paymentMethod: 'Cash' },
+    status: 201
+  });
+
+  const attendance = await call('/parents/me/attendance', { auth: parentToken });
+  const dashboard = await call('/parents/me/dashboard', { auth: parentToken });
+  const payments = await call('/parents/me/payments', { auth: parentToken });
+  assert.equal(attendance.children[0].currentSubscriptionPaidAmount, 100);
+  assert.equal(dashboard.children[0].currentSubscriptionPaidAmount, 100);
+  assert.equal(payments[0].visiblePaidAmount, 100);
+});
+
 test('reports include unlinked subscriptions and count a manual balance only once', async () => {
   const player = await newPlayer({ payment: 100, previousDueBalance: 50, attendanceDueManual: true });
   await newPlayer({ fullName: 'Expired player', endDate: '2026-01-01' });
