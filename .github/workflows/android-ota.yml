@@ -1,17 +1,89 @@
 name: Android Web Asset Updates
+
 on:
   push:
     branches: [main]
     paths: ['frontend/**', '.github/workflows/android-ota.yml']
   workflow_dispatch:
+    inputs:
+      publish_legacy:
+        description: Publish the existing Android application channel
+        required: false
+        type: boolean
+        default: false
+      publish_google_play_parents:
+        description: Publish the Google Play parent-only channel
+        required: false
+        type: boolean
+        default: false
+
 permissions:
-  contents: write
+  contents: read
+
 concurrency:
   group: android-ota-main
-  cancel-in-progress: true
+  cancel-in-progress: false
+
 jobs:
-  publish:
+  verify:
     runs-on: ubuntu-latest
+    outputs:
+      publish_mode: ${{ steps.plan.outputs.publish_mode }}
+    steps:
+      - name: Select publication mode
+        id: plan
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_MODE: ${{ vars.OTA_PUBLISH_MODE || 'none' }}
+          DISPATCH_LEGACY: ${{ inputs.publish_legacy }}
+          DISPATCH_PARENTS: ${{ inputs.publish_google_play_parents }}
+        run: |
+          mode=none
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            if [ "$DISPATCH_LEGACY" = true ] && [ "$DISPATCH_PARENTS" = true ]; then mode=both
+            elif [ "$DISPATCH_LEGACY" = true ]; then mode=legacy
+            elif [ "$DISPATCH_PARENTS" = true ]; then mode=parents
+            fi
+          elif [ "$EVENT_NAME" = push ]; then
+            case "$PUSH_MODE" in
+              legacy|parents|both) mode="$PUSH_MODE" ;;
+              ''|none) mode=none ;;
+              *) echo "Invalid OTA_PUBLISH_MODE repository variable."; exit 1 ;;
+            esac
+          fi
+          echo "publish_mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "Publication mode: $mode"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - run: npm ci
+        working-directory: backend
+      - run: npm test
+        working-directory: backend
+      - run: npm ci
+        working-directory: frontend
+      - run: npm test
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - run: npm run build:parents
+        working-directory: frontend
+      - name: Verify both isolated OTA packages with a temporary key
+        run: node scripts/ota-dual-local-check.mjs
+        working-directory: frontend
+
+  publish:
+    needs: verify
+    if: github.ref == 'refs/heads/main' && needs.verify.outputs.publish_mode != 'none'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,27 +92,34 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
-        working-directory: backend
-      - run: npm test
-        working-directory: backend
-      - run: npm ci
         working-directory: frontend
-      - run: npm test
+      - run: npm run build
         working-directory: frontend
-      - name: Sign web assets
+      - run: npm run build:parents
+        working-directory: frontend
+      - name: Stage and verify selected signed channels
         working-directory: frontend
         env:
+          OTA_CHANNELS: ${{ needs.verify.outputs.publish_mode }}
+          OTA_STAGING_ROOT: ${{ runner.temp }}/warriors-ota-staging
           OTA_SIGNING_PRIVATE_KEY: ${{ secrets.OTA_SIGNING_PRIVATE_KEY }}
         run: |
-          test -n "$OTA_SIGNING_PRIVATE_KEY" || { echo 'Set the OTA_SIGNING_PRIVATE_KEY repository secret first.'; exit 1; }
-          npm run ota:publish
-      - name: Publish to existing Render backend
+          test -n "$OTA_SIGNING_PRIVATE_KEY" || { echo 'Set OTA_SIGNING_PRIVATE_KEY before enabling publication.'; exit 1; }
+          npm run ota:stage
+      - name: Apply the fully verified staging set
+        working-directory: frontend
+        env:
+          OTA_STAGING_ROOT: ${{ runner.temp }}/warriors-ota-staging
+          OTA_APPLY_STAGED: YES_I_UNDERSTAND
+        run: npm run ota:apply-staged
+      - name: Commit selected channels from this source revision
+        shell: bash
         run: |
           git fetch origin main
-          test "$(git rev-parse origin/main)" = "$GITHUB_SHA" || { echo 'A newer source revision exists; skipping stale publication.'; exit 0; }
+          test "$(git rev-parse origin/main)" = "$GITHUB_SHA" || { echo 'A newer source revision exists; refusing stale publication.'; exit 1; }
           git config user.name 'Warriors OTA'
           git config user.email 'ota@users.noreply.github.com'
           git add backend/public/ota
           git diff --cached --quiet && exit 0
-          git commit -m 'Publish signed Android web assets'
+          git commit -m "Publish verified Android OTA assets (${{ needs.verify.outputs.publish_mode }})"
           git push origin HEAD:main

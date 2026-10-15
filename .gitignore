@@ -1,6 +1,7 @@
 node_modules
 .DS_Store
 dist
+dist-parents
 build
 .env
 .env.local
@@ -14,5 +15,6 @@ frontend/node_modules
 !backend/downloads/Warriors-Parent-2.0.apk
 *.aab
 .ota-secrets/
+.ota-staging/
 *.keystore
 *.jks
