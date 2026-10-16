@@ -1,0 +1,12 @@
+{
+  "legacyAndroid": {
+    "appId": "com.warriorsgymnastics.app",
+    "contract": "android-e14f6ae244df2a0f72ae2781",
+    "publicKeySha256": "cadaad978a02d680992897d79fae0d61632c0c4f3765cd6adcb9851c1f1263d9"
+  },
+  "googlePlayParents": {
+    "appId": "com.warriorsgymnastics.parents",
+    "contract": "android-8839a63cf093baf7ed41d9f2",
+    "publicKeySha256": "cadaad978a02d680992897d79fae0d61632c0c4f3765cd6adcb9851c1f1263d9"
+  }
+}

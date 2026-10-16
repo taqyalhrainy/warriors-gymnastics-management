@@ -36,6 +36,7 @@ async function mount(file, services) {
     'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'fragment' },
     'react-router-dom': { useParams: () => ({ id: 'player1' }), Link: 'a' },
     '../components/Sidebar.jsx': { default: () => null },
+    '../components/ParentSidebar.jsx': { default: () => null },
     '../components/DataStatus.jsx': { default: ({ state }) => state?.loading ? 'Loading...' : state?.error ? 'LOAD ERROR' : null },
     '../hooks/useSectionLoader.js': hook,
     '../context/LanguageContext.jsx': { useLanguage: () => ({ t: (key) => key, language: 'en' }) },

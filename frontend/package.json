@@ -7,11 +7,17 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:parents": "vite build --mode parents",
     "preview": "vite preview",
     "android:sync": "npm run build && cap sync android",
     "android:open": "cap open android",
     "ota:keygen": "node scripts/ota-keygen.mjs",
     "ota:publish": "npm run build && node scripts/ota-publish.mjs",
+    "ota:publish:parents": "npm run build:parents && node scripts/ota-publish-parents.mjs",
+    "ota:stage": "node scripts/ota-stage.mjs",
+    "ota:apply-staged": "node scripts/ota-apply-staged.mjs",
+    "ota:verify:dual-local": "npm run build && npm run build:parents && node scripts/ota-dual-local-check.mjs",
+    "android:prepare:parents": "node scripts/prepare-parent-android-workspace.mjs",
     "test": "node --experimental-vm-modules --test tests/*.test.js"
   },
   "dependencies": {
