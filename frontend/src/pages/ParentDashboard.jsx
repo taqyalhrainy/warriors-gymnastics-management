@@ -125,11 +125,11 @@ const ParentDashboard = () => {
     </span>
   );
   const appTiles = [
-    { path: '/parent/attendance', label: t('attendance'), icon: 'attendance' },
+    { path: '/parent/children', label: t('yourChildren'), icon: 'children', badge: children.length },
     { path: '/parent/payments', label: t('payments'), icon: 'payments' },
     { path: '/parent/notifications', label: t('notifications'), icon: 'notifications', badge: notifications.filter((note) => !note.isRead).length },
     { path: '/parent/settings', label: 'Settings', icon: 'settings' },
-    { path: '/parent/children', label: t('yourChildren'), icon: 'children', badge: children.length },
+    { path: '/parent/attendance', label: t('attendance'), icon: 'attendance' },
     { path: '/parent/subscriptions', label: t('subscriptionSummary'), icon: 'subscription' }
   ];
 
