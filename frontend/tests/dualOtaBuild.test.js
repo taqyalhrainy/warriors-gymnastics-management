@@ -39,13 +39,16 @@ test('parent build guard rejects full app and admin modules', () => {
   assert.throws(() => assertParentModuleIds([resolve(root, 'src/App.jsx')]), /forbidden modules/i);
 });
 
-test('workflow verifies both builds and keeps publication disabled by default', () => {
+test('workflow preserves legacy publishing and protects intentional dual publication', () => {
   const workflow = readFileSync(resolve(root, '../.github/workflows/android-ota.yml'), 'utf8');
   assert.match(workflow, /group:\s*android-ota-main/);
   assert.match(workflow, /cancel-in-progress:\s*false/);
   assert.match(workflow, /publish_legacy:[\s\S]*?default:\s*false/);
   assert.match(workflow, /publish_google_play_parents:[\s\S]*?default:\s*false/);
-  assert.match(workflow, /vars\.OTA_PUBLISH_MODE \|\| 'none'/);
+  assert.match(workflow, /confirm_publish_both:[\s\S]*?default:\s*false/);
+  assert.match(workflow, /vars\.OTA_PUBLISH_MODE \|\| 'legacy'/);
+  assert.match(workflow, /test "\$DISPATCH_CONFIRM_BOTH" = true/);
+  assert.match(workflow, /elif \[ "\$DISPATCH_PARENTS" = true \]; then mode=parents/);
   assert.match(workflow,
     /if:\s*github\.ref == 'refs\/heads\/main' && needs\.verify\.outputs\.publish_mode != 'none'/);
   assert.match(workflow, /npm run build\s/);

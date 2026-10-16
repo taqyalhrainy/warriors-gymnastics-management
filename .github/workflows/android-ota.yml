@@ -16,6 +16,11 @@ on:
         required: false
         type: boolean
         default: false
+      confirm_publish_both:
+        description: Confirm intentional publication to both Android channels
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -35,20 +40,26 @@ jobs:
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
-          PUSH_MODE: ${{ vars.OTA_PUBLISH_MODE || 'none' }}
+          PUSH_MODE: ${{ vars.OTA_PUBLISH_MODE || 'legacy' }}
           DISPATCH_LEGACY: ${{ inputs.publish_legacy }}
           DISPATCH_PARENTS: ${{ inputs.publish_google_play_parents }}
+          DISPATCH_CONFIRM_BOTH: ${{ inputs.confirm_publish_both }}
         run: |
           mode=none
           if [ "$EVENT_NAME" = workflow_dispatch ]; then
-            if [ "$DISPATCH_LEGACY" = true ] && [ "$DISPATCH_PARENTS" = true ]; then mode=both
+            if [ "$DISPATCH_LEGACY" = true ] && [ "$DISPATCH_PARENTS" = true ]; then
+              test "$DISPATCH_CONFIRM_BOTH" = true || { echo 'Select confirm_publish_both to publish both channels intentionally.'; exit 1; }
+              mode=both
             elif [ "$DISPATCH_LEGACY" = true ]; then mode=legacy
             elif [ "$DISPATCH_PARENTS" = true ]; then mode=parents
+            elif [ "$DISPATCH_CONFIRM_BOTH" = true ]; then
+              echo 'confirm_publish_both requires both publication channels.'
+              exit 1
             fi
           elif [ "$EVENT_NAME" = push ]; then
             case "$PUSH_MODE" in
-              legacy|parents|both) mode="$PUSH_MODE" ;;
-              ''|none) mode=none ;;
+              legacy|parents|both|none) mode="$PUSH_MODE" ;;
+              '') mode=legacy ;;
               *) echo "Invalid OTA_PUBLISH_MODE repository variable."; exit 1 ;;
             esac
           fi
