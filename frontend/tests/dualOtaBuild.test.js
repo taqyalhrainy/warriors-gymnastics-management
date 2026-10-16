@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { nativeContract } from '../scripts/native-contract.mjs';
 import { assertParentModuleIds } from '../scripts/parent-build-guard.mjs';
+import { publicKeyFingerprint } from '../scripts/public-key-fingerprint.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -23,7 +23,7 @@ test('legacy and Google Play parent OTA channels are isolated', () => {
 test('parent OTA contract uses the public key embedded in the current parent APK', () => {
   const channels = JSON.parse(readFileSync(resolve(root, 'ota-channels.json'), 'utf8'));
   const publicKey = readFileSync(resolve(root, 'ota-public-key.pem'));
-  assert.equal(createHash('sha256').update(publicKey).digest('hex'),
+  assert.equal(publicKeyFingerprint(publicKey),
     channels.googlePlayParents.publicKeySha256);
 });
 
@@ -63,7 +63,14 @@ test('workflow preserves legacy publishing and protects intentional dual publica
 test('protected OTA public key baseline is identical for both native apps', () => {
   const channels = JSON.parse(readFileSync(resolve(root, 'ota-channels.json'), 'utf8'));
   const publicKey = readFileSync(resolve(root, 'ota-public-key.pem'));
-  const hash = createHash('sha256').update(publicKey).digest('hex');
+  const hash = publicKeyFingerprint(publicKey);
   assert.equal(channels.legacyAndroid.publicKeySha256, hash);
   assert.equal(channels.googlePlayParents.publicKeySha256, hash);
+});
+
+test('OTA public key fingerprint is independent of PEM line endings', () => {
+  const publicKey = readFileSync(resolve(root, 'ota-public-key.pem'), 'utf8');
+  const lf = publicKey.replace(/\r\n/g, '\n');
+  const crlf = lf.replace(/\n/g, '\r\n');
+  assert.equal(publicKeyFingerprint(lf), publicKeyFingerprint(crlf));
 });

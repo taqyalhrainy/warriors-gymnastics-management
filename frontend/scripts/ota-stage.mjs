@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,6 +5,7 @@ import { unzipSync } from 'fflate';
 import { nativeContract } from './native-contract.mjs';
 import { createSignedOtaBundle, verifySignedOtaBundle } from './ota-package-core.mjs';
 import { assertParentBundleFiles, assertParentDist } from './parent-build-guard.mjs';
+import { publicKeyFingerprint } from './public-key-fingerprint.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const channels = JSON.parse(readFileSync(new URL('../ota-channels.json', import.meta.url), 'utf8'));
@@ -25,7 +25,7 @@ if (process.env.OTA_PUBLIC_KEY_PATH && !localTest) {
 }
 const publicKey = readFileSync(localTest && process.env.OTA_PUBLIC_KEY_PATH
   ? path.resolve(process.env.OTA_PUBLIC_KEY_PATH) : new URL('../ota-public-key.pem', import.meta.url));
-const publicKeyHash = createHash('sha256').update(publicKey).digest('hex');
+const publicKeyHash = publicKeyFingerprint(publicKey);
 const legacyContract = nativeContract();
 
 if (channels.legacyAndroid.contract !== legacyContract
