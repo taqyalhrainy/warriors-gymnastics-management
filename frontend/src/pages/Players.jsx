@@ -96,6 +96,7 @@ const PlayersPage = () => {
   const [waitingView, setWaitingView] = useState('waiting');
   const [waitingDayFilter, setWaitingDayFilter] = useState('all');
   const [waitingAgeFilter, setWaitingAgeFilter] = useState('');
+  const [waitingNameFilter, setWaitingNameFilter] = useState('');
   const [search, setSearch] = useState('');
   const [playersTotal, setPlayersTotal] = useState(() => cachedInitialPlayersPage?.total || 0);
   const [playersPage, setPlayersPage] = useState(() => cachedInitialPlayersPage?.page || 1);
@@ -540,7 +541,9 @@ const PlayersPage = () => {
   const filteredWaitingList = waitingList
     .filter((entry) => (entry.listType || 'waiting') === waitingView)
     .filter((entry) => waitingDayFilter === 'all' || getWaitingEntryDays(entry).has(waitingDayFilter))
-    .filter((entry) => !waitingAgeFilter || String(entry.playerAge ?? '').trim() === waitingAgeFilter.trim());
+    .filter((entry) => !waitingAgeFilter || String(entry.playerAge ?? '').trim() === waitingAgeFilter.trim())
+    .filter((entry) => !waitingNameFilter.trim()
+      || String(entry.playerName || '').toLocaleLowerCase().includes(waitingNameFilter.trim().toLocaleLowerCase()));
 
   return (
     <div className="dashboard-layout">
@@ -751,6 +754,10 @@ const PlayersPage = () => {
                 <label>
                   <span>Age</span>
                   <input inputMode="decimal" value={waitingAgeFilter} onChange={(event) => setWaitingAgeFilter(event.target.value)} placeholder="All ages" />
+                </label>
+                <label>
+                  <span>Player name</span>
+                  <input type="search" value={waitingNameFilter} onChange={(event) => setWaitingNameFilter(event.target.value)} placeholder="Search by name" />
                 </label>
               </div>
 

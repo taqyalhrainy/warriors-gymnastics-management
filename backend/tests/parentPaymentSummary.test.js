@@ -43,6 +43,32 @@ test('payment recorded for a newly created cycle counts before its future class 
   assert.equal(summarizeParentPayments(players, rows).get('a'), 100);
 });
 
+test('a prepayment recorded earlier on the renewal day counts for the future-start cycle', () => {
+  const players = [{
+    _id: 'a',
+    currentSubscriptionCreatedAt: '2026-10-21T10:00:00.000Z',
+    currentSubscriptionStartedAt: '2026-10-24T00:00:00.000Z'
+  }];
+  const rows = [{
+    _id: 'payment-current',
+    playerId: 'a',
+    paidAmount: 100,
+    createdAt: '2026-10-21T09:00:00.000Z',
+    paymentDate: '2026-10-21T00:00:00.000Z'
+  }];
+  assert.equal(summarizeParentPayments(players, rows).get('a'), 100);
+});
+
+test('an explicitly linked payment belongs only to its matching subscription', () => {
+  const rows = [{ playerId: 'a', subscriptionId: 'subscription-new', paidAmount: 100 }];
+  assert.equal(summarizeParentPayments([{
+    _id: 'a', subscriptionId: 'subscription-new', currentSubscriptionCreatedAt: '2026-10-21T10:00:00.000Z'
+  }], rows).get('a'), 100);
+  assert.equal(summarizeParentPayments([{
+    _id: 'a', subscriptionId: 'subscription-other', currentSubscriptionCreatedAt: '2026-10-21T10:00:00.000Z'
+  }], rows).get('a'), 0);
+});
+
 test('a payment from before the current cycle is not reused even when its date was future-dated', () => {
   const players = [{
     _id: 'a',
