@@ -268,7 +268,7 @@ const getCurrentPaymentSummaryMap = async (players, existingPayments) => {
   const paymentRows = existingPayments || await Payment.find({
     isDeleted: { $ne: true },
     playerId: { $in: playerIds }
-  }).select('playerId subscriptionId paidAmount paymentDate createdAt transactionType').lean();
+  }).select('playerId paidAmount paymentDate createdAt transactionType').lean();
 
   const summaryMap = new Map(players.map((player) => {
     const totalAmount = getParentVisibleRemaining(player);

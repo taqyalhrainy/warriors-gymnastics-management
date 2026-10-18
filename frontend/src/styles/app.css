@@ -3942,7 +3942,7 @@ body.attendance-touch-dragging {
     0 0 18px rgba(34, 197, 94, 0.14);
 }
 
-.parent-package-card .subscription-history-summary.is-current-subscription.is-unpaid-subscription {
+.parent-package-card .subscription-history-summary.is-current-subscription.is-attention-subscription {
   border-color: rgba(239, 68, 68, 0.58);
   background:
     linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(254, 202, 202, 0.12)),
@@ -3952,7 +3952,7 @@ body.attendance-touch-dragging {
     0 0 18px rgba(239, 68, 68, 0.16);
 }
 
-.parent-package-card .subscription-history-summary.is-current-subscription.is-unpaid-subscription b {
+.parent-package-card .subscription-history-summary.is-current-subscription.is-attention-subscription b {
   color: #b91c1c;
 }
 

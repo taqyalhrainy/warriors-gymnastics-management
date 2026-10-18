@@ -6,7 +6,7 @@ import { useSectionLoader } from '../hooks/useSectionLoader.js';
 import { fetchParentAttendance, fetchParentAttendanceHistory, getCachedParentAttendance } from '../services/parents.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import warriorsLogo from '../assets/warriors-logo.png';
-import { attendanceCycleStart } from '../utils/attendanceRecords.js';
+import { attendanceCycleStart, isParentSubscriptionRed } from '../utils/attendanceRecords.js';
 
 const formatDate = (date) => (date ? new Date(date).toLocaleDateString() : '-');
 const formatTime = (date) => (date ? new Date(date).toLocaleTimeString() : '-');
@@ -217,6 +217,7 @@ const ParentAttendancePage = () => {
       const used = current
         ? Number(child.attendancePresentCount ?? records.filter((record) => record.status === 'present' && isCurrentRecord(record, child)).length)
         : records.filter((record) => record.status === 'present').length;
+      const total = Number(cycle.packageClasses || 0);
       return {
         key: `${child._id}:${cycle.key}`,
         child,
@@ -224,12 +225,10 @@ const ParentAttendancePage = () => {
         startDate: cycle.startDate,
         endDate: cycle.endDate,
         used,
-        total: Number(cycle.packageClasses || 0),
+        total,
         records,
         current,
-        paidInFull: !current
-          || Number(child.payment || 0) <= 0
-          || Number(child.currentSubscriptionPaidAmount || 0) >= Number(child.payment || 0)
+        needsAttention: current && isParentSubscriptionRed(child, { endDate: cycle.endDate, used, total })
       };
     });
 
@@ -290,7 +289,7 @@ const ParentAttendancePage = () => {
                       const isClassOpen = openClassKey === item.key;
                       return (
                         <section className="subscription-history-group parent-package-card" key={item.key}>
-                          <button type="button" className={`subscription-history-summary${item.current ? ' is-current-subscription' : ''}${item.current && !item.paidInFull ? ' is-unpaid-subscription' : ''}`} onClick={() => setOpenClassKey(isClassOpen ? '' : item.key)}>
+                          <button type="button" className={`subscription-history-summary${item.current ? ' is-current-subscription' : ''}${item.needsAttention ? ' is-attention-subscription' : ''}`} onClick={() => setOpenClassKey(isClassOpen ? '' : item.key)}>
                             <span>
                               <strong>{item.title}</strong>
                               <small>{formatDate(item.startDate)} - {formatDate(item.endDate)}</small>

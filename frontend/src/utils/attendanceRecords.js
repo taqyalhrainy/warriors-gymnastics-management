@@ -69,6 +69,20 @@ export const isAttendanceSubscriptionExpired = (player, now = new Date()) => {
   return total > 0 && used >= total;
 };
 
+export const isParentSubscriptionRed = (player, cycle = {}, now = new Date()) => {
+  const attendanceDue = player?.attendanceDueManual
+    ? Number(player.previousDueBalance || 0) - Number(player.dueAdjustment || 0)
+    : 0;
+  if (attendanceDue < 0) return true;
+
+  const end = cycle.endDate || player?.endDate || player?.subscriptionId?.endDate;
+  if (end && day(end) <= day(now)) return true;
+
+  const total = Math.max(0, Number(cycle.total ?? player?.packageClasses ?? player?.subscriptionId?.totalSessions ?? 0));
+  const used = Math.max(0, Number(cycle.used ?? player?.attendancePresentCount ?? player?.subscriptionId?.usedSessions ?? 0));
+  return total > 0 && used >= total;
+};
+
 // A recorded class belongs to its original group, even after a membership change.
 export const attachAttendanceRecords = (groups, records) => {
   const playersById = new Map(groups.flatMap((group) => group.players.map((player) => [id(player), player])));

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { attendanceCycleStart, authoritativeField, countAttendanceForCycle, packageCounter, mergeCurrentAttendanceState, isAttendanceSubscriptionExpired } from '../src/utils/attendanceRecords.js';
+import { attendanceCycleStart, authoritativeField, countAttendanceForCycle, packageCounter, mergeCurrentAttendanceState, isAttendanceSubscriptionExpired, isParentSubscriptionRed } from '../src/utils/attendanceRecords.js';
 
 const player = { _id: 'a', status: 'active', startDate: '2026-08-01', currentSubscriptionStartedAt: '2026-09-20',
   endDate: '2026-10-20', packageClasses: 8,
@@ -43,6 +43,16 @@ test('genuine exhausted, expired and frozen subscriptions keep their intended ba
   assert.equal(isAttendanceSubscriptionExpired({ ...player, attendancePresentCount: 8 }, now), true);
   assert.equal(isAttendanceSubscriptionExpired({ ...player, endDate: '2026-09-28', attendancePresentCount: 3 }, now), true);
   assert.equal(isAttendanceSubscriptionExpired({ ...player, status: 'frozen', attendancePresentCount: 8 }, now), false);
+});
+
+test('parent package color depends only on negative attendance due, end date, or exhausted classes', () => {
+  const now = new Date('2026-09-29T12:00:00Z');
+  const active = { ...player, endDate: '2026-10-20', attendancePresentCount: 3, attendanceDueManual: true };
+  assert.equal(isParentSubscriptionRed({ ...active, previousDueBalance: -1 }, {}, now), true);
+  assert.equal(isParentSubscriptionRed({ ...active, previousDueBalance: 100 }, {}, now), false);
+  assert.equal(isParentSubscriptionRed({ ...active, previousDueBalance: 0 }, { endDate: '2026-09-28', used: 3, total: 8 }, now), true);
+  assert.equal(isParentSubscriptionRed({ ...active, previousDueBalance: 0 }, { endDate: '2026-10-20', used: 8, total: 8 }, now), true);
+  assert.equal(isParentSubscriptionRed({ ...active, previousDueBalance: 0 }, { endDate: '2026-10-20', used: 3, total: 8 }, now), false);
 });
 
 test('an explicit empty server value clears stale attendance and subscription data', () => {

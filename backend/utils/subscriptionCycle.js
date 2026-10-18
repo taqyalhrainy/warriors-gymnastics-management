@@ -1,4 +1,4 @@
-const { getAppDateKey, getAppDateOnly } = require('./appDate');
+const { getAppDateOnly } = require('./appDate');
 
 const toValidDate = (value) => {
   if (!value) return null;
@@ -22,20 +22,9 @@ const isPaymentInCurrentSubscription = (payment, player) => {
   const confirmedPaymentId = String(player?.currentSubscriptionPaymentId || '');
   if (paymentId && confirmedPaymentId && paymentId === confirmedPaymentId) return true;
 
-  const paymentSubscriptionId = String(payment?.subscriptionId?._id || payment?.subscriptionId || '');
-  const playerSubscriptionId = String(player?.subscriptionId?._id || player?.subscriptionId || '');
-  if (paymentSubscriptionId && playerSubscriptionId) {
-    return paymentSubscriptionId === playerSubscriptionId;
-  }
-
   const cycleCreatedAt = toValidDate(player?.currentSubscriptionCreatedAt);
   const paymentCreatedAt = toValidDate(payment?.createdAt);
-  if (cycleCreatedAt) {
-    return Boolean(paymentCreatedAt && (
-      paymentCreatedAt >= cycleCreatedAt
-      || getAppDateKey(paymentCreatedAt) === getAppDateKey(cycleCreatedAt)
-    ));
-  }
+  if (cycleCreatedAt) return Boolean(paymentCreatedAt && paymentCreatedAt >= cycleCreatedAt);
 
   const subscriptionStart = getCurrentSubscriptionStart(player);
   if (!subscriptionStart) return true;

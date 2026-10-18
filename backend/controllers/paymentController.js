@@ -226,9 +226,7 @@ const getCurrentSubscriptionPaymentMatch = (player) => {
   const match = { playerId: player._id, isDeleted: { $ne: true } };
   const cycleCreatedAt = toValidDate(player.currentSubscriptionCreatedAt);
   if (cycleCreatedAt) {
-    const cycleDay = getAppDateOnly(cycleCreatedAt).toISOString().slice(0, 10);
-    match.$or = [{ createdAt: { $gte: getAppDayStartUtc(cycleDay) } }];
-    if (player.subscriptionId) match.$or.push({ subscriptionId: player.subscriptionId });
+    match.$or = [{ createdAt: { $gte: cycleCreatedAt } }];
     if (player.currentSubscriptionPaymentId) match.$or.push({ _id: player.currentSubscriptionPaymentId });
     return match;
   }
