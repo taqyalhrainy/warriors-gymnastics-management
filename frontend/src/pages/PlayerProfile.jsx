@@ -273,8 +273,8 @@ const PlayerProfilePage = () => {
           <DataStatus state={loadStates.player} retry={() => loadSection('player', () => getPlayer(id), setPlayer)} />
         )}
         {showSubscriptionModal && (
-          <div className="student-modal-backdrop" role="presentation">
-            <div className="student-modal new-subscription-modal" role="dialog" aria-modal="true">
+          <div className="student-modal-backdrop" role="presentation" onClick={() => !isSavingSubscription && setShowSubscriptionModal(false)}>
+            <div className="student-modal new-subscription-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
               <div className="student-modal-header">
                 <div>
                   <h2>New Subscription</h2>

@@ -7,6 +7,7 @@ import ParentNotificationPermissionPrompt from './components/ParentNotificationP
 import warriorsLogo from './assets/warriors-logo.png';
 import { isNativeAndroidApp, setupNativePushListeners } from './utils/nativePushNotifications.js';
 import NativeAppLifecycle from './components/NativeAppLifecycle.jsx';
+import AdminModalExitGuard from './components/AdminModalExitGuard.jsx';
 
 const LoginPage = lazy(() => import('./pages/Login.jsx'));
 const AdminPasswordRecovery = lazy(() => import('./pages/AdminPasswordRecovery.jsx'));
@@ -117,6 +118,7 @@ function App() {
     <div className={`app-shell${user?.role === 'parent' ? ' parent-app-shell' : ''}`}>
       <ParentMessageNotifier />
       <ParentNotificationPermissionPrompt user={user} />
+      {adminRoles.includes(user?.role) && <AdminModalExitGuard />}
       <Suspense fallback={<div className="route-loading"><img src={warriorsLogo} alt="" /><span className="loading-spinner" />Loading...</div>}>
         <NativeAppLifecycle />
         <Routes>

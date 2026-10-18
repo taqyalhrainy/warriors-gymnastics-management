@@ -651,7 +651,10 @@ const PlayersPage = () => {
           )}
         </div>
         {isWaitingFormOpen && (
-          <div className="student-modal-backdrop" role="presentation" onClick={requestCloseWaitingListModal}>
+          <div className="student-modal-backdrop" role="presentation" onClick={(event) => {
+            if (event.nativeEvent?.modalExitConfirmed) closeWaitingListModal();
+            else requestCloseWaitingListModal();
+          }}>
             <section className={`student-modal waiting-list-modal${isWaitingExpanded ? ' is-expanded' : ''}`} role="dialog" aria-modal="true" aria-label="Waiting List" onClick={(event) => event.stopPropagation()}>
               <div className="student-modal-header">
                 <div className="waiting-list-heading">
@@ -802,7 +805,10 @@ const PlayersPage = () => {
           </div>
         )}
         {movingWaitingEntry && (
-          <div className="student-modal-backdrop" role="presentation" onClick={requestCloseMoveToPlayers}>
+          <div className="student-modal-backdrop" role="presentation" onClick={(event) => {
+            if (event.nativeEvent?.modalExitConfirmed) closeMoveToPlayers();
+            else requestCloseMoveToPlayers();
+          }}>
             <section className="student-modal waiting-list-modal" role="dialog" aria-modal="true" aria-label="Move to Players" onClick={(event) => event.stopPropagation()}>
               <div className="student-modal-header">
                 <div>

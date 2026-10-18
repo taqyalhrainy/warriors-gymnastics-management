@@ -3278,7 +3278,7 @@ const AttendancePage = () => {
         )}
 
         {selectedPlayer && (
-          <div className="student-modal-backdrop" role="presentation" onClick={() => closeSelectedPlayer()}>
+          <div className="student-modal-backdrop" role="presentation" onClick={(event) => closeSelectedPlayer({ force: Boolean(event.nativeEvent?.modalExitConfirmed) })}>
             <section className="student-modal player-details-modal" role="dialog" aria-modal="true" aria-label={t('studentDetails')} onClick={(event) => event.stopPropagation()}>
               <div className="student-modal-header">
                 <div>
@@ -3697,7 +3697,10 @@ const AttendancePage = () => {
         )}
 
         {showSubscriptionModal && selectedPlayer && (
-          <div className="student-modal-backdrop" role="presentation" onClick={closeSubscriptionModal}>
+          <div className="student-modal-backdrop" role="presentation" onClick={(event) => {
+            if (event.nativeEvent?.modalExitConfirmed) setShowSubscriptionModal(false);
+            else closeSubscriptionModal();
+          }}>
             <div className="student-modal new-subscription-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
               <div className="student-modal-header">
                 <div>

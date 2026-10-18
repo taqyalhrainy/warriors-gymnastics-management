@@ -75,6 +75,7 @@ const LoginPage = ({ initialRole = 'parent' }) => {
   const [loginRole, setLoginRole] = useState(initialRole);
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [rememberLogin, setRememberLogin] = useState(() => localStorage.getItem(AUTH_REMEMBER_KEY) !== 'false');
   const [fieldErrors, setFieldErrors] = useState({});
   const [generalError, setGeneralError] = useState('');
@@ -205,7 +206,19 @@ const LoginPage = ({ initialRole = 'parent' }) => {
           {fieldErrors.identifier && <p className="field-error">{fieldErrors.identifier}</p>}
 
           <label>Password</label>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" autoCapitalize="none" autoCorrect="off" spellCheck={false} dir="ltr" />
+          <div className="login-password-row">
+            <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" autoCapitalize="none" autoCorrect="off" spellCheck={false} dir="ltr" />
+            <button
+              type="button"
+              className={`login-password-toggle${showPassword ? ' is-visible' : ''}`}
+              onClick={() => setShowPassword((current) => !current)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-pressed={showPassword}
+              title={showPassword ? 'Hide password' : 'Show password'}
+            >
+              <span className="login-password-eye" aria-hidden="true" />
+            </button>
+          </div>
           {fieldErrors.password && <p className="field-error">{fieldErrors.password}</p>}
 
           <label className="remember-login-row">

@@ -3392,6 +3392,10 @@ body.attendance-touch-dragging {
   background: rgba(17, 17, 17, 0.68);
 }
 
+.global-modal-exit-backdrop {
+  z-index: 1000;
+}
+
 .unsaved-exit-dialog {
   width: min(460px, 100%);
   display: grid;
@@ -6834,6 +6838,69 @@ body.rtl .payment-table-wrap {
 
 .login-card h2 {
   margin-top: 0;
+}
+
+.login-password-row {
+  position: relative;
+}
+
+.login-password-row input {
+  width: 100%;
+  padding-inline-end: 48px;
+}
+
+.login-password-toggle {
+  position: absolute;
+  inset-inline-end: 6px;
+  top: 50%;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+  transform: translateY(-50%);
+}
+
+.login-password-toggle:hover,
+.login-password-toggle:focus-visible,
+.login-password-toggle.is-visible {
+  background: var(--surface-alt);
+  color: var(--text);
+}
+
+.login-password-eye {
+  position: relative;
+  width: 20px;
+  height: 14px;
+  display: block;
+  border: 2px solid currentColor;
+  border-radius: 75% 20%;
+  transform: rotate(45deg);
+}
+
+.login-password-eye::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  transform: translate(-50%, -50%);
+}
+
+.login-password-toggle:not(.is-visible)::after {
+  content: '';
+  position: absolute;
+  width: 24px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  transform: rotate(-45deg);
 }
 
 .login-role-tabs {

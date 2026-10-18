@@ -153,8 +153,8 @@ const CoachProfilePage = () => {
         )}
       </main>
       {editingNote && (
-        <div className="student-modal-backdrop">
-          <section className="student-modal coach-note-dialog" role="dialog" aria-modal="true" aria-labelledby="coach-note-title">
+        <div className="student-modal-backdrop" role="presentation" onClick={() => !savingNote && setEditingNote(null)}>
+          <section className="student-modal coach-note-dialog" role="dialog" aria-modal="true" aria-labelledby="coach-note-title" onClick={(event) => event.stopPropagation()}>
             <h2 id="coach-note-title">Day note - {formatDate(editingNote.date)}</h2>
             <form onSubmit={saveNote}>
               <label htmlFor="coach-history-note-input">Day note</label>
