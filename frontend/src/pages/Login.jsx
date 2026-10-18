@@ -197,12 +197,15 @@ const LoginPage = ({ initialRole = 'parent' }) => {
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
             autoComplete="username"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             inputMode={loginRole === 'admin' ? 'email' : 'text'}
           />
           {fieldErrors.identifier && <p className="field-error">{fieldErrors.identifier}</p>}
 
           <label>Password</label>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" autoCapitalize="none" autoCorrect="off" spellCheck={false} dir="ltr" />
           {fieldErrors.password && <p className="field-error">{fieldErrors.password}</p>}
 
           <label className="remember-login-row">

@@ -138,12 +138,15 @@ const ParentLoginPage = () => {
             value={identifier}
             onChange={(event) => setIdentifier(event.target.value)}
             autoComplete="username"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             inputMode="text"
           />
           {fieldErrors.identifier && <p className="field-error">{fieldErrors.identifier}</p>}
 
           <label>Password</label>
-          <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" />
+          <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" autoCapitalize="none" autoCorrect="off" spellCheck={false} dir="ltr" />
           {fieldErrors.password && <p className="field-error">{fieldErrors.password}</p>}
 
           <label className="remember-login-row">

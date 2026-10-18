@@ -421,6 +421,7 @@ test('deleted players disappear from all parent screens while attendance remains
 
 test('parent login names remain unique when edited', async () => {
   await call(`/parents/${otherParent._id}`, { method: 'PUT', body: { name: parent.name }, status: 409 });
+  await call(`/parents/${otherParent._id}`, { method: 'PUT', body: { name: '  PARENT   ONE  ' }, status: 409 });
   assert.equal((await User.findById(otherUser._id)).name, 'Parent two');
 });
 

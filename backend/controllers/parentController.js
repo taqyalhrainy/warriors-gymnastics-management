@@ -17,9 +17,19 @@ const { createAuditLog } = require('../utils/audit');
 const { encrypt, decrypt } = require('../utils/encryption');
 const { getAppDateOnly } = require('../utils/appDate');
 const { getCurrentSubscriptionStart } = require('../utils/subscriptionCycle');
+const { normalizeParentLoginName, normalizeParentPassword } = require('../utils/loginCredentials');
 
 const isSubscriptionPaymentType = (value) => ['full payment', 'partial payment'].includes(String(value || '').trim().toLowerCase());
 const escapeRegex = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const hasDuplicateParentLoginName = async (name, excludedUserId = null) => {
+  const loginNameKey = normalizeParentLoginName(name);
+  if (!loginNameKey) return false;
+  const filter = { role: 'parent' };
+  if (excludedUserId) filter._id = { $ne: excludedUserId };
+  const users = await User.find(filter).select('name loginNameKey').lean();
+  return users.some((user) => (user.loginNameKey || normalizeParentLoginName(user.name)) === loginNameKey);
+};
 
 const getPaginationOptions = (query) => {
   const limit = Math.min(Math.max(parseInt(query.limit, 10) || 0, 0), 100);
@@ -403,16 +413,15 @@ const createParent = async (req, res, next) => {
     if (email && await User.findOne({ email })) {
       return res.status(409).json({ message: 'Email already registered.' });
     }
-    const existingParentName = await User.findOne({
-      role: 'parent',
-      name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
-    });
-    if (existingParentName) {
+    if (await hasDuplicateParentLoginName(name)) {
       return res.status(409).json({ message: 'A parent with this name already exists. Please use a unique login name.' });
     }
-    const passwordHash = await bcrypt.hash(password, 12);
+    const loginNameKey = normalizeParentLoginName(name);
+    const normalizedPassword = normalizeParentPassword(password);
+    if (!normalizedPassword) return res.status(400).json({ message: 'Password is required.' });
+    const passwordHash = await bcrypt.hash(normalizedPassword, 12);
     const internalEmail = email || `parent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@warriors.local`;
-    const user = await User.create({ name, email: internalEmail, passwordHash, role: 'parent', phone, isActive: isActive !== false });
+    const user = await User.create({ name, loginNameKey, email: internalEmail, passwordHash, role: 'parent', phone, isActive: isActive !== false });
     const parent = await Parent.create({
       userId: user._id,
       name,
@@ -446,9 +455,10 @@ const updateParent = async (req, res, next) => {
       return res.status(404).json({ message: 'Parent user not found.' });
     }
     if (body.name) {
-      const duplicate = await User.exists({ _id: { $ne: user._id }, role: 'parent', name: new RegExp(`^${escapeRegex(body.name)}$`, 'i') });
+      const duplicate = await hasDuplicateParentLoginName(body.name, user._id);
       if (duplicate) return res.status(409).json({ message: 'A parent with this login name already exists.' });
       user.name = body.name;
+      user.loginNameKey = normalizeParentLoginName(body.name);
       parent.name = body.name;
     }
     if (body.email) {
@@ -463,9 +473,12 @@ const updateParent = async (req, res, next) => {
       parent.phoneEncrypted = body.phone ? encrypt(body.phone) : '';
     }
     if (body.password) {
-      user.passwordHash = await bcrypt.hash(body.password, 12);
+      const normalizedPassword = normalizeParentPassword(body.password);
+      if (!normalizedPassword) return res.status(400).json({ message: 'Password is required.' });
+      user.passwordHash = await bcrypt.hash(normalizedPassword, 12);
       user.sessionVersion = Number(user.sessionVersion || 0) + 1;
     }
+    if (!user.loginNameKey) user.loginNameKey = normalizeParentLoginName(user.name);
     await user.save();
     await parent.save();
     await createAuditLog({ userId: req.user._id, action: 'update parent', entity: 'Parent', entityId: parent._id, req });

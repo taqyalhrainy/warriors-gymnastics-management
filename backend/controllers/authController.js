@@ -5,12 +5,43 @@ const Parent = require('../models/Parent');
 const { sanitizeObject, validateEmail } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { encrypt } = require('../utils/encryption');
+const { getParentPasswordCandidates, normalizeParentLoginName } = require('../utils/loginCredentials');
 
 const signToken = (id, remember = false, sessionVersion = 0) => jwt.sign(
   { id, sessionVersion },
   process.env.JWT_SECRET,
   { expiresIn: remember ? '90d' : '7d' }
 );
+
+const escapeRegex = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const findParentByLoginName = async (name) => {
+  const loginNameKey = normalizeParentLoginName(name);
+  if (!loginNameKey) return null;
+
+  const exactMatches = await User.find({
+    role: 'parent',
+    name: new RegExp(`^${escapeRegex(String(name).trim())}$`, 'i')
+  }).limit(2);
+  if (exactMatches.length === 1) return exactMatches[0];
+  if (exactMatches.length > 1) return null;
+
+  const keyedMatches = await User.find({ role: 'parent', loginNameKey }).limit(2);
+  if (keyedMatches.length === 1) return keyedMatches[0];
+  if (keyedMatches.length > 1) return null;
+
+  const legacyMatches = (await User.find({ role: 'parent' }))
+    .filter((candidate) => normalizeParentLoginName(candidate.name) === loginNameKey);
+  return legacyMatches.length === 1 ? legacyMatches[0] : null;
+};
+
+const matchesPassword = async (user, password) => {
+  const candidates = user.role === 'parent' ? getParentPasswordCandidates(password) : [password];
+  for (const candidate of candidates) {
+    if (await bcrypt.compare(candidate, user.passwordHash)) return true;
+  }
+  return false;
+};
 
 const registerUser = async (req, res, next) => {
   try {
@@ -75,16 +106,24 @@ const loginUser = async (req, res, next) => {
     }
     const user = email
       ? await User.findOne({ email })
-      : await User.findOne({ role: 'parent', name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') });
+      : await findParentByLoginName(name);
     if (!user) {
       return res.status(404).json({ message: 'No account found with these login details.' });
     }
     if (!user.isActive) {
       return res.status(403).json({ message: 'This account is inactive. Please contact support.' });
     }
-    const validPassword = await bcrypt.compare(password, user.passwordHash);
+    const validPassword = await matchesPassword(user, password);
     if (!validPassword) {
       return res.status(401).json({ message: 'Incorrect password. Please try again.' });
+    }
+    if (user.role === 'parent' && !user.loginNameKey) {
+      const loginNameKey = normalizeParentLoginName(user.name);
+      const normalizedMatches = (await User.find({ role: 'parent' }).select('_id name loginNameKey').lean())
+        .filter((candidate) => (candidate.loginNameKey || normalizeParentLoginName(candidate.name)) === loginNameKey);
+      if (normalizedMatches.length === 1 && String(normalizedMatches[0]._id) === String(user._id)) {
+        await User.updateOne({ _id: user._id }, { $set: { loginNameKey } });
+      }
     }
     await createAuditLog({ userId: user._id, action: 'login', entity: 'User', entityId: user._id, req });
     return res.json({ token: signToken(user._id, Boolean(remember), user.sessionVersion || 0), user: { id: user._id, name: user.name, email: user.email, role: user.role } });
