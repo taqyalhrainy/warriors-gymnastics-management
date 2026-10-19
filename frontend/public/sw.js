@@ -1,4 +1,4 @@
-const CACHE_NAME = 'warriors-shell-v18';
+const CACHE_NAME = 'warriors-shell-v19';
 const SHELL_ASSETS = ['/', '/login?source=pwa', '/parent/login?source=parent-pwa', '/admin/login?source=admin-pwa', '/manifest.webmanifest', '/admin-manifest.webmanifest', '/warriors-logo.png', '/warriors-icon-192.png', '/warriors-icon-512.png'];
 
 const isAppShell = async (response) => response?.ok
@@ -31,7 +31,15 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => Promise.all(
       keys.filter((key) => key.startsWith('warriors-shell-') && key !== CACHE_NAME).map((key) => caches.delete(key))
-    )).then(() => self.clients.claim())
+    )).then(() => self.clients.claim()).then(async () => {
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      await Promise.all(windows.map((client) => {
+        const url = new URL(client.url);
+        const isParentPage = url.origin === self.location.origin
+          && (url.pathname === '/parent' || url.pathname.startsWith('/parent/'));
+        return isParentPage ? client.navigate(client.url) : undefined;
+      }));
+    })
   );
 });
 

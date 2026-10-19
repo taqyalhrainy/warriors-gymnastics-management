@@ -13,29 +13,37 @@ const manifest = (changes = {}) => {
 };
 const setup = async (options = {}) => {
   const calls = [];
+  const handlers = {};
+  const document = { hidden: false, addEventListener: (name, handler) => { handlers[name] = handler; } };
   const service = await load('../src/services/androidLiveUpdate.js', {
     '@capacitor/core': { Capacitor: { isNativePlatform: () => options.native !== false, getPlatform: () => 'android' } },
+    '@capacitor/app': { App: { addListener: async (name, handler) => { handlers[name] = handler; } } },
     '@capawesome/capacitor-live-update': { LiveUpdate: {
       ready: async () => calls.push('ready'), getCurrentBundle: async () => ({ bundleId: null }),
       getNextBundle: async () => ({ bundleId: null }), getBlockedBundles: async () => ({ bundleIds: options.blocked ? [bundleId] : [] }),
       getDownloadedBundles: async () => ({ bundleIds: [] }),
       downloadBundle: async (bundle) => { calls.push(bundle); if (options.failure) throw new Error('Download failed'); },
-      setNextBundle: async () => calls.push('staged')
+      setNextBundle: async () => calls.push('staged'),
+      reload: async () => calls.push('reloaded')
     } },
     '../utils/nativePushNotifications.js': { NativePushSession: { getOtaConfig: async () => ({ contract, publicKey, origin: 'https://updates.test' }) } }
   }, { crypto: webcrypto, atob, TextEncoder, Uint8Array, URL, AbortSignal, console,
-    window: { addEventListener() {} }, document: { addEventListener() {} },
+    window: { addEventListener: (name, handler) => { handlers[name] = handler; } }, document,
     fetch: async () => { calls.push('fetch'); return { ok: true, json: async () => options.envelope || manifest() }; } });
-  return { service, calls };
+  return { service, calls, handlers, document };
 };
 
-test('valid signed OTA is staged only after readiness, without interrupting the app', async () => {
-  const { service, calls } = await setup();
+test('valid signed OTA is staged after readiness and activates only after the app is backgrounded', async () => {
+  const { service, calls, handlers, document } = await setup();
   await service.markAndroidAppReady();
   assert.equal(calls[0], 'ready');
   assert.equal(calls.at(-1), 'staged');
   assert.equal(calls[2].checksum, bundleId);
   assert.match(calls[2].url, /^https:\/\/updates.test\/ota\/android-/);
+  assert.ok(!calls.includes('reloaded'));
+  document.hidden = true;
+  await handlers.visibilitychange();
+  assert.equal(calls.at(-1), 'reloaded');
   await service.markAndroidAppReady();
   assert.equal(calls.filter((call) => call === 'ready').length, 1);
 });

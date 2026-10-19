@@ -1,11 +1,32 @@
 import { Capacitor } from '@capacitor/core';
+import { App } from '@capacitor/app';
 import { LiveUpdate } from '@capawesome/capacitor-live-update';
 import { NativePushSession } from '../utils/nativePushNotifications.js';
 
 let readyPromise;
 let checking;
 let lastCheck = 0;
+let pendingActivation = false;
+let activationPromise;
 const decodeBase64 = (value) => Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
+
+const activatePendingBundle = () => {
+  if (!pendingActivation || activationPromise) return activationPromise;
+  pendingActivation = false;
+  activationPromise = LiveUpdate.reload()
+    .catch((error) => {
+      pendingActivation = true;
+      console.warn('Android update activation deferred:', error.message);
+    })
+    .finally(() => { activationPromise = undefined; });
+  return activationPromise;
+};
+
+const stageActivation = () => {
+  pendingActivation = true;
+  if (document.hidden) return activatePendingBundle();
+  return undefined;
+};
 
 export const verifyOtaManifest = async (envelope, config) => {
   if (typeof envelope?.payload !== 'string' || envelope.payload.length > 10000
@@ -39,15 +60,19 @@ const checkForUpdate = () => {
     const current = await LiveUpdate.getCurrentBundle();
     const next = await LiveUpdate.getNextBundle();
     const blocked = await LiveUpdate.getBlockedBundles();
-    if (current.bundleId === manifest.bundleId || next.bundleId === manifest.bundleId
-      || blocked.bundleIds.includes(manifest.bundleId)) return;
+    if (current.bundleId === manifest.bundleId || blocked.bundleIds.includes(manifest.bundleId)) return;
+    if (next.bundleId === manifest.bundleId) {
+      stageActivation();
+      return;
+    }
     const downloaded = await LiveUpdate.getDownloadedBundles();
     if (!downloaded.bundleIds.includes(manifest.bundleId)) {
       await LiveUpdate.downloadBundle({ bundleId: manifest.bundleId, checksum: manifest.checksum,
         signature: manifest.signature, url: base + manifest.bundleId + '.zip', artifactType: 'zip' });
     }
-    // Never reload while the parent is filling in a form. Activate on the next cold start.
     await LiveUpdate.setNextBundle({ bundleId: manifest.bundleId });
+    // Apply only after the parent leaves the foreground, so active work is never interrupted.
+    stageActivation();
   })().catch((error) => console.warn('Android update deferred:', error.message))
     .finally(() => { checking = undefined; });
   return checking;
@@ -59,8 +84,12 @@ export const markAndroidAppReady = () => {
     readyPromise = LiveUpdate.ready().then(() => {
       window.addEventListener('online', checkForUpdate);
       document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) checkForUpdate();
+        if (document.hidden) return activatePendingBundle();
+        return checkForUpdate();
       });
+      App.addListener('appStateChange', ({ isActive }) => (
+        isActive ? checkForUpdate() : activatePendingBundle()
+      )).catch((error) => console.warn('Android update lifecycle listener unavailable:', error.message));
       return checkForUpdate();
     }).catch((error) => console.error('Android update readiness failed:', error.message));
   }

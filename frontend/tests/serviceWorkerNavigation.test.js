@@ -21,6 +21,26 @@ const setup = (network, initial = {}) => {
   } };
 };
 
+test('a new shell cache refreshes open parent clients without touching admin clients', async () => {
+  const handlers = {};
+  const navigated = [];
+  const parent = { url: 'https://gym.example/parent/notifications', navigate: async (url) => navigated.push(url) };
+  const admin = { url: 'https://gym.example/attendance', navigate: async (url) => navigated.push(url) };
+  vm.runInNewContext(source, {
+    self: {
+      location: { origin: 'https://gym.example' },
+      addEventListener: (name, handler) => { handlers[name] = handler; },
+      clients: { claim: async () => {}, matchAll: async () => [parent, admin] }
+    },
+    URL, Response, fetch: async () => shell('Current'),
+    caches: { keys: async () => ['warriors-shell-v18', 'warriors-shell-v19'], delete: async () => true }
+  });
+  let lifetime;
+  handlers.activate({ waitUntil: (promise) => { lifetime = promise; } });
+  await lifetime;
+  assert.deepEqual(navigated, [parent.url]);
+});
+
 test('APK downloads and QR redirects bypass the app shell and cache entirely', () => {
   const app = setup(() => { throw new Error('Worker must not fetch or replace downloads'); }, {
     '/parent/login?source=parent-pwa': shell('Parent')
