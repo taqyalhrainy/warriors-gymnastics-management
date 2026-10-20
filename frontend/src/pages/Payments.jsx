@@ -11,6 +11,7 @@ import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
 import { attendanceCycleStart } from '../utils/attendanceRecords.js';
 import { getRemainingAmount, sumRemainingByPlayer } from '../utils/manualRemaining.js';
 import { PAYMENT_TIME_ZONE, getPaymentDayKey, getPaymentMonthKey, mergePaymentRows, rollPaymentDayForward } from '../utils/paymentDates.js';
+import { PAYMENT_PLAYER_MODES, getPaymentPlayerMode, playerMatchesPaymentMode } from '../utils/paymentPlayerModes.js';
 
 const formatDate = (date) => {
   if (!date) return '-';
@@ -104,7 +105,7 @@ const getPlayerGroups = (player) => {
 };
 
 const createInitialPaymentForm = () => ({
-  payerMode: 'player',
+  payerMode: PAYMENT_PLAYER_MODES.ACTIVE,
   playerId: '',
   customPlayerName: '',
   paidAmount: 0,
@@ -375,7 +376,7 @@ const PaymentsPage = () => {
   const filteredPlayers = useMemo(() => {
     const query = playerSearch.trim().toLowerCase();
     return players
-      .filter((player) => (player.status || 'active') === 'active' || player._id === form.playerId)
+      .filter((player) => playerMatchesPaymentMode(player, form.payerMode) || player._id === form.playerId)
       .filter((player) => {
         if (!query) return true;
         return [
@@ -385,7 +386,7 @@ const PaymentsPage = () => {
           getPlayerGroups(player)
         ].join(' ').toLowerCase().includes(query);
       });
-  }, [players, playerSearch, form.playerId]);
+  }, [players, playerSearch, form.payerMode, form.playerId]);
 
   const visiblePayments = useMemo(() => {
     if (activeView === 'pending') {
@@ -477,11 +478,14 @@ const PaymentsPage = () => {
   };
 
   const handleEditPayment = (payment) => {
+    const paymentPlayerId = payment.playerId?._id || payment.playerId || '';
+    const paymentPlayer = players.find((player) => String(player._id) === String(paymentPlayerId))
+      || (payment.playerId && typeof payment.playerId === 'object' ? payment.playerId : null);
     paymentDateWasChosenRef.current = true;
     setEditingPaymentId(payment._id);
     setForm({
-      payerMode: payment.playerId ? 'player' : 'custom',
-      playerId: payment.playerId?._id || payment.playerId || '',
+      payerMode: payment.playerId ? getPaymentPlayerMode(paymentPlayer) : PAYMENT_PLAYER_MODES.CUSTOM,
+      playerId: paymentPlayerId,
       customPlayerName: payment.playerId ? '' : getMemberName(payment),
       paidAmount: String(payment.paidAmount ?? 0),
       transactionType: ['Full payment', 'Partial payment'].includes(getTransactionLabel(payment)) ? getTransactionLabel(payment) : 'custom',
@@ -603,8 +607,9 @@ const PaymentsPage = () => {
                           setPlayerSearch('');
                         }}
                       >
-                        <option value="player">{t('player')}</option>
-                        <option value="custom">Custom name</option>
+                        <option value={PAYMENT_PLAYER_MODES.ACTIVE}>Active Player</option>
+                        <option value={PAYMENT_PLAYER_MODES.FROZEN}>Freeze Player</option>
+                        <option value={PAYMENT_PLAYER_MODES.CUSTOM}>Custom name</option>
                       </select>
                     )}
                     {form.payerMode === 'custom' ? (
@@ -621,7 +626,7 @@ const PaymentsPage = () => {
                           className="select-search-input"
                           value={playerSearch}
                           onChange={(event) => setPlayerSearch(event.target.value)}
-                          placeholder="Search player..."
+                          placeholder={form.payerMode === PAYMENT_PLAYER_MODES.FROZEN ? 'Search freeze player...' : 'Search active player...'}
                           type="search"
                         />
                         <select
@@ -632,7 +637,7 @@ const PaymentsPage = () => {
                           required
                           disabled={Boolean(editingPaymentId)}
                         >
-                          <option value="">{t('selectPlayer')}</option>
+                          <option value="">{form.payerMode === PAYMENT_PLAYER_MODES.FROZEN ? 'Select Freeze Player' : 'Select Active Player'}</option>
                           {filteredPlayers.map((player) => <option key={player._id} value={player._id}>{player.fullName}</option>)}
                         </select>
                       </>
