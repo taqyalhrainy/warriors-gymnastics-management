@@ -12,6 +12,7 @@ const Group = require('../models/TrainingGroup');
 const Attendance = require('../models/Attendance');
 const Subscription = require('../models/Subscription');
 const Program = require('../models/Program');
+const { getAppDateKey } = require('../utils/appDate');
 let releasePush;
 const pendingPush = new Promise((resolve) => { releasePush = resolve; });
 require('../utils/pushNotifications').sendPushToUser = () => pendingPush;
@@ -157,6 +158,10 @@ test('a newer start date repairs a stale cycle marker even when the client omits
 });
 
 test('renewing a player also replaces stale linked subscription dates and counters', async () => {
+  const futureStart = new Date(Date.now() + (2 * 24 * 60 * 60 * 1000));
+  const futureEnd = new Date(Date.now() + (32 * 24 * 60 * 60 * 1000));
+  const futureStartKey = getAppDateKey(futureStart);
+  const futureEndKey = getAppDateKey(futureEnd);
   const subject = await Player.create({ fullName: 'Linked subscription player', parentId: player.parentId,
     parentPhoneEncrypted: 'test', groupId: group._id, groupIds: [group._id], packageName: 'Eight classes', packageClasses: 8, payment: 90 });
   const linked = await Subscription.create({ playerId: subject._id, type: 'sessions', packageName: 'Old', totalSessions: 12,
@@ -166,8 +171,8 @@ test('renewing a player also replaces stale linked subscription dates and counte
 
   await request(`/players/${subject._id}`, {
     newSubscription: true,
-    startDate: '2026-09-20',
-    endDate: '2026-10-20'
+    startDate: futureStartKey,
+    endDate: futureEndKey
   });
 
   const saved = await Subscription.findById(linked._id).lean();
@@ -175,8 +180,8 @@ test('renewing a player also replaces stale linked subscription dates and counte
   assert.equal(saved.totalSessions, 8);
   assert.equal(saved.usedSessions, 0);
   assert.equal(saved.remainingSessions, 8);
-  assert.equal(saved.startDate.toISOString().slice(0, 10), '2026-09-20');
-  assert.equal(saved.endDate.toISOString().slice(0, 10), '2026-10-20');
+  assert.equal(saved.startDate.toISOString().slice(0, 10), futureStartKey);
+  assert.equal(saved.endDate.toISOString().slice(0, 10), futureEndKey);
   assert.equal(saved.price, 90);
   assert.equal(saved.status, 'active');
 });
