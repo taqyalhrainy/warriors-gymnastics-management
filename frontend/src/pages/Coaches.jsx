@@ -20,9 +20,18 @@ const getDateInputValue = (date = new Date()) => {
 const formatTime = (date) => {
   if (!date) return '-';
   return new Date(date).toLocaleTimeString('en-GB', {
+    timeZone: 'Asia/Amman',
     hour: '2-digit',
     minute: '2-digit'
   });
+};
+
+const getTimeInputValue = (date) => {
+  if (!date) return '';
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Amman', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  }).formatToParts(new Date(date)).map((part) => [part.type, part.value]));
+  return parts.hour && parts.minute ? `${parts.hour}:${parts.minute}` : '';
 };
 
 const getCoachStatusLabel = (attendance) => {
@@ -42,6 +51,8 @@ const CoachesPage = () => {
   const [selectedDate, setSelectedDate] = useState(getDateInputValue());
   const [pendingCoachAction, setPendingCoachAction] = useState('');
   const [coachNoteDrafts, setCoachNoteDrafts] = useState({});
+  const [editingArrivalCoachId, setEditingArrivalCoachId] = useState('');
+  const [arrivalTimeDraft, setArrivalTimeDraft] = useState('');
   const { t } = useLanguage();
 
   const loadCoaches = async () => {
@@ -49,6 +60,8 @@ const CoachesPage = () => {
   };
 
   useEffect(() => {
+    setEditingArrivalCoachId('');
+    setArrivalTimeDraft('');
     loadCoaches();
   }, [selectedDate]);
 
@@ -148,6 +161,30 @@ const CoachesPage = () => {
       setMessage('Coach day note saved.');
     } catch (error) {
       setMessage(error.response?.data?.message || 'Unable to save coach day note.');
+    } finally {
+      setPendingCoachAction('');
+    }
+  };
+
+  const handleArrivalTimeSave = async (coach) => {
+    const actionKey = `${coach._id}:arrival-time`;
+    if (pendingCoachAction || !arrivalTimeDraft) return;
+    setMessage('');
+    setPendingCoachAction(actionKey);
+    try {
+      const attendance = await updateCoachAttendance(coach._id, {
+        action: 'arrival-time',
+        date: selectedDate,
+        arrivalTime: arrivalTimeDraft
+      });
+      setCoaches((current) => current.map((item) => (
+        item._id === coach._id ? { ...item, todayAttendance: attendance } : item
+      )));
+      setEditingArrivalCoachId('');
+      setArrivalTimeDraft('');
+      setMessage('Coach arrival time updated.');
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Unable to update coach arrival time.');
     } finally {
       setPendingCoachAction('');
     }
@@ -260,9 +297,30 @@ const CoachesPage = () => {
                         <small>Phone 2</small>
                         <strong>{coach.phone2 || '-'}</strong>
                       </div>
-                      <div>
+                      <div className={`coach-arrival-field${editingArrivalCoachId === coach._id ? ' is-editing' : ''}`}>
                         <small>Came</small>
-                        <strong>{formatTime(attendance?.arrivedAt)}</strong>
+                        {editingArrivalCoachId === coach._id ? (
+                          <span className="coach-arrival-editor">
+                            <input type="time" value={arrivalTimeDraft} required disabled={Boolean(pendingCoachAction)}
+                              onChange={(event) => setArrivalTimeDraft(event.target.value)} />
+                            <button type="button" className="btn-primary" disabled={Boolean(pendingCoachAction) || !arrivalTimeDraft}
+                              onClick={() => handleArrivalTimeSave(coach)}>
+                              {pendingCoachAction === `${coach._id}:arrival-time` ? 'Saving...' : 'Save'}
+                            </button>
+                            <button type="button" className="btn-secondary" disabled={Boolean(pendingCoachAction)} onClick={() => {
+                              setEditingArrivalCoachId('');
+                              setArrivalTimeDraft('');
+                            }}>Cancel</button>
+                          </span>
+                        ) : (
+                          <span className="coach-arrival-value">
+                            <strong>{formatTime(attendance?.arrivedAt)}</strong>
+                            {attendance?.arrivedAt && <button type="button" className="btn-secondary" disabled={Boolean(pendingCoachAction)} onClick={() => {
+                              setEditingArrivalCoachId(coach._id);
+                              setArrivalTimeDraft(getTimeInputValue(attendance.arrivedAt));
+                            }}>Edit time</button>}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="coach-time-grid">

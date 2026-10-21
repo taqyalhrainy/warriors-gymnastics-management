@@ -13,7 +13,7 @@ const Attendance = require('../models/Attendance');
 const Subscription = require('../models/Subscription');
 const Payment = require('../models/Payment');
 const History = require('../models/HistoryEntry');
-const { getAppDateKey, dateKeyToUtc } = require('../utils/appDate');
+const { getAppDateKey, dateKeyToUtc, getAppDateTimeUtc } = require('../utils/appDate');
 
 require('../utils/pushNotifications').sendPushToUser = async () => ({ attempted: 0, sent: 0 });
 require('../utils/nativePushNotifications').sendNativePushToUser = async () => ({ attempted: 0, sent: 0 });
@@ -686,6 +686,10 @@ test('editing an old coach day note preserves status, times and other days', asy
   const path = `/coaches/${coach._id}/attendance`;
   const oldDate = '2026-09-20';
   const old = await call(path, { method: 'POST', body: { action: 'arrived', date: oldDate } });
+  const corrected = await call(path, { method: 'POST', body: { action: 'arrival-time', date: oldDate, arrivalTime: '15:35' } });
+  assert.equal(corrected.arrivedAt, getAppDateTimeUtc(oldDate, '15:35').toISOString());
+  assert.equal(corrected.status, old.status);
+  await call(path, { method: 'POST', body: { action: 'arrival-time', date: oldDate, arrivalTime: '25:00' }, status: 400 });
   await call(path, { method: 'POST', body: { action: 'note', date: '2026-09-21', dayNote: 'Other day' } });
   for (const note of ['Updated past day', '']) {
     await call(path, { method: 'POST', body: { action: 'note', date: old.date, dayNote: note } });
@@ -693,8 +697,21 @@ test('editing an old coach day note preserves status, times and other days', asy
     const row = history.find((row) => row._id === old._id);
     assert.equal(row.dayNote, note);
     assert.equal(row.status, old.status);
-    assert.equal(row.arrivedAt, old.arrivedAt);
+    assert.equal(row.arrivedAt, corrected.arrivedAt);
     assert.equal(history.find((row) => row._id !== old._id).dayNote, 'Other day');
   }
   await call(path, { method: 'POST', auth: parentToken, body: { action: 'note', date: oldDate, dayNote: 'Forbidden' }, status: 403 });
+  await call(path, { method: 'POST', auth: parentToken, body: { action: 'arrival-time', date: oldDate, arrivalTime: '16:00' }, status: 403 });
+});
+
+test('player note date changes only when the note text changes', async () => {
+  const subject = await newPlayer();
+  const first = await call(`/players/${subject._id}`, { method: 'PUT', body: { note: 'First note' } });
+  assert.ok(first.noteUpdatedAt);
+  const unchanged = await call(`/players/${subject._id}`, { method: 'PUT', body: { level: 'Beginner' } });
+  assert.equal(unchanged.noteUpdatedAt, first.noteUpdatedAt);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  const edited = await call(`/players/${subject._id}`, { method: 'PUT', body: { note: 'Edited note' } });
+  assert.equal(edited.note, 'Edited note');
+  assert.ok(new Date(edited.noteUpdatedAt) > new Date(first.noteUpdatedAt));
 });

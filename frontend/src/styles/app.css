@@ -5348,6 +5348,31 @@ body.rtl .new-subscription-summary-card[type='button'] {
   font-size: 1rem;
 }
 
+.coach-arrival-value,
+.coach-arrival-editor {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.coach-arrival-field.is-editing {
+  grid-column: 1 / -1;
+}
+
+.coach-arrival-value button,
+.coach-arrival-editor button {
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+}
+
+.coach-arrival-editor input[type="time"] {
+  width: 118px;
+  min-height: 38px;
+  padding: 6px 8px;
+}
+
 .coach-card-actions,
 .coach-admin-actions {
   display: flex;

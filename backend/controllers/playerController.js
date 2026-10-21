@@ -299,6 +299,7 @@ const createPlayer = async (req, res, next) => {
 
     await validateGroupsHaveCapacity(groupIds, 'One or more groups were not found.', 'is already at full capacity.');
 
+    const createdAt = new Date();
     const payload = {
       fullName,
       dateOfBirth,
@@ -312,7 +313,7 @@ const createPlayer = async (req, res, next) => {
       skillLevels,
       startDate,
       endDate,
-      currentSubscriptionCreatedAt: new Date(),
+      currentSubscriptionCreatedAt: createdAt,
       packageName: packageName || '',
       packageClasses: parseLocalizedNumber(packageClasses),
       packageHours: parseLocalizedNumber(packageHours),
@@ -322,6 +323,7 @@ const createPlayer = async (req, res, next) => {
       attendanceDueManual: Boolean(attendanceDueManual),
       subscriptionNeedsAttention: Boolean(subscriptionNeedsAttention),
       note: note || '',
+      noteUpdatedAt: note ? createdAt : null,
       makeupClassesNote: makeupClassesNote || '',
       freezeNote: freezeNote || '',
       showInAttendanceWhenFrozen: showInAttendanceWhenFrozen !== false,
@@ -384,7 +386,7 @@ const updatePlayer = async (req, res, next) => {
     }
     const updates = cleanPlayerPayload(sanitizeObject(req.body));
     const expectedVersion = updates.expectedVersion;
-    for (const key of ['expectedVersion', '__v', '_id', 'createdAt', 'isDeleted', 'deletedAt', 'preservedRemainingBalance', 'remainingBalancePolicyVersion', 'remainingBalancePreservedAt', 'currentSubscriptionCreatedAt', 'currentSubscriptionPaymentConfirmedAt', 'currentSubscriptionPaymentId']) delete updates[key];
+    for (const key of ['expectedVersion', '__v', '_id', 'createdAt', 'isDeleted', 'deletedAt', 'noteUpdatedAt', 'preservedRemainingBalance', 'remainingBalancePolicyVersion', 'remainingBalancePreservedAt', 'currentSubscriptionCreatedAt', 'currentSubscriptionPaymentConfirmedAt', 'currentSubscriptionPaymentId']) delete updates[key];
     const requestedNewSubscription = Boolean(updates.newSubscription);
     delete updates.newSubscription;
     const player = await Player.findById(id);
@@ -450,6 +452,12 @@ const updatePlayer = async (req, res, next) => {
     }
     if (typeof updates.packageHours !== 'undefined') {
       updates.packageHours = parseLocalizedNumber(updates.packageHours);
+    }
+    if (typeof updates.note !== 'undefined' && (
+      String(updates.note || '') !== String(player.note || '')
+      || (String(updates.note || '') && !player.noteUpdatedAt)
+    )) {
+      updates.noteUpdatedAt = new Date();
     }
     if (updates.status && updates.status !== 'frozen') {
       updates.showInAttendanceWhenFrozen = true;
