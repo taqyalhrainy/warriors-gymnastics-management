@@ -14,8 +14,9 @@ const { synchronizeSubscriptionAttendanceUsage } = require('../utils/subscriptio
 const { getAppDateKey, getAppDateOnly } = require('../utils/appDate');
 const { getCurrentSubscriptionStart, isLaterSubscriptionStart } = require('../utils/subscriptionCycle');
 const { beginSubscriptionPaymentProof, reconcileOwnerSubscriptionPaymentProofs } = require('../utils/subscriptionPaymentProof');
+const { resolvePlayerNoteTimestamps } = require('../utils/playerNoteTimestamp');
 
-const formatPlayerResponse = (player) => {
+const formatPlayerResponse = (player, resolvedNoteTimestamps = new Map()) => {
   const obj = player.toObject({ virtuals: true });
   // Older installed clients still add this field to the manual balance.
   obj.preservedRemainingBalance = 0;
@@ -37,6 +38,7 @@ const formatPlayerResponse = (player) => {
     obj.groupIds = [obj.groupId];
   }
   obj.note = decodeText(obj.note || '');
+  obj.noteUpdatedAt = obj.noteUpdatedAt || resolvedNoteTimestamps.get(String(obj._id)) || null;
   obj.makeupClassesNote = decodeText(obj.makeupClassesNote || '');
   obj.freezeNote = decodeText(obj.freezeNote || '');
   delete obj.parentPhoneEncrypted;
@@ -252,16 +254,17 @@ const getPlayers = async (req, res, next) => {
       query,
       limit ? Player.countDocuments(filter) : Promise.resolve(null)
     ]);
+    const resolvedNoteTimestamps = compact ? new Map() : await resolvePlayerNoteTimestamps(players);
     if (limit) {
       return res.json({
-        items: players.map(formatPlayerResponse),
+        items: players.map((player) => formatPlayerResponse(player, resolvedNoteTimestamps)),
         total,
         page,
         limit,
         hasMore: skip + players.length < total
       });
     }
-    res.json(players.map(formatPlayerResponse));
+    res.json(players.map((player) => formatPlayerResponse(player, resolvedNoteTimestamps)));
   } catch (error) {
     next(error);
   }
@@ -370,7 +373,8 @@ const getPlayerById = async (req, res, next) => {
     if (!player) {
       return res.status(404).json({ message: 'Player not found.' });
     }
-    const playerData = formatPlayerResponse(player);
+    const resolvedNoteTimestamps = await resolvePlayerNoteTimestamps([player]);
+    const playerData = formatPlayerResponse(player, resolvedNoteTimestamps);
     playerData.paymentRemainingAmount = await getPlayerRemainingAmount(player);
     res.json(playerData);
   } catch (error) {

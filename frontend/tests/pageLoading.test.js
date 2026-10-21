@@ -41,6 +41,7 @@ async function mount(file, services) {
     '../hooks/useSectionLoader.js': hook,
     '../context/LanguageContext.jsx': { useLanguage: () => ({ t: (key) => key, language: 'en' }) },
     '../utils/format.js': { formatCurrency: (value) => `MONEY:${value}` },
+    '../utils/playerNoteTimestamp.js': { formatPlayerNoteTimestamp: (value, language, fallback) => value || fallback },
     '../utils/attendanceRecords.js': { attendanceCycleStart: (player) => player?.startDate || player?.currentSubscriptionStartedAt || '' },
     ...services
   };

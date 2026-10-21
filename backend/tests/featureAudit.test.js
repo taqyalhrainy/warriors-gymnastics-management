@@ -715,3 +715,27 @@ test('player note date changes only when the note text changes', async () => {
   assert.equal(edited.note, 'Edited note');
   assert.ok(new Date(edited.noteUpdatedAt) > new Date(first.noteUpdatedAt));
 });
+
+test('legacy player notes recover their last edit time from history without changing stored data', async () => {
+  const subject = await newPlayer();
+  const changedAt = new Date('2026-10-20T16:45:00.000Z');
+  await Player.updateOne({ _id: subject._id }, {
+    $set: { note: 'Legacy note' },
+    $unset: { noteUpdatedAt: 1 }
+  });
+  await History.create({
+    entityType: 'player',
+    entityId: subject._id,
+    action: 'update',
+    before: { note: 'Earlier note' },
+    after: { note: 'Legacy note' },
+    changedFields: ['note'],
+    changedAt
+  });
+
+  const detail = await call(`/players/${subject._id}`);
+  assert.equal(detail.noteUpdatedAt, changedAt.toISOString());
+  const board = await call('/groups/attendance-board');
+  assert.equal(board.players.find((player) => player._id === String(subject._id)).noteUpdatedAt, changedAt.toISOString());
+  assert.equal((await Player.findById(subject._id)).noteUpdatedAt, undefined);
+});

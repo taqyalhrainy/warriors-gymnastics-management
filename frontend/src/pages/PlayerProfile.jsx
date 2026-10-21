@@ -9,6 +9,7 @@ import { fetchPaymentsByPlayer, getCachedPaymentsByPlayer } from '../services/pa
 import { formatCurrency } from '../utils/format.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { attendanceCycleStart } from '../utils/attendanceRecords.js';
+import { formatPlayerNoteTimestamp } from '../utils/playerNoteTimestamp.js';
 
 const getDateInputValue = (date = new Date()) => {
   if (!date) return '';
@@ -109,12 +110,6 @@ const getPlayerAge = (dateOfBirth) => {
   return age >= 0 ? age : '';
 };
 
-const formatNoteDate = (value) => {
-  if (!value) return '';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-GB');
-};
-
 const PlayerProfilePage = () => {
   const { id } = useParams();
   const cachedPlayer = getCachedPlayer(id);
@@ -136,7 +131,7 @@ const PlayerProfilePage = () => {
   const [subscriptionForm, setSubscriptionForm] = useState({ startDate: '', endDate: '' });
   const [subscriptionMessage, setSubscriptionMessage] = useState('');
   const [isSavingSubscription, setIsSavingSubscription] = useState(false);
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
 
   useEffect(() => {
     const nextCachedPlayer = getCachedPlayer(id);
@@ -259,7 +254,10 @@ const PlayerProfilePage = () => {
             <div><strong>{t('hours')}:</strong> {player.packageHours || t('notSet')}</div>
             <div><strong>{t('payment')}:</strong> {formatCurrency(player.payment || 0)}</div>
             <div><strong>Total Paid:</strong> {loadStates.payments?.ready ? formatCurrency(totalPaid) : <DataStatus state={loadStates.payments} retry={() => loadSection('payments', () => fetchPaymentsByPlayer(id), setPaymentHistory)} />}</div>
-            <div><strong>{t('note')}{player.noteUpdatedAt ? ` · ${t('lastEdit')}: ${formatNoteDate(player.noteUpdatedAt)}` : ''}:</strong> {player.note || t('notSet')}</div>
+            <div className="player-profile-note">
+              <strong>{t('note')}:</strong> {player.note || t('notSet')}
+              {player.note && <small className="player-note-timestamp">{t('lastEdit')}: {formatPlayerNoteTimestamp(player.noteUpdatedAt, language, t('oldNoteDateUnavailable'))}</small>}
+            </div>
             {player.freezeNote && <div><strong>Freeze:</strong> {player.freezeNote}</div>}
             <div><strong>{t('makeupClasses')}:</strong> {player.makeupClassesNote || t('notSet')}</div>
             <div className="profile-attendance-history">
