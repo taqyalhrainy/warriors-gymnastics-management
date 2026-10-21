@@ -16,6 +16,7 @@ import { clearCache } from '../services/cache.js';
 import { formatCurrency } from '../utils/format.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import { formatPlayerNoteTimestamp } from '../utils/playerNoteTimestamp.js';
 
 const initialWaitingForm = {
   playerName: '',
@@ -944,7 +945,11 @@ const AdminDashboard = () => {
                     <div><span>{t('hours')}</span><strong>{viewedPlayer.packageHours || t('notSet')}</strong></div>
                     <div><span>{t('payment')}</span><strong>{formatCurrency(viewedPlayer.payment || 0)}</strong></div>
                     <div><span>Total Paid</span><strong>{canShowEmpty(loadStates.viewPayments) ? formatCurrency(viewedPlayerTotalPaid) : <DataStatus state={loadStates.viewPayments} />}</strong></div>
-                    <div className="student-info-grid-full"><span>{t('note')}</span><strong>{viewedPlayer.note || t('notSet')}</strong></div>
+                    <div className="student-info-grid-full">
+                      <span>{t('note')}</span>
+                      <strong>{viewedPlayer.note || t('notSet')}</strong>
+                      {viewedPlayer.note && <small className="player-note-timestamp">{t('lastEdit')}: {formatPlayerNoteTimestamp(viewedPlayer.noteUpdatedAt, language, t('oldNoteDateUnavailable'))}</small>}
+                    </div>
                   </div>
 
                   <div className="student-history expired-player-attendance-history">

@@ -3624,6 +3624,18 @@ body.attendance-touch-dragging {
   grid-column: 1 / -1;
 }
 
+.player-note-timestamp {
+  display: block;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.player-profile-note .player-note-timestamp {
+  margin-top: 4px;
+}
+
 .student-modal-date-row {
   grid-column: 1 / -1;
   display: grid;

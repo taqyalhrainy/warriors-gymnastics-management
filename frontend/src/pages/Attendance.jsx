@@ -14,6 +14,7 @@ import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
 import { compressProfileImage } from '../utils/imageUpload.js';
 import { getCacheVersion } from '../services/cache.js';
 import { attachAttendanceRecords, isAttendanceInCycle, getUnassignedAttendance, attendanceCycleStart, authoritativeField, packageCounter, countAttendanceForCycle, mergeCurrentAttendanceState, isAttendanceSubscriptionExpired } from '../utils/attendanceRecords.js';
+import { formatPlayerNoteTimestamp } from '../utils/playerNoteTimestamp.js';
 
 const ATTENDANCE_BOARD_CACHE_TTL_MS = 5 * 60 * 1000;
 const LOCAL_ATTENDANCE_OVERRIDE_TTL_MS = 60 * 1000;
@@ -424,7 +425,7 @@ const AttendancePage = () => {
   const selectedPlayerEditRequestIdRef = useRef(0);
   const selectedPlayerMutationSequenceRef = useRef(0);
   const pendingSelectedPlayerMutationRef = useRef('');
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
   const todayDateValue = getLocalDateValue();
   const attendanceRangeStartValue = getAttendanceRangeStartValue();
   const isViewingToday = selectedAttendanceDate === todayDateValue;
@@ -2823,6 +2824,7 @@ const AttendancePage = () => {
 
   const formatGroupTime = (group) => [group.startTime, group.endTime].filter(Boolean).join(' - ');
   const formatDate = (date) => date ? new Date(date).toLocaleDateString() : t('notSet');
+  const formatNoteTimestamp = (date) => formatPlayerNoteTimestamp(date, language, t('oldNoteDateUnavailable'));
   const getRecentAttendanceRecords = (records) => records;
   const getSubscriptionStartValue = (snapshot, allowInitialFallback = false) => (
     attendanceCycleStart(snapshot)
@@ -3408,8 +3410,11 @@ const AttendancePage = () => {
                       <input name="packageHours" type="text" inputMode="decimal" value={selectedPlayerForm.packageHours} onChange={handleSelectedPlayerFormChange} />
                     </label>
                     <label className="student-modal-edit-grid-full">
-                      <span>{t('note')}{selectedPlayer.noteUpdatedAt ? ` · ${t('lastEdit')}: ${formatDate(selectedPlayer.noteUpdatedAt)}` : ''}</span>
+                      <span>{t('note')}</span>
                       <textarea name="note" value={selectedPlayerForm.note} onChange={handleSelectedPlayerFormChange} placeholder={t('discountNotePlaceholder')} />
+                      {decodeDisplayText(selectedPlayer.note) && (
+                        <small className="player-note-timestamp">{t('lastEdit')}: {formatNoteTimestamp(selectedPlayer.noteUpdatedAt)}</small>
+                      )}
                     </label>
                     {(selectedPlayerForm.status === 'frozen' || selectedPlayerForm.freezeNote) && (
                       <label className="student-modal-edit-grid-full">
@@ -3471,8 +3476,11 @@ const AttendancePage = () => {
                     </div>
                     <div><span>{t('makeupClasses')}</span><strong>{decodeDisplayText(selectedPlayer.makeupClassesNote) || t('notSet')}</strong></div>
                     <div className="student-info-grid-full">
-                      <span>{t('note')}{selectedPlayer.noteUpdatedAt ? ` · ${t('lastEdit')}: ${formatDate(selectedPlayer.noteUpdatedAt)}` : ''}</span>
+                      <span>{t('note')}</span>
                       <strong>{decodeDisplayText(selectedPlayer.note) || t('notSet')}</strong>
+                      {decodeDisplayText(selectedPlayer.note) && (
+                        <small className="player-note-timestamp">{t('lastEdit')}: {formatNoteTimestamp(selectedPlayer.noteUpdatedAt)}</small>
+                      )}
                     </div>
                     {selectedPlayer.freezeNote && (
                       <div className="student-info-grid-full freeze-note-panel">

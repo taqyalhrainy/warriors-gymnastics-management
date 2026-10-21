@@ -1,5 +1,6 @@
 const TrainingGroup = require('../models/TrainingGroup');
 const Player = require('../models/Player');
+const { resolvePlayerNoteTimestamps } = require('../utils/playerNoteTimestamp');
 require('../models/Parent');
 require('../models/Program');
 require('../models/Coach');
@@ -166,7 +167,7 @@ const scheduleGroupMaintenance = () => {
     });
 };
 
-const formatPlayerResponse = (player) => {
+const formatPlayerResponse = (player, resolvedNoteTimestamps = new Map()) => {
   const obj = player.toObject({ virtuals: true });
   if (obj.groupId && typeof obj.groupId === 'object') {
     obj.groupId = formatGroupResponse(obj.groupId);
@@ -184,6 +185,7 @@ const formatPlayerResponse = (player) => {
     }
   }
   obj.note = decodeText(obj.note || '');
+  obj.noteUpdatedAt = obj.noteUpdatedAt || resolvedNoteTimestamps.get(String(obj._id)) || null;
   delete obj.parentPhoneEncrypted;
   return obj;
 };
@@ -310,6 +312,7 @@ const loadGroupPlayers = async (id, compact = false, scope = null) => {
       .populate('coachId', 'name')
       .populate('subscriptionId', 'type status totalSessions remainingSessions usedSessions startDate endDate price');
     const playerIds = players.map((player) => player._id);
+    const resolvedNoteTimestamps = await resolvePlayerNoteTimestamps(players);
     const cycleStartByPlayerId = new Map(players.map((player) => [
       String(player._id),
       getCurrentSubscriptionStart(player) || new Date(0)
@@ -349,7 +352,7 @@ const loadGroupPlayers = async (id, compact = false, scope = null) => {
     });
 
     return players.map((player) => ({
-      ...formatPlayerResponse(player),
+      ...formatPlayerResponse(player, resolvedNoteTimestamps),
       attendanceGroupId: id,
       attendancePresentCount: Math.min(
         Number(player.packageClasses || player.subscriptionId?.totalSessions || 0) || Number.MAX_SAFE_INTEGER,
