@@ -39,6 +39,7 @@ const playerSchema = new mongoose.Schema({
   remainingBalancePolicyVersion: { type: Number, default: 1 },
   remainingBalancePreservedAt: { type: Date },
   note: { type: String, trim: true, default: '' },
+  noteUpdatedAt: { type: Date },
   makeupClassesNote: { type: String, trim: true, default: '' },
   freezeNote: { type: String, trim: true, default: '' },
   status: { type: String, enum: ['active', 'expired', 'frozen', 'left', 'tryout'], default: 'active' },

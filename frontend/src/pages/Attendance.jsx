@@ -232,6 +232,7 @@ const mergeStablePlayerFields = (incomingPlayer, fallbackPlayer = null) => ({
     ? { ...emptySkillLevels(), ...incomingPlayer.skillLevels }
     : getSkillLevels(fallbackPlayer),
   makeupClassesNote: authoritativeField(incomingPlayer, fallbackPlayer, 'makeupClassesNote', ''),
+  noteUpdatedAt: authoritativeField(incomingPlayer, fallbackPlayer, 'noteUpdatedAt', null),
   paymentRemainingAmount: authoritativeField(incomingPlayer, fallbackPlayer, 'paymentRemainingAmount', 0),
   attendancePresentCount: authoritativeField(incomingPlayer, fallbackPlayer, 'attendancePresentCount', 0),
   attendanceGroupId: authoritativeField(incomingPlayer, fallbackPlayer, 'attendanceGroupId'),
@@ -3407,7 +3408,7 @@ const AttendancePage = () => {
                       <input name="packageHours" type="text" inputMode="decimal" value={selectedPlayerForm.packageHours} onChange={handleSelectedPlayerFormChange} />
                     </label>
                     <label className="student-modal-edit-grid-full">
-                      <span>{t('note')}</span>
+                      <span>{t('note')}{selectedPlayer.noteUpdatedAt ? ` · ${t('lastEdit')}: ${formatDate(selectedPlayer.noteUpdatedAt)}` : ''}</span>
                       <textarea name="note" value={selectedPlayerForm.note} onChange={handleSelectedPlayerFormChange} placeholder={t('discountNotePlaceholder')} />
                     </label>
                     {(selectedPlayerForm.status === 'frozen' || selectedPlayerForm.freezeNote) && (
@@ -3470,7 +3471,7 @@ const AttendancePage = () => {
                     </div>
                     <div><span>{t('makeupClasses')}</span><strong>{decodeDisplayText(selectedPlayer.makeupClassesNote) || t('notSet')}</strong></div>
                     <div className="student-info-grid-full">
-                      <span>{t('note')}</span>
+                      <span>{t('note')}{selectedPlayer.noteUpdatedAt ? ` · ${t('lastEdit')}: ${formatDate(selectedPlayer.noteUpdatedAt)}` : ''}</span>
                       <strong>{decodeDisplayText(selectedPlayer.note) || t('notSet')}</strong>
                     </div>
                     {selectedPlayer.freezeNote && (

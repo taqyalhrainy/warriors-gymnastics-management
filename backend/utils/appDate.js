@@ -37,6 +37,28 @@ const getAppDayStartUtc = (key) => {
   }
   return new Date(result);
 };
+const getAppDateTimeUtc = (key, time) => {
+  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key || ''));
+  const timeMatch = /^(\d{2}):(\d{2})$/.exec(String(time || ''));
+  if (!dateMatch || !timeMatch) return null;
+  const [, yearText, monthText, dayText] = dateMatch;
+  const [, hourText, minuteText] = timeMatch;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const calendarCheck = new Date(Date.UTC(year, month - 1, day));
+  if (calendarCheck.toISOString().slice(0, 10) !== key || hour > 23 || minute > 59) return null;
+
+  const targetWallTime = Date.UTC(year, month - 1, day, hour, minute);
+  let result = targetWallTime;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    result = targetWallTime - getTimeZoneOffset(new Date(result));
+  }
+  const parsed = new Date(result);
+  return getAppDateKey(parsed) === key ? parsed : null;
+};
 const getAppDayRangeUtc = (key) => {
   const nextKeyDate = dateKeyToUtc(key);
   nextKeyDate.setUTCDate(nextKeyDate.getUTCDate() + 1);
@@ -46,4 +68,4 @@ const getAppDayRangeUtc = (key) => {
   };
 };
 
-module.exports = { APP_TIME_ZONE, getAppDateKey, dateKeyToUtc, getAppDateOnly, getAppDayStartUtc, getAppDayRangeUtc };
+module.exports = { APP_TIME_ZONE, getAppDateKey, dateKeyToUtc, getAppDateOnly, getAppDayStartUtc, getAppDateTimeUtc, getAppDayRangeUtc };

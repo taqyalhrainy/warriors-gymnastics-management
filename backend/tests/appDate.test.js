@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { getAppDateKey, dateKeyToUtc, getAppDateOnly, getAppDayRangeUtc } = require('../utils/appDate');
+const { getAppDateKey, dateKeyToUtc, getAppDateOnly, getAppDateTimeUtc, getAppDayRangeUtc } = require('../utils/appDate');
 
 test('club date follows Amman across the UTC midnight boundary', () => {
   assert.equal(getAppDateKey('2026-09-28T21:30:00.000Z'), '2026-09-29');
@@ -11,4 +11,7 @@ test('club date follows Amman across the UTC midnight boundary', () => {
   const range = getAppDayRangeUtc('2026-09-29');
   assert.equal(range.start.toISOString(), '2026-09-28T21:00:00.000Z');
   assert.equal(range.end.toISOString(), '2026-09-29T21:00:00.000Z');
+  assert.equal(getAppDateTimeUtc('2026-09-29', '16:35').toISOString(), '2026-09-29T13:35:00.000Z');
+  assert.equal(getAppDateTimeUtc('2026-02-30', '16:35'), null);
+  assert.equal(getAppDateTimeUtc('2026-09-29', '25:00'), null);
 });

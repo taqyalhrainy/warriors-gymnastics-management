@@ -5,7 +5,7 @@ const User = require('../models/User');
 const { sanitizeObject, validateEmail, validateObjectId } = require('../middleware/validate');
 const { createAuditLog } = require('../utils/audit');
 const { snapshotCoachDocument, createHistoryEntry } = require('../utils/history');
-const { getAppDateKey, dateKeyToUtc } = require('../utils/appDate');
+const { getAppDateKey, dateKeyToUtc, getAppDateTimeUtc } = require('../utils/appDate');
 
 const getDateOnly = (value = new Date()) => {
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return dateKeyToUtc(value);
@@ -196,7 +196,7 @@ const updateCoachAttendance = async (req, res, next) => {
 
     const body = sanitizeObject(req.body);
     const action = String(body.action || '').trim().toLowerCase();
-    if (!['arrived', 'left', 'absent', 'clear', 'note'].includes(action)) {
+    if (!['arrived', 'left', 'absent', 'clear', 'note', 'arrival-time'].includes(action)) {
       return res.status(400).json({ message: 'Invalid coach attendance action.' });
     }
 
@@ -236,6 +236,25 @@ const updateCoachAttendance = async (req, res, next) => {
       ).lean();
 
       await createAuditLog({ userId: req.user._id, action: 'coach day note', entity: 'CoachAttendance', entityId: attendance._id, req });
+      await recordCoachHistory({ coach, action: 'update', before: beforeSnapshot, userId: req.user._id, req });
+      return res.json(attendance);
+    }
+
+    if (action === 'arrival-time') {
+      const dateKey = getAppDateKey(date);
+      const arrivedAt = getAppDateTimeUtc(dateKey, body.arrivalTime);
+      if (!arrivedAt) {
+        return res.status(400).json({ message: 'A valid arrival time is required.' });
+      }
+      const attendance = await CoachAttendance.findOneAndUpdate(
+        { coachId: coach._id, date, arrivedAt: { $exists: true } },
+        { $set: { arrivedAt, updatedBy: req.user._id, updatedAt: now } },
+        { new: true }
+      ).lean();
+      if (!attendance) {
+        return res.status(400).json({ message: 'Mark the coach as came before editing the arrival time.' });
+      }
+      await createAuditLog({ userId: req.user._id, action: 'coach arrival time edit', entity: 'CoachAttendance', entityId: attendance._id, req });
       await recordCoachHistory({ coach, action: 'update', before: beforeSnapshot, userId: req.user._id, req });
       return res.json(attendance);
     }

@@ -79,6 +79,7 @@ const snapshotPlayerDocument = (playerDocument) => {
     attendanceDueManual: Boolean(player?.attendanceDueManual),
     ...(player?.preservedRemainingBalance === undefined ? {} : { preservedRemainingBalance: Number(player.preservedRemainingBalance) }),
     note: player?.note || '',
+    noteUpdatedAt: player?.noteUpdatedAt || null,
     makeupClassesNote: player?.makeupClassesNote || '',
     freezeNote: player?.freezeNote || '',
     status: player?.status || '',

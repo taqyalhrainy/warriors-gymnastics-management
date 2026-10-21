@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { fetchPlayerAlertCandidates } from '../services/players.js';
-import { birthdayDay, todaysBirthdays, readBirthdayIds } from '../utils/birthdayAlerts.js';
+import { birthdayDay, upcomingBirthdays, readBirthdayIds } from '../utils/birthdayAlerts.js';
 
 export const useBirthdayAlerts = () => {
   const { user } = useAuth();
@@ -46,6 +46,6 @@ export const useBirthdayAlerts = () => {
       window.removeEventListener('storage', syncRead);
     };
   }, [enabled, userId]);
-  const birthdays = enabled ? todaysBirthdays(players, day) : [];
+  const birthdays = enabled ? upcomingBirthdays(players, day) : [];
   return { players: enabled ? players : [], birthdays, day, userId, ready, error, unread: birthdays.filter((player) => !readIds.includes(String(player._id))).length };
 };

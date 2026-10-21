@@ -99,6 +99,7 @@ const buildPlayerRestorePayload = (snapshot) => ({
   ...(snapshot.preservedRemainingBalance === undefined ? {} : { preservedRemainingBalance: Number(snapshot.preservedRemainingBalance) }),
   remainingBalancePolicyVersion: 1,
   note: snapshot.note || '',
+  noteUpdatedAt: asDate(snapshot.noteUpdatedAt) || null,
   makeupClassesNote: snapshot.makeupClassesNote || '',
   freezeNote: snapshot.freezeNote || '',
   status: snapshot.status || 'active',

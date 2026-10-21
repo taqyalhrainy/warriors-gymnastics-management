@@ -109,6 +109,12 @@ const getPlayerAge = (dateOfBirth) => {
   return age >= 0 ? age : '';
 };
 
+const formatNoteDate = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-GB');
+};
+
 const PlayerProfilePage = () => {
   const { id } = useParams();
   const cachedPlayer = getCachedPlayer(id);
@@ -253,7 +259,7 @@ const PlayerProfilePage = () => {
             <div><strong>{t('hours')}:</strong> {player.packageHours || t('notSet')}</div>
             <div><strong>{t('payment')}:</strong> {formatCurrency(player.payment || 0)}</div>
             <div><strong>Total Paid:</strong> {loadStates.payments?.ready ? formatCurrency(totalPaid) : <DataStatus state={loadStates.payments} retry={() => loadSection('payments', () => fetchPaymentsByPlayer(id), setPaymentHistory)} />}</div>
-            <div><strong>{t('note')}:</strong> {player.note || t('notSet')}</div>
+            <div><strong>{t('note')}{player.noteUpdatedAt ? ` · ${t('lastEdit')}: ${formatNoteDate(player.noteUpdatedAt)}` : ''}:</strong> {player.note || t('notSet')}</div>
             {player.freezeNote && <div><strong>Freeze:</strong> {player.freezeNote}</div>}
             <div><strong>{t('makeupClasses')}:</strong> {player.makeupClassesNote || t('notSet')}</div>
             <div className="profile-attendance-history">
