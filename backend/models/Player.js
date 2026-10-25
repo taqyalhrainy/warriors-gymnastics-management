@@ -31,6 +31,8 @@ const playerSchema = new mongoose.Schema({
   packageName: { type: String, trim: true, default: '' },
   packageClasses: { type: Number, min: 0, default: 0 },
   packageHours: { type: Number, min: 0, default: 0 },
+  subscriptionScheduleMode: { type: String, enum: ['auto', 'custom'], default: 'auto' },
+  subscriptionCustomDays: [{ type: Number, min: 0, max: 6 }],
   payment: { type: Number, default: 0, min: 0 },
   previousDueBalance: { type: Number, default: 0 },
   dueAdjustment: { type: Number, default: 0, min: 0 },

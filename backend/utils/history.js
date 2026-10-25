@@ -73,6 +73,8 @@ const snapshotPlayerDocument = (playerDocument) => {
     packageName: player?.packageName || '',
     packageClasses: Number(player?.packageClasses || 0),
     packageHours: Number(player?.packageHours || 0),
+    subscriptionScheduleMode: player?.subscriptionScheduleMode === 'custom' ? 'custom' : 'auto',
+    subscriptionCustomDays: (player?.subscriptionCustomDays || []).map(Number),
     payment: Number(player?.payment || 0),
     previousDueBalance: Number(player?.previousDueBalance || 0),
     dueAdjustment: Number(player?.dueAdjustment || 0),

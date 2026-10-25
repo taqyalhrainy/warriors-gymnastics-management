@@ -92,6 +92,9 @@ const buildPlayerRestorePayload = (snapshot) => ({
   packageName: snapshot.packageName || '',
   packageClasses: Number(snapshot.packageClasses || 0),
   packageHours: Number(snapshot.packageHours || 0),
+  subscriptionScheduleMode: snapshot.subscriptionScheduleMode === 'custom' ? 'custom' : 'auto',
+  subscriptionCustomDays: (Array.isArray(snapshot.subscriptionCustomDays) ? snapshot.subscriptionCustomDays : [])
+    .map(Number).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6),
   payment: Number(snapshot.payment || 0),
   previousDueBalance: Number(snapshot.previousDueBalance || 0),
   dueAdjustment: Number(snapshot.dueAdjustment || 0),

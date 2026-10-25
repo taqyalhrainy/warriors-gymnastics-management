@@ -25,6 +25,15 @@ const PLAYER_SKILL_LEVELS = [
   { key: 'floor', label: 'Floor' },
   { key: 'bars', label: 'Bars' }
 ];
+const SUBSCRIPTION_DAY_OPTIONS = [
+  ['Sun', 0],
+  ['Mon', 1],
+  ['Tue', 2],
+  ['Wed', 3],
+  ['Thu', 4],
+  ['Fri', 5],
+  ['Sat', 6]
+];
 const emptySkillLevels = () => Object.fromEntries(PLAYER_SKILL_LEVELS.map(({ key }) => [key, '']));
 const getSkillLevels = (player) => Object.fromEntries(PLAYER_SKILL_LEVELS.map(({ key }) => [key, player?.skillLevels?.[key] || '']));
 let attendanceBoardCache = null;
@@ -228,6 +237,10 @@ const mergeStablePlayerFields = (incomingPlayer, fallbackPlayer = null) => ({
   packageName: authoritativeField(incomingPlayer, fallbackPlayer, 'packageName', ''),
   packageClasses: authoritativeField(incomingPlayer, fallbackPlayer, 'packageClasses', 0),
   packageHours: authoritativeField(incomingPlayer, fallbackPlayer, 'packageHours', 0),
+  subscriptionScheduleMode: authoritativeField(incomingPlayer, fallbackPlayer, 'subscriptionScheduleMode', 'auto'),
+  subscriptionCustomDays: Array.isArray(incomingPlayer?.subscriptionCustomDays)
+    ? incomingPlayer.subscriptionCustomDays
+    : (fallbackPlayer?.subscriptionCustomDays || []),
   payment: authoritativeField(incomingPlayer, fallbackPlayer, 'payment', 0),
   skillLevels: incomingPlayer?.skillLevels && typeof incomingPlayer.skillLevels === 'object'
     ? { ...emptySkillLevels(), ...incomingPlayer.skillLevels }
@@ -332,6 +345,8 @@ const mapSnapshotPlayerToAttendancePlayer = (player) => {
     packageName: player.packageName || '',
     packageClasses: Number(player.packageClasses || 0),
     packageHours: Number(player.packageHours || 0),
+    subscriptionScheduleMode: player.subscriptionScheduleMode === 'custom' ? 'custom' : 'auto',
+    subscriptionCustomDays: Array.isArray(player.subscriptionCustomDays) ? player.subscriptionCustomDays.map(Number) : [],
     payment: Number(player.payment || 0),
     previousDueBalance: Number(player.previousDueBalance || 0),
     dueAdjustment: Number(player.dueAdjustment || 0),
@@ -1725,6 +1740,10 @@ const AttendancePage = () => {
     packageName: player?.packageName || '',
     packageClasses: player?.packageClasses ?? '',
     packageHours: player?.packageHours ?? '',
+    subscriptionScheduleMode: player?.subscriptionScheduleMode === 'custom' ? 'custom' : 'auto',
+    subscriptionCustomDays: Array.isArray(player?.subscriptionCustomDays)
+      ? player.subscriptionCustomDays.map(Number).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
+      : [],
     payment: player?.payment ?? '',
     dueAdjustment: player?.dueAdjustment ?? 0,
     note: decodeDisplayText(player?.note),
@@ -1794,17 +1813,31 @@ const AttendancePage = () => {
 
     if (name === 'packageName') {
       const selectedPackage = packageOptions.find((option) => option.label === value);
-      setSelectedPlayerForm((current) => ({
-        ...current,
-        packageName: value,
-        packageClasses: selectedPackage ? selectedPackage.classes : '',
-        packageHours: selectedPackage ? selectedPackage.hours : ''
-      }));
+      setSelectedPlayerForm((current) => {
+        const next = {
+          ...current,
+          packageName: value,
+          packageClasses: selectedPackage ? selectedPackage.classes : '',
+          packageHours: selectedPackage ? selectedPackage.hours : ''
+        };
+        return { ...next, endDate: getSelectedPlayerEditEndDate(next) };
+      });
       return;
     }
 
     if (name === 'payment' || name === 'packageClasses' || name === 'packageHours') {
-      setSelectedPlayerForm((current) => ({ ...current, [name]: normalizeDigits(value) }));
+      setSelectedPlayerForm((current) => {
+        const next = { ...current, [name]: normalizeDigits(value) };
+        return name === 'packageClasses' ? { ...next, endDate: getSelectedPlayerEditEndDate(next) } : next;
+      });
+      return;
+    }
+
+    if (name === 'startDate') {
+      setSelectedPlayerForm((current) => {
+        const next = { ...current, startDate: value };
+        return { ...next, endDate: getSelectedPlayerEditEndDate(next) };
+      });
       return;
     }
 
@@ -1832,10 +1865,41 @@ const AttendancePage = () => {
         ? current.groupIds.filter((id) => id !== groupId)
         : [...current.groupIds, groupId];
 
-      return {
+      const next = {
         ...current,
         groupIds: nextGroupIds
       };
+      return { ...next, endDate: getSelectedPlayerEditEndDate(next) };
+    });
+  };
+
+  const getSelectedPlayerEditEndDate = (form) => {
+    if (form.subscriptionScheduleMode === 'custom' && !form.subscriptionCustomDays.length) {
+      return form.endDate;
+    }
+    return getScheduledEndDateValue(form.startDate, selectedPlayer, editGroups.length ? editGroups : groupColumns, {
+      groupIds: form.groupIds,
+      totalClasses: form.packageClasses,
+      ...(form.subscriptionScheduleMode === 'custom' ? { dayIndexes: form.subscriptionCustomDays } : {})
+    });
+  };
+
+  const handleSelectedPlayerScheduleModeChange = (subscriptionScheduleMode) => {
+    selectedPlayerFormDirtyRef.current = true;
+    setSelectedPlayerForm((current) => {
+      const next = { ...current, subscriptionScheduleMode };
+      return { ...next, endDate: getSelectedPlayerEditEndDate(next) };
+    });
+  };
+
+  const handleSelectedPlayerCustomDayToggle = (dayIndex) => {
+    selectedPlayerFormDirtyRef.current = true;
+    setSelectedPlayerForm((current) => {
+      const subscriptionCustomDays = current.subscriptionCustomDays.includes(dayIndex)
+        ? current.subscriptionCustomDays.filter((day) => day !== dayIndex)
+        : [...current.subscriptionCustomDays, dayIndex].sort((first, second) => first - second);
+      const next = { ...current, subscriptionCustomDays };
+      return { ...next, endDate: getSelectedPlayerEditEndDate(next) };
     });
   };
 
@@ -1856,6 +1920,7 @@ const AttendancePage = () => {
     return {
       ...form,
       groupIds: [...(form.groupIds || [])].map(String).sort(),
+      subscriptionCustomDays: [...(form.subscriptionCustomDays || [])].map(Number).sort((first, second) => first - second),
       payment: String(form.payment ?? ''),
       packageClasses: String(form.packageClasses ?? ''),
       packageHours: String(form.packageHours ?? '')
@@ -1928,13 +1993,20 @@ const AttendancePage = () => {
     const groupIds = (selectedPlayer?.groupIds?.length ? selectedPlayer.groupIds : [selectedPlayer?.groupId].filter(Boolean))
       .map((group) => getEntityId(group._id || group))
       .filter(Boolean);
+    const scheduleMode = selectedPlayer?.subscriptionScheduleMode === 'custom' ? 'custom' : 'auto';
+    const customDays = Array.isArray(selectedPlayer?.subscriptionCustomDays) ? selectedPlayer.subscriptionCustomDays.map(Number) : [];
+    const customClasses = selectedPlayer?.packageClasses || selectedPlayer?.subscriptionId?.totalSessions || '';
     setSubscriptionForm({
       startDate,
-      endDate: getScheduledEndDateValue(startDate, selectedPlayer, groupColumns, { groupIds }),
+      endDate: getScheduledEndDateValue(startDate, selectedPlayer, groupColumns, {
+        groupIds,
+        totalClasses: customClasses,
+        ...(scheduleMode === 'custom' && customDays.length ? { dayIndexes: customDays } : {})
+      }),
       groupIds,
-      scheduleMode: 'auto',
-      customDays: [],
-      customClasses: selectedPlayer?.packageClasses || selectedPlayer?.subscriptionId?.totalSessions || ''
+      scheduleMode,
+      customDays,
+      customClasses
     });
     setSubscriptionMessage('');
     setIsSubscriptionGroupPickerOpen(false);
@@ -2025,6 +2097,10 @@ const AttendancePage = () => {
       setSubscriptionMessage('Choose at least one group for this subscription.');
       return;
     }
+    if (subscriptionForm.scheduleMode === 'custom' && !subscriptionForm.customDays.length) {
+      setSubscriptionMessage('Choose at least one custom attendance day.');
+      return;
+    }
 
     const confirmed = window.confirm('This will start a new subscription cycle and cannot be undone. Continue?');
     if (!confirmed) return;
@@ -2036,6 +2112,9 @@ const AttendancePage = () => {
     const availableGroups = editGroups.length ? editGroups : groupColumns;
     const selectedGroupRefs = subscriptionForm.groupIds
       .map((groupId) => availableGroups.find((group) => getEntityId(group._id) === getEntityId(groupId)) || { _id: groupId, name: '' });
+    const subscriptionPackageClasses = subscriptionForm.scheduleMode === 'custom'
+      ? parseLocalizedNumber(subscriptionForm.customClasses)
+      : Number(selectedPlayer.packageClasses || 0);
     const optimisticPlayerBase = {
       ...selectedPlayer,
       startDate: subscriptionForm.startDate,
@@ -2044,6 +2123,9 @@ const AttendancePage = () => {
       groupIds: selectedGroupRefs.length ? selectedGroupRefs : selectedPlayer.groupIds,
       status: selectedPlayer.status === 'expired' ? 'active' : selectedPlayer.status,
       subscriptionNeedsAttention: keepWarning,
+      packageClasses: subscriptionPackageClasses,
+      subscriptionScheduleMode: subscriptionForm.scheduleMode,
+      subscriptionCustomDays: subscriptionForm.scheduleMode === 'custom' ? subscriptionForm.customDays : [],
       paymentRemainingAmount: Number(selectedPlayer.paymentRemainingAmount || 0),
       currentSubscriptionStartedAt: subscriptionForm.startDate,
       currentSubscriptionAttendanceIds: [],
@@ -2073,7 +2155,7 @@ const AttendancePage = () => {
         startDate: subscriptionForm.startDate,
         endDate: subscriptionForm.endDate,
         packageName: selectedPlayer.packageName || '',
-        packageClasses: Number(selectedPlayer.packageClasses || 0),
+        packageClasses: subscriptionPackageClasses,
         packageHours: Number(selectedPlayer.packageHours || 0),
         payment: Number(selectedPlayer.payment || 0)
       };
@@ -2089,6 +2171,9 @@ const AttendancePage = () => {
         endDate: subscriptionForm.endDate,
         groupId: subscriptionForm.groupIds[0] || '',
         groupIds: subscriptionForm.groupIds,
+        packageClasses: subscriptionPackageClasses,
+        subscriptionScheduleMode: subscriptionForm.scheduleMode,
+        subscriptionCustomDays: subscriptionForm.scheduleMode === 'custom' ? subscriptionForm.customDays : [],
         status: selectedPlayer.status === 'expired' ? 'active' : selectedPlayer.status,
         subscriptionNeedsAttention: keepWarning,
         newSubscription: true
@@ -2161,7 +2246,6 @@ const AttendancePage = () => {
     if (pendingSelectedPlayerMutationRef.current) {
       return;
     }
-
     const mutation = beginSelectedPlayerMutation('subscription-attention');
     const previousPlayer = selectedPlayer;
     const optimisticPlayer = {
@@ -2643,6 +2727,10 @@ const AttendancePage = () => {
       return;
     }
     if (pendingSelectedPlayerMutationRef.current) {
+      return;
+    }
+    if (selectedPlayerForm.subscriptionScheduleMode === 'custom' && !selectedPlayerForm.subscriptionCustomDays.length) {
+      setMessage('Choose at least one custom attendance day.');
       return;
     }
 
@@ -3409,6 +3497,42 @@ const AttendancePage = () => {
                       <span>{t('hours')}</span>
                       <input name="packageHours" type="text" inputMode="decimal" value={selectedPlayerForm.packageHours} onChange={handleSelectedPlayerFormChange} />
                     </label>
+                    <div className="student-modal-edit-grid-full subscription-schedule-box player-edit-schedule-box">
+                      <div>
+                        <strong>Attendance schedule</strong>
+                        <small>Change the weekly days and calculated end date.</small>
+                      </div>
+                      <div className="subscription-schedule-toggle">
+                        <button
+                          type="button"
+                          className={selectedPlayerForm.subscriptionScheduleMode === 'auto' ? 'is-active' : ''}
+                          onClick={() => handleSelectedPlayerScheduleModeChange('auto')}
+                        >
+                          Auto from groups
+                        </button>
+                        <button
+                          type="button"
+                          className={selectedPlayerForm.subscriptionScheduleMode === 'custom' ? 'is-active' : ''}
+                          onClick={() => handleSelectedPlayerScheduleModeChange('custom')}
+                        >
+                          Custom days
+                        </button>
+                      </div>
+                      {selectedPlayerForm.subscriptionScheduleMode === 'custom' && (
+                        <div className="subscription-day-picker" aria-label="Player subscription days">
+                          {SUBSCRIPTION_DAY_OPTIONS.map(([label, dayIndex]) => (
+                            <button
+                              key={dayIndex}
+                              type="button"
+                              className={selectedPlayerForm.subscriptionCustomDays.includes(dayIndex) ? 'is-active' : ''}
+                              onClick={() => handleSelectedPlayerCustomDayToggle(dayIndex)}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <label className="student-modal-edit-grid-full">
                       <span>{t('note')}</span>
                       <textarea name="note" value={selectedPlayerForm.note} onChange={handleSelectedPlayerFormChange} placeholder={t('discountNotePlaceholder')} />
@@ -3811,15 +3935,7 @@ const AttendancePage = () => {
                         />
                       </label>
                       <div className="subscription-day-picker" aria-label="Subscription days">
-                        {[
-                          ['Sun', 0],
-                          ['Mon', 1],
-                          ['Tue', 2],
-                          ['Wed', 3],
-                          ['Thu', 4],
-                          ['Fri', 5],
-                          ['Sat', 6]
-                        ].map(([label, dayIndex]) => (
+                        {SUBSCRIPTION_DAY_OPTIONS.map(([label, dayIndex]) => (
                           <button
                             key={dayIndex}
                             type="button"

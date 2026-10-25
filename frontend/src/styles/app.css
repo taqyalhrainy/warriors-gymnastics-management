@@ -857,6 +857,15 @@ body.theme-light .new-subscription-warning {
   background: color-mix(in srgb, #14b8a6 8%, var(--surface));
 }
 
+.player-edit-schedule-box > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.player-edit-schedule-box small {
+  color: var(--muted);
+}
+
 .subscription-schedule-toggle,
 .subscription-day-picker {
   display: flex;

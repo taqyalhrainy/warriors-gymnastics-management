@@ -53,6 +53,13 @@ const normalizeSkillLevels = (value) => Object.fromEntries(SKILL_LEVEL_KEYS.map(
   typeof value?.[key] === 'string' ? value[key].trim().slice(0, 120) : ''
 ]));
 
+const normalizeSubscriptionCustomDays = (value) => (
+  [...new Set((Array.isArray(value) ? value : [])
+    .map(Number)
+    .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))]
+    .sort((first, second) => first - second)
+);
+
 const normalizeGroupIds = (payload) => {
   const rawGroupIds = Array.isArray(payload.groupIds)
     ? payload.groupIds
@@ -113,6 +120,15 @@ const cleanPlayerPayload = (payload) => {
   }
   if (payload.skillLevels !== undefined) {
     payload.skillLevels = normalizeSkillLevels(payload.skillLevels);
+  }
+  if (payload.subscriptionScheduleMode !== undefined) {
+    payload.subscriptionScheduleMode = payload.subscriptionScheduleMode === 'custom' ? 'custom' : 'auto';
+  }
+  if (payload.subscriptionCustomDays !== undefined) {
+    payload.subscriptionCustomDays = normalizeSubscriptionCustomDays(payload.subscriptionCustomDays);
+  }
+  if (payload.subscriptionScheduleMode === 'auto') {
+    payload.subscriptionCustomDays = [];
   }
   return payload;
 };
@@ -282,7 +298,7 @@ const createPlayer = async (req, res, next) => {
   try {
     const data = cleanPlayerPayload(sanitizeObject(req.body));
     const groupIds = normalizeGroupIds(data);
-    const { fullName, dateOfBirth, parentId, parentPhone, programId, coachId, level, skillLevels, startDate, endDate, packageName, packageClasses, packageHours, payment, previousDueBalance, dueAdjustment, attendanceDueManual, subscriptionNeedsAttention, note, makeupClassesNote, freezeNote, showInAttendanceWhenFrozen, profileImage, status = 'active' } = data;
+    const { fullName, dateOfBirth, parentId, parentPhone, programId, coachId, level, skillLevels, startDate, endDate, packageName, packageClasses, packageHours, subscriptionScheduleMode, subscriptionCustomDays, payment, previousDueBalance, dueAdjustment, attendanceDueManual, subscriptionNeedsAttention, note, makeupClassesNote, freezeNote, showInAttendanceWhenFrozen, profileImage, status = 'active' } = data;
     if (!fullName || !parentId) {
       return res.status(400).json({ message: 'Required player fields are missing.' });
     }
@@ -320,6 +336,8 @@ const createPlayer = async (req, res, next) => {
       packageName: packageName || '',
       packageClasses: parseLocalizedNumber(packageClasses),
       packageHours: parseLocalizedNumber(packageHours),
+      subscriptionScheduleMode: subscriptionScheduleMode === 'custom' ? 'custom' : 'auto',
+      subscriptionCustomDays: subscriptionScheduleMode === 'custom' ? normalizeSubscriptionCustomDays(subscriptionCustomDays) : [],
       payment: parseLocalizedNumber(payment),
       previousDueBalance: typeof previousDueBalance !== 'undefined' ? parseLocalizedNumber(previousDueBalance) : 0,
       dueAdjustment: typeof dueAdjustment !== 'undefined' ? parseLocalizedNumber(dueAdjustment) : 0,
