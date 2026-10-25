@@ -20,4 +20,3 @@ test('both player editors persist custom subscription schedule fields', () => {
   }
   assert.match(attendance, /subscriptionCustomDays: subscriptionForm\.scheduleMode === 'custom' \? subscriptionForm\.customDays : \[\]/);
 });
-
