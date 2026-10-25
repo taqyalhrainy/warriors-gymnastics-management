@@ -11,6 +11,49 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
 import { compressProfileImage } from '../utils/imageUpload.js';
 
+const SUBSCRIPTION_DAY_OPTIONS = [
+  ['Sun', 0], ['Mon', 1], ['Tue', 2], ['Wed', 3], ['Thu', 4], ['Fri', 5], ['Sat', 6]
+];
+const DAY_INDEXES = {
+  sunday: 0, sun: 0, 'الأحد': 0,
+  monday: 1, mon: 1, 'الاثنين': 1, 'الإثنين': 1,
+  tuesday: 2, tue: 2, tues: 2, 'الثلاثاء': 2,
+  wednesday: 3, wed: 3, 'الأربعاء': 3,
+  thursday: 4, thu: 4, thurs: 4, 'الخميس': 4,
+  friday: 5, fri: 5, 'الجمعة': 5,
+  saturday: 6, sat: 6, 'السبت': 6
+};
+
+const getDayIndex = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  const exact = DAY_INDEXES[normalized];
+  if (Number.isInteger(exact)) return exact;
+  const match = Object.entries(DAY_INDEXES).find(([day]) => normalized.includes(day));
+  return match?.[1];
+};
+
+const calculateEndDate = (form, groups) => {
+  const totalClasses = Number(form.packageClasses || 0);
+  const days = form.subscriptionScheduleMode === 'custom'
+    ? form.subscriptionCustomDays
+    : form.groupIds.flatMap((groupId) => {
+      const group = groups.find((item) => item._id === groupId);
+      return (group?.days || []).flatMap((value) => String(value).split(/[\/,|]+/)).map(getDayIndex);
+    }).filter(Number.isInteger);
+  if (!form.startDate || totalClasses <= 0 || !days.length) return form.endDate;
+
+  const [year, month, day] = form.startDate.split('-').map(Number);
+  const endDate = new Date(year, month - 1, day);
+  if (Number.isNaN(endDate.getTime())) return form.endDate;
+  const scheduledDays = new Set(days);
+  let counted = 0;
+  while (counted < totalClasses) {
+    if (scheduledDays.has(endDate.getDay())) counted += 1;
+    if (counted < totalClasses) endDate.setDate(endDate.getDate() + 1);
+  }
+  return `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+};
+
 const PlayerFormPage = () => {
   const { states: loadStates, load: loadSection } = useSectionLoader(["parents","groups","packages"]);
   const { id } = useParams();
@@ -28,6 +71,8 @@ const PlayerFormPage = () => {
     packageName: '',
     packageClasses: '',
     packageHours: '',
+    subscriptionScheduleMode: 'auto',
+    subscriptionCustomDays: [],
     payment: '',
     note: '',
     makeupClassesNote: '',
@@ -83,6 +128,8 @@ const PlayerFormPage = () => {
           packageName: data.packageName || '',
           packageClasses: data.packageClasses || '',
           packageHours: data.packageHours || '',
+          subscriptionScheduleMode: data.subscriptionScheduleMode === 'custom' ? 'custom' : 'auto',
+          subscriptionCustomDays: Array.isArray(data.subscriptionCustomDays) ? data.subscriptionCustomDays.map(Number) : [],
           payment: data.payment ?? '',
           note: data.note || '',
           makeupClassesNote: data.makeupClassesNote || '',
@@ -102,12 +149,13 @@ const PlayerFormPage = () => {
     }
     if (name === 'packageName') {
       const selectedPackage = packageOptions.find((option) => option.label === value);
-      setPlayer({
+      const next = {
         ...player,
         packageName: value,
         packageClasses: selectedPackage ? selectedPackage.classes : '',
         packageHours: selectedPackage ? selectedPackage.hours : ''
-      });
+      };
+      setPlayer({ ...next, endDate: calculateEndDate(next, groups) });
       return;
     }
     if (name === 'payment') {
@@ -115,7 +163,13 @@ const PlayerFormPage = () => {
       return;
     }
     if (name === 'packageClasses' || name === 'packageHours') {
-      setPlayer({ ...player, [name]: normalizeDigits(value) });
+      const next = { ...player, [name]: normalizeDigits(value) };
+      setPlayer(name === 'packageClasses' ? { ...next, endDate: calculateEndDate(next, groups) } : next);
+      return;
+    }
+    if (name === 'startDate') {
+      const next = { ...player, startDate: value };
+      setPlayer({ ...next, endDate: calculateEndDate(next, groups) });
       return;
     }
     setPlayer({ ...player, [name]: value });
@@ -138,7 +192,25 @@ const PlayerFormPage = () => {
       const nextGroupIds = current.groupIds.includes(groupId)
         ? current.groupIds.filter((id) => id !== groupId)
         : [...current.groupIds, groupId];
-      return { ...current, groupIds: nextGroupIds, groupId: nextGroupIds[0] || '' };
+      const next = { ...current, groupIds: nextGroupIds, groupId: nextGroupIds[0] || '' };
+      return { ...next, endDate: calculateEndDate(next, groups) };
+    });
+  };
+
+  const handleScheduleModeChange = (subscriptionScheduleMode) => {
+    setPlayer((current) => {
+      const next = { ...current, subscriptionScheduleMode };
+      return { ...next, endDate: calculateEndDate(next, groups) };
+    });
+  };
+
+  const handleCustomDayToggle = (dayIndex) => {
+    setPlayer((current) => {
+      const subscriptionCustomDays = current.subscriptionCustomDays.includes(dayIndex)
+        ? current.subscriptionCustomDays.filter((day) => day !== dayIndex)
+        : [...current.subscriptionCustomDays, dayIndex].sort((first, second) => first - second);
+      const next = { ...current, subscriptionCustomDays };
+      return { ...next, endDate: calculateEndDate(next, groups) };
     });
   };
 
@@ -149,6 +221,10 @@ const PlayerFormPage = () => {
     }
 
     setMessage('');
+    if (player.subscriptionScheduleMode === 'custom' && !player.subscriptionCustomDays.length) {
+      setMessage('Choose at least one custom attendance day.');
+      return;
+    }
     setIsSaving(true);
     try {
       const payload = {
@@ -264,6 +340,43 @@ const PlayerFormPage = () => {
 
             <label>{t('endDate')}</label>
             <input name="endDate" type="date" value={player.endDate} onChange={handleChange} />
+
+            <div className="subscription-schedule-box player-edit-schedule-box">
+              <div>
+                <strong>Attendance schedule</strong>
+                <small>Change the weekly days and calculated end date.</small>
+              </div>
+              <div className="subscription-schedule-toggle">
+                <button
+                  type="button"
+                  className={player.subscriptionScheduleMode === 'auto' ? 'is-active' : ''}
+                  onClick={() => handleScheduleModeChange('auto')}
+                >
+                  Auto from groups
+                </button>
+                <button
+                  type="button"
+                  className={player.subscriptionScheduleMode === 'custom' ? 'is-active' : ''}
+                  onClick={() => handleScheduleModeChange('custom')}
+                >
+                  Custom days
+                </button>
+              </div>
+              {player.subscriptionScheduleMode === 'custom' && (
+                <div className="subscription-day-picker" aria-label="Player subscription days">
+                  {SUBSCRIPTION_DAY_OPTIONS.map(([label, dayIndex]) => (
+                    <button
+                      key={dayIndex}
+                      type="button"
+                      className={player.subscriptionCustomDays.includes(dayIndex) ? 'is-active' : ''}
+                      onClick={() => handleCustomDayToggle(dayIndex)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <label>{t('package')}</label>
             <select name="packageName" value={player.packageName} onChange={handleChange}>

@@ -109,6 +109,26 @@ test('admin skill levels persist, enter history, and only the owning parent can 
   assert.ok(!visibleIds.includes(String(foreign._id)));
 });
 
+test('player custom subscription days persist, sanitize, and remain restorable in history', async () => {
+  const player = await newPlayer();
+  const saved = await call(`/players/${player._id}`, {
+    method: 'PUT',
+    body: { subscriptionScheduleMode: 'custom', subscriptionCustomDays: [4, 2, 2, 9, -1] }
+  });
+  assert.equal(saved.subscriptionScheduleMode, 'custom');
+  assert.deepEqual(saved.subscriptionCustomDays, [2, 4]);
+  const history = await History.findOne({ entityType: 'player', entityId: player._id }).sort({ changedAt: -1 });
+  assert.equal(history.after.subscriptionScheduleMode, 'custom');
+  assert.deepEqual(history.after.subscriptionCustomDays, [2, 4]);
+
+  const automatic = await call(`/players/${player._id}`, {
+    method: 'PUT',
+    body: { subscriptionScheduleMode: 'auto', subscriptionCustomDays: [1, 3] }
+  });
+  assert.equal(automatic.subscriptionScheduleMode, 'auto');
+  assert.deepEqual(automatic.subscriptionCustomDays, []);
+});
+
 test('invalid player saves do not alter parent membership or group counts', async () => {
   await call('/players', { method: 'POST', body: { fullName: 'Invalid', parentId: String(parent._id), parentPhone: '123',
     groupIds: [String(group._id)], packageClasses: -1 }, status: 400 });
@@ -461,8 +481,10 @@ test('status announcements target each parent once and keep player audiences sep
 
 test('waiting/data list edits, saved messages and gallery activation survive fresh reads', async () => {
   const row = await call('/waitingList', { method: 'POST', body: { playerName: 'Waiting student', parentName: 'Parent', desiredGroupIds: [String(group._id)] }, status: 201 });
+  const directData = await call('/waitingList', { method: 'POST', body: { playerName: 'Direct data', listType: 'data' }, status: 201 });
+  assert.equal(directData.listType, 'data');
   await call(`/waitingList/${row._id}`, { method: 'PUT', body: { playerName: 'Waiting student', listType: 'data', notes: 'Contacted' } });
-  assert.equal((await call('/waitingList'))[0].listType, 'data');
+  assert.ok((await call('/waitingList')).every((entry) => entry.listType === 'data'));
   const message = await call('/notifications/saved', { method: 'POST', body: { title: 'Template', message: 'Original' }, status: 201 });
   await call(`/notifications/saved/${message._id}`, { method: 'PUT', body: { title: 'Template', message: 'Edited' } });
   assert.equal((await call('/notifications/saved'))[0].message, 'Edited');

@@ -46,14 +46,17 @@ const sendWithRetry = async (subscription, payload) => {
   }
 };
 
-const sendPushToUser = async (userId, payload = {}, { endpoint } = {}) => {
+const sendPushToUser = async (userId, payload = {}, { endpoint, excludeAndroid = false } = {}) => {
   if (!userId || !isPushConfigured()) {
     return { attempted: 0, sent: 0, deleted: 0, failed: 0 };
   }
 
   const filter = { userId };
   if (endpoint) filter.endpoint = endpoint;
-  const subscriptions = await PushSubscription.find(filter).lean();
+  const savedSubscriptions = await PushSubscription.find(filter).lean();
+  const subscriptions = excludeAndroid
+    ? savedSubscriptions.filter((subscription) => !/android/i.test(subscription.userAgent || ''))
+    : savedSubscriptions;
   const results = await Promise.all(subscriptions.map(async (subscription) => {
     try {
       await sendWithRetry(subscription, JSON.stringify(normalizePayload(payload)));

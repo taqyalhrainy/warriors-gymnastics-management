@@ -1,4 +1,5 @@
 const Notification = require('../models/Notification');
+const NativePushToken = require('../models/NativePushToken');
 const { sendPushToUser } = require('./pushNotifications');
 const { sendNativePushToUser } = require('./nativePushNotifications');
 
@@ -11,7 +12,7 @@ const safeInternalUrl = (url, type, id) => {
   return fallback;
 };
 
-const pushNotification = (notification) => {
+const pushNotification = async (notification) => {
   const id = notification._id;
   const payload = {
     title: notification.title,
@@ -21,8 +22,19 @@ const pushNotification = (notification) => {
     url: safeInternalUrl(notification.url, notification.type, id)
   };
 
+  let hasCurrentNativeAndroid = false;
+  try {
+    hasCurrentNativeAndroid = Boolean(await NativePushToken.exists({
+      userId: notification.recipientUserId,
+      platform: 'android',
+      transportVersion: 2
+    }));
+  } catch (error) {
+    console.error('Unable to check native Android push registration:', error?.message || error);
+  }
+
   return Promise.allSettled([
-    sendPushToUser(notification.recipientUserId, payload),
+    sendPushToUser(notification.recipientUserId, payload, { excludeAndroid: hasCurrentNativeAndroid }),
     sendNativePushToUser(notification.recipientUserId, payload)
   ]).then((results) => {
     results.forEach((result) => {

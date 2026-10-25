@@ -41,7 +41,8 @@ test('one admin action persists once and independently fans out Web Push and FCM
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../utils/notificationDelivery.js'), 'utf8'), {
     module, console: { error() {} }, require: (name) => {
       if (name === '../models/Notification') return { create: async (data) => { created++; return { ...data, _id: 'note-id' }; } };
-      if (name === './pushNotifications') return { sendPushToUser: async (user, data) => { deliveries.push({ transport: 'web', user, data }); throw new Error('Web unavailable'); } };
+      if (name === '../models/NativePushToken') return { exists: async () => ({ _id: 'native-token' }) };
+      if (name === './pushNotifications') return { sendPushToUser: async (user, data, options) => { deliveries.push({ transport: 'web', user, data, options }); throw new Error('Web unavailable'); } };
       if (name === './nativePushNotifications') return { sendNativePushToUser: async (user, data) => deliveries.push({ transport: 'fcm', user, data }) };
       throw new Error(name);
     }
@@ -50,4 +51,5 @@ test('one admin action persists once and independently fans out Web Push and FCM
   assert.equal(created, 1);
   assert.deepEqual(deliveries.map((item) => item.transport), ['web', 'fcm']);
   assert.equal(deliveries[0].data.notificationId, deliveries[1].data.notificationId);
+  assert.equal(deliveries[0].options.excludeAndroid, true);
 });

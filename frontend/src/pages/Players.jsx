@@ -303,14 +303,15 @@ const PlayersPage = () => {
       if (editingWaitingEntryId) {
         const entry = await updateWaitingListEntry(editingWaitingEntryId, waitingForm);
         setWaitingList((current) => current.map((item) => (item._id === entry._id ? entry : item)));
-        setWaitingMessage('Waiting list entry updated.');
+        setWaitingMessage(`${entry.listType === 'data' ? 'Data' : 'Waiting list'} entry updated.`);
       } else {
-        const entry = await createWaitingListEntry({ ...waitingForm, listType: 'waiting' });
+        const entry = await createWaitingListEntry({ ...waitingForm, listType: waitingView });
         setWaitingList((current) => [...current, entry]);
-        setWaitingMessage('Player added to the waiting list.');
+        setWaitingMessage(waitingView === 'data' ? 'Player added directly to Data.' : 'Player added to the waiting list.');
       }
-      setWaitingForm(initialWaitingForm);
-      setWaitingFormBaseline(initialWaitingForm);
+      const resetForm = { ...initialWaitingForm, listType: waitingView };
+      setWaitingForm(resetForm);
+      setWaitingFormBaseline(resetForm);
       setEditingWaitingEntryId('');
     } catch (error) {
       setWaitingMessage(error.response?.data?.message || 'Unable to save waiting list entry.');
@@ -337,6 +338,15 @@ const PlayersPage = () => {
   const handleWaitingCancelEdit = () => {
     setWaitingForm(initialWaitingForm);
     setWaitingFormBaseline(initialWaitingForm);
+    setEditingWaitingEntryId('');
+    setWaitingMessage('');
+  };
+
+  const handleWaitingViewChange = (listType) => {
+    const nextForm = { ...initialWaitingForm, listType };
+    setWaitingView(listType);
+    setWaitingForm(nextForm);
+    setWaitingFormBaseline(nextForm);
     setEditingWaitingEntryId('');
     setWaitingMessage('');
   };
@@ -678,14 +688,14 @@ const PlayersPage = () => {
                 <button
                   type="button"
                   className={waitingView === 'waiting' ? 'is-active' : ''}
-                  onClick={() => setWaitingView('waiting')}
+                  onClick={() => handleWaitingViewChange('waiting')}
                 >
                   Waiting
                 </button>
                 <button
                   type="button"
                   className={waitingView === 'data' ? 'is-active' : ''}
-                  onClick={() => setWaitingView('data')}
+                  onClick={() => handleWaitingViewChange('data')}
                 >
                   Data
                 </button>
@@ -734,7 +744,9 @@ const PlayersPage = () => {
                   <span>Note</span>
                   <input name="notes" value={waitingForm.notes} onChange={handleWaitingFormChange} />
                 </label>
-                <button className="btn-primary" type="submit">{editingWaitingEntryId ? 'Save changes' : 'Save to waiting list'}</button>
+                <button className="btn-primary" type="submit">
+                  {editingWaitingEntryId ? 'Save changes' : waitingView === 'data' ? 'Save to Data' : 'Save to waiting list'}
+                </button>
                 {editingWaitingEntryId && waitingForm.listType !== 'data' && (
                   <button className="btn-secondary" type="button" onClick={() => handleMoveWaitingEntry('data')}>Move to Data list</button>
                 )}

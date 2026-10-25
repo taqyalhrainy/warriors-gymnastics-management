@@ -21,8 +21,8 @@ const loadModule = (file, dependencies) => {
 
 const setup = (failureStatus, recover = false) => {
   const subscriptions = [
-    { userId: 'parent', endpoint: 'https://fcm.googleapis.com/android' },
-    { userId: 'parent', endpoint: 'https://web.push.apple.com/iphone' },
+    { userId: 'parent', endpoint: 'https://fcm.googleapis.com/android', userAgent: 'Mozilla/5.0 (Linux; Android 14)' },
+    { userId: 'parent', endpoint: 'https://web.push.apple.com/iphone', userAgent: 'Mozilla/5.0 (iPhone)' },
     { userId: 'other-parent', endpoint: 'https://fcm.googleapis.com/other' }
   ];
   const sent = [];
@@ -125,6 +125,13 @@ test('normal messages still reach both phones, with immediate delivery priority'
   assert.equal(result.sent, 2);
   assert.equal(sent.length, 2);
   assert.ok(sent.every((item) => item.options.urgency === 'high'));
+});
+
+test('a current native Android registration suppresses only the stale Android Chrome subscription', async () => {
+  const { push, sent } = setup();
+  const result = await push.sendPushToUser('parent', { body: 'Training reminder' }, { excludeAndroid: true });
+  assert.equal(result.sent, 1);
+  assert.deepEqual(sent.map((item) => item.endpoint), ['https://web.push.apple.com/iphone']);
 });
 
 test('temporary Android provider failure is retried without dropping the message', async () => {
