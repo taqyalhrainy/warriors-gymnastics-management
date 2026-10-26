@@ -6,7 +6,7 @@ import { useSectionLoader } from '../hooks/useSectionLoader.js';
 import { fetchParentAttendance, fetchParentAttendanceHistory, getCachedParentAttendance } from '../services/parents.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import warriorsLogo from '../assets/warriors-logo.png';
-import { attendanceCycleStart, isParentSubscriptionRed } from '../utils/attendanceRecords.js';
+import { attendanceCycleStart, getLatestSubscriptionCycleIndex, isParentSubscriptionRed } from '../utils/attendanceRecords.js';
 
 const formatDate = (date) => (date ? new Date(date).toLocaleDateString() : '-');
 const formatTime = (date) => (date ? new Date(date).toLocaleTimeString() : '-');
@@ -104,14 +104,12 @@ const isCurrentRecord = (record, child) => {
 const getCurrentSubscriptionCycleKey = (child) => getDateInputValue(attendanceCycleStart(child));
 const CHILDREN_PAGE_SIZE = 8;
 
-const getAttendanceRecordsForSubscription = (records, child, cycle, cycles) => {
+const getAttendanceRecordsForSubscription = (records, child, cycle, cycles, isCurrentCycle = false) => {
   const sortedAsc = [...cycles].sort((first, second) => new Date(first.startDate) - new Date(second.startDate));
   const cycleIndex = sortedAsc.findIndex((item) => item.key === cycle.key);
   const nextCycle = sortedAsc[cycleIndex + 1];
   const startTime = dateOnly(cycle.startDate).getTime();
   const nextStartTime = nextCycle ? dateOnly(nextCycle.startDate).getTime() : null;
-  const currentCycleKey = getCurrentSubscriptionCycleKey(child);
-  const isCurrentCycle = cycle.key === currentCycleKey;
   const explicitIds = new Set((child.currentSubscriptionAttendanceIds || []).map(String));
 
   return records.filter((record) => {
@@ -167,14 +165,14 @@ const ParentAttendancePage = () => {
 
   const loadChildHistory = (childId) => {
     if (!childId || historyByChildId[childId] || loadStates[childId]?.loading) return;
-    loadSection(childId, () => fetchParentAttendanceHistory(childId), (data) => {
+    loadSection(childId, () => fetchParentAttendanceHistory(childId, { force: true }), (data) => {
         setHistoryByChildId((current) => ({ ...current, [childId]: data.subscriptionHistory || [] }));
       });
   };
 
   useEffect(() => {
     let isMounted = true;
-    fetchParentAttendance()
+    fetchParentAttendance({ force: true })
       .then((data) => {
         if (!isMounted) return;
         if (Array.isArray(data)) {
@@ -211,9 +209,10 @@ const ParentAttendancePage = () => {
         packageHours: Number(child.packageHours || 0)
       }];
 
-    const rows = historyCycles.map((cycle) => {
-      const records = getAttendanceRecordsForSubscription(childRecords, child, cycle, historyCycles);
-      const current = cycle.key === currentCycleKey;
+    const currentCycleIndex = getLatestSubscriptionCycleIndex(historyCycles);
+    const rows = historyCycles.map((cycle, cycleIndex) => {
+      const current = cycleIndex === currentCycleIndex;
+      const records = getAttendanceRecordsForSubscription(childRecords, child, cycle, historyCycles, current);
       const used = current
         ? Number(child.attendancePresentCount ?? records.filter((record) => record.status === 'present' && isCurrentRecord(record, child)).length)
         : records.filter((record) => record.status === 'present').length;
@@ -228,7 +227,13 @@ const ParentAttendancePage = () => {
         total,
         records,
         current,
-        needsAttention: current && isParentSubscriptionRed(child, { endDate: cycle.endDate, used, total })
+        needsAttention: current && isParentSubscriptionRed(child, {
+          endDate: cycle.endDate,
+          used,
+          total,
+          expectedPayment: child.payment ?? cycle.payment,
+          paidAmount: child.currentSubscriptionPaidAmount
+        })
       };
     });
 
@@ -289,7 +294,7 @@ const ParentAttendancePage = () => {
                       const isClassOpen = openClassKey === item.key;
                       return (
                         <section className="subscription-history-group parent-package-card" key={item.key}>
-                          <button type="button" className={`subscription-history-summary${item.current ? ' is-current-subscription' : ''}${item.needsAttention ? ' is-attention-subscription' : ''}`} onClick={() => setOpenClassKey(isClassOpen ? '' : item.key)}>
+                          <button type="button" className={`subscription-history-summary${item.current ? ' is-current-subscription' : ' is-past-subscription'}${item.needsAttention ? ' is-attention-subscription' : ''}`} onClick={() => setOpenClassKey(isClassOpen ? '' : item.key)}>
                             <span>
                               <strong>{item.title}</strong>
                               <small>{formatDate(item.startDate)} - {formatDate(item.endDate)}</small>

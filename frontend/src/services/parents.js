@@ -109,20 +109,20 @@ export const fetchParentChildren = async () => {
   }, { ttlMs: PARENT_CACHE_TTL_MS });
 };
 
-export const fetchParentAttendance = async () => {
+export const fetchParentAttendance = async (options = {}) => {
   const cacheKey = getParentCacheKey(PARENT_ATTENDANCE_CACHE_KEY);
   return fetchCached(cacheKey, async () => {
     const response = await api.get('/parents/me/attendance', PARENT_REQUEST_OPTIONS);
     writePersistentCache(cacheKey, response.data);
     return response.data;
-  }, { ttlMs: PARENT_CACHE_TTL_MS });
+  }, { ttlMs: PARENT_CACHE_TTL_MS, force: Boolean(options.force) });
 };
 
-export const fetchParentAttendanceHistory = async (playerId) => {
+export const fetchParentAttendanceHistory = async (playerId, options = {}) => {
   return fetchCached(getParentCacheKey(`${PARENT_ATTENDANCE_CACHE_KEY}:history:${playerId}`), async () => {
     const response = await api.get(`/parents/me/attendance/${playerId}/history`, PARENT_REQUEST_OPTIONS);
     return response.data;
-  }, { ttlMs: PARENT_CACHE_TTL_MS });
+  }, { ttlMs: PARENT_CACHE_TTL_MS, force: Boolean(options.force) });
 };
 
 export const fetchParentDashboard = async (params = {}) => {

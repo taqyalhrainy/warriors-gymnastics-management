@@ -73,7 +73,22 @@ export const isParentSubscriptionRed = (player, cycle = {}, now = new Date()) =>
   const attendanceDue = player?.attendanceDueManual
     ? Number(player.previousDueBalance || 0) - Number(player.dueAdjustment || 0)
     : 0;
-  if (attendanceDue < 0) return true;
+  if (attendanceDue > 0) return true;
+
+  const expectedPayment = Math.max(0, Number(
+    cycle.expectedPayment
+    ?? cycle.payment
+    ?? player?.payment
+    ?? player?.subscriptionId?.price
+    ?? 0
+  ));
+  const paidAmount = Math.max(0, Number(
+    cycle.paidAmount
+    ?? player?.currentSubscriptionPaidAmount
+    ?? player?.paidTotal
+    ?? 0
+  ));
+  if (expectedPayment > 0 && paidAmount < expectedPayment) return true;
 
   const end = cycle.endDate || player?.endDate || player?.subscriptionId?.endDate;
   if (end && day(end) <= day(now)) return true;
@@ -82,6 +97,13 @@ export const isParentSubscriptionRed = (player, cycle = {}, now = new Date()) =>
   const used = Math.max(0, Number(cycle.used ?? player?.attendancePresentCount ?? player?.subscriptionId?.usedSessions ?? 0));
   return total > 0 && used >= total;
 };
+
+export const getLatestSubscriptionCycleIndex = (cycles = []) => cycles.reduce((latestIndex, cycle, index) => {
+  const cycleTime = new Date(cycle?.startDate || 0).getTime();
+  const latestTime = latestIndex >= 0 ? new Date(cycles[latestIndex]?.startDate || 0).getTime() : -Infinity;
+  if (!Number.isFinite(cycleTime)) return latestIndex;
+  return latestIndex < 0 || cycleTime > latestTime ? index : latestIndex;
+}, -1);
 
 // A recorded class belongs to its original group, even after a membership change.
 export const attachAttendanceRecords = (groups, records) => {
