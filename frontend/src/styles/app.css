@@ -3967,6 +3967,16 @@ body.attendance-touch-dragging {
     0 0 18px rgba(34, 197, 94, 0.14);
 }
 
+.parent-package-card .subscription-history-summary.is-past-subscription {
+  border-color: color-mix(in srgb, var(--muted) 34%, var(--border));
+  background: color-mix(in srgb, var(--muted) 9%, var(--surface-alt));
+  box-shadow: inset 5px 0 0 color-mix(in srgb, var(--muted) 58%, transparent);
+}
+
+.parent-package-card .subscription-history-summary.is-past-subscription b {
+  color: var(--muted);
+}
+
 .parent-package-card .subscription-history-summary.is-current-subscription.is-attention-subscription {
   border-color: rgba(239, 68, 68, 0.58);
   background:
