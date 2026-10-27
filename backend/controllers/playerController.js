@@ -205,12 +205,13 @@ const synchronizeLinkedSubscription = async (player, startsNewSubscription = fal
   await subscription.save();
 };
 
-const reconcileLinkedSubscriptions = async () => {
+const reconcileLinkedSubscriptions = async (options = {}) => {
   const players = await Player.find({
     isDeleted: { $ne: true },
     subscriptionId: { $ne: null }
   });
-  const batchSize = 20;
+  const batchSize = Math.max(1, Number(options.batchSize || 20));
+  const pauseMs = Math.max(0, Number(options.pauseMs || 0));
   for (let index = 0; index < players.length; index += batchSize) {
     await Promise.all(players.slice(index, index + batchSize).map(async (player) => {
       if (player.subscriptionId) {
@@ -218,6 +219,9 @@ const reconcileLinkedSubscriptions = async () => {
         await synchronizeSubscriptionAttendanceUsage(player);
       }
     }));
+    if (pauseMs && index + batchSize < players.length) {
+      await new Promise((resolve) => setTimeout(resolve, pauseMs));
+    }
   }
   return players.length;
 };

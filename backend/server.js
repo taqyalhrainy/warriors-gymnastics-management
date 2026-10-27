@@ -291,7 +291,9 @@ const runStartupMaintenance = async () => {
     ensureHistoryBaselines()
   ]);
 
-  const reconciledSubscriptions = await reconcileLinkedSubscriptions();
+  // This is a repair pass, not part of serving requests. Keep it deliberately
+  // gentle so a fresh Render instance can serve the first user immediately.
+  const reconciledSubscriptions = await reconcileLinkedSubscriptions({ batchSize: 5, pauseMs: 75 });
   console.log(`Reconciled ${reconciledSubscriptions} linked player subscriptions.`);
 
   const cleanupResult = await cleanupOldAttendanceData();
@@ -323,7 +325,7 @@ const startServer = async () => {
     runStartupMaintenance().catch((error) => {
       console.error('Startup maintenance failed:', error.message);
     });
-  }, 10000);
+  }, 2 * 60 * 1000);
 };
 
 startServer().catch((error) => {

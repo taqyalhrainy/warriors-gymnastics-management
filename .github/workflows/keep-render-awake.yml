@@ -2,18 +2,27 @@ name: Keep Render Backend Awake
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    # Offset from the busiest cron boundaries and leave a wide margin before
+    # Render's idle timeout. GitHub schedules are best-effort, not exact.
+    - cron: '3-59/5 * * * *'
   workflow_dispatch:
+
+concurrency:
+  group: keep-render-backend-awake
+  cancel-in-progress: true
 
 jobs:
   ping-backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     steps:
       - name: Ping backend health endpoint
         run: |
-          curl --silent --show-error --location \
-            --max-time 25 \
-            --retry 3 \
-            --retry-delay 10 \
+          response="$(curl --fail-with-body --silent --show-error --location \
+            --connect-timeout 10 \
+            --max-time 30 \
+            --retry 4 \
+            --retry-delay 5 \
             --retry-all-errors \
-            https://warriors-gymnastics-management.onrender.com/api/health || true
+            https://warriors-gymnastics-management.onrender.com/api/health)"
+          node -e "const data=JSON.parse(process.argv[1]); if(data.status!=='ok'||data.database!=='connected') process.exit(1)" "$response"

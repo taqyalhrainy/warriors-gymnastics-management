@@ -91,7 +91,10 @@ api.interceptors.request.use((config) => {
   if (isWriteRequest) {
     beginWrite(config);
     // Allow database writes to finish during a server cold start; never retry them blindly.
-    if (config.timeout === 12000) config.timeout = 60000;
+    // Login is safe to retry after the shared health check and must fail fast
+    // enough to avoid stacking minute-long attempts while Render wakes up.
+    const isLoginRequest = String(config.url || '').includes('/auth/login');
+    if (!isLoginRequest && config.timeout === 12000) config.timeout = 60000;
   }
   return config;
 });
