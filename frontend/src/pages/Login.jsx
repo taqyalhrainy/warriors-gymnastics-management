@@ -4,39 +4,12 @@ import { useAuth } from '../context/AuthContext.jsx';
 import InstallAppButton from '../components/InstallAppButton.jsx';
 import { login } from '../services/auth.js';
 import api from '../services/api.js';
+import { sendAuthWithWakeRetry } from '../services/authWake.js';
 import warriorsLogo from '../assets/warriors-logo.png';
-import { isNativeAndroidApp } from '../utils/nativePushNotifications.js';
 
-const SERVER_WAKE_RETRY_MS = 3000;
-const SERVER_WAKE_MAX_MS = 180000;
 const AUTH_REMEMBER_KEY = 'warriors-remember-auth';
 const REMEMBERED_ADMIN_LOGIN_KEY = 'warriors-remembered-admin-login';
 let hasRequestedServerWake = false;
-
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-const isServerWakeError = (err) => {
-  const status = err.response?.status;
-  return !err.response || err.code === 'ECONNABORTED' || [502, 503, 504].includes(status);
-};
-
-const sendAuthWithWakeRetry = async (requestFn, onWaiting) => {
-  const startedAt = Date.now();
-
-  while (true) {
-    try {
-      return await requestFn();
-    } catch (err) {
-      const maxWait = isNativeAndroidApp() ? 30000 : SERVER_WAKE_MAX_MS;
-      if (!isServerWakeError(err) || Date.now() - startedAt > maxWait) {
-        throw err;
-      }
-
-      onWaiting(true);
-      await wait(SERVER_WAKE_RETRY_MS);
-    }
-  }
-};
 
 const getAuthErrorMessage = (err) => {
   const status = err.response?.status;
