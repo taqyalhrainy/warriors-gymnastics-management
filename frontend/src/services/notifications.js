@@ -170,6 +170,12 @@ export const sendNotification = async (data) => {
   return response.data;
 };
 
+export const sendPlayerNotification = async (playerId, data) => {
+  const response = await api.post(`/notifications/player/${playerId}`, data);
+  invalidateCache(['notifications:', 'parent:']);
+  return response.data;
+};
+
 export const announceAllParents = async (data) => {
   const response = await api.post('/notifications/announce-all', data);
   invalidateCache(['notifications:', 'parent:']);
