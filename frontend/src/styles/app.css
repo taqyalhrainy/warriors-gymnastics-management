@@ -3767,6 +3767,143 @@ body.attendance-touch-dragging {
   grid-column: 1 / -1;
 }
 
+.player-note-summary {
+  min-height: 104px;
+}
+
+.player-direct-message-card {
+  position: relative;
+  min-height: 104px;
+  align-content: center;
+  justify-items: center;
+  overflow: hidden;
+  text-align: center;
+  background:
+    radial-gradient(circle at 20% 12%, rgba(255, 255, 255, 0.26), transparent 28%),
+    linear-gradient(135deg, rgba(30, 64, 175, 0.16), rgba(14, 165, 233, 0.1)),
+    var(--surface-alt) !important;
+}
+
+.player-direct-message-card small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.player-direct-message-button {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 46px;
+  border: 2px solid rgba(186, 230, 253, 0.78);
+  border-radius: 999px;
+  padding: 0 24px;
+  overflow: hidden;
+  color: #ffffff;
+  cursor: pointer;
+  background: linear-gradient(135deg, #1d4ed8 0%, #0284c7 48%, #06b6d4 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.18) inset,
+    0 0 10px rgba(14, 165, 233, 0.3),
+    0 14px 28px rgba(30, 64, 175, 0.24);
+  animation: player-message-pulse 1.35s ease-in-out infinite;
+}
+
+.player-direct-message-button::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(110deg, transparent 20%, rgba(255, 255, 255, 0.42) 45%, transparent 70%);
+  transform: translateX(-120%);
+  animation: player-message-shine 2.4s ease-in-out infinite;
+}
+
+.player-direct-message-button span {
+  font-size: 1.08rem;
+}
+
+.player-direct-message-button strong {
+  color: inherit;
+  overflow: visible;
+}
+
+.player-direct-message-button:hover:not(:disabled) {
+  transform: translateY(-2px) scale(1.015);
+}
+
+.player-direct-message-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+  animation: none;
+}
+
+@keyframes player-message-pulse {
+  0%, 100% {
+    filter: brightness(0.82);
+    box-shadow: 0 0 5px rgba(14, 165, 233, 0.2), 0 12px 24px rgba(30, 64, 175, 0.2);
+  }
+  50% {
+    filter: brightness(1.22);
+    box-shadow: 0 0 22px rgba(34, 211, 238, 0.58), 0 18px 36px rgba(30, 64, 175, 0.3);
+  }
+}
+
+@keyframes player-message-shine {
+  0%, 28% { transform: translateX(-120%); }
+  62%, 100% { transform: translateX(120%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-direct-message-button,
+  .player-direct-message-button::after {
+    animation: none;
+  }
+}
+
+.player-message-modal-backdrop {
+  z-index: 1550;
+}
+
+.player-message-modal {
+  width: min(620px, 100%);
+}
+
+.player-message-form {
+  display: grid;
+  gap: 14px;
+}
+
+.player-message-form label {
+  display: grid;
+  gap: 7px;
+}
+
+.player-message-form label > span {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.player-message-form textarea {
+  min-height: 150px;
+  resize: vertical;
+}
+
+.player-message-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.player-direct-message-button.is-submit {
+  min-width: 190px;
+}
+
 .student-info-grid .student-info-date-row {
   grid-column: 1 / -1;
   display: grid;

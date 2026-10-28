@@ -385,6 +385,50 @@ const createNotification = async (req, res, next) => {
   }
 };
 
+const createPlayerNotification = async (req, res, next) => {
+  try {
+    const { playerId } = req.params;
+    const payload = sanitizeObject(req.body);
+    const { title, message, type } = payload;
+    if (!validateObjectId(playerId) || !title || !message) {
+      return res.status(400).json({ message: 'Player, title, and message are required.' });
+    }
+    if (title.length > 160 || message.length > 2000) {
+      return res.status(400).json({ message: 'The title or message is too long.' });
+    }
+
+    const player = await Player.findOne({ _id: playerId, isDeleted: { $ne: true } }).populate({
+      path: 'parentId',
+      populate: { path: 'userId', select: '_id role isActive' }
+    });
+    const recipient = player?.parentId?.userId;
+    if (!player) {
+      return res.status(404).json({ message: 'Player not found.' });
+    }
+    if (!recipient || recipient.role !== 'parent' || !recipient.isActive) {
+      return res.status(400).json({ message: 'This player does not have an active parent account.' });
+    }
+
+    const notification = await createAndPushNotification({
+      recipientUserId: recipient._id,
+      playerId: player._id,
+      title,
+      message,
+      type: type || 'announcement'
+    });
+    await createAuditLog({
+      userId: req.user._id,
+      action: 'create player notification',
+      entity: 'Notification',
+      entityId: notification._id,
+      req
+    });
+    res.status(201).json(notification);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const announceAllParents = async (req, res, next) => {
   try {
     const payload = sanitizeObject(req.body);
@@ -518,6 +562,7 @@ module.exports = {
   updateSavedMessage,
   deleteSavedMessage,
   createNotification,
+  createPlayerNotification,
   announceAllParents,
   announceGroupParents,
   announceParentsByPlayerStatus

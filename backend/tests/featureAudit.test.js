@@ -453,6 +453,20 @@ test('notification read state and unread count belong only to the recipient', as
   assert.equal((await call('/notifications/count', { auth: parentToken })).count, 0);
 });
 
+test('direct player messages resolve the current parent on the server and target only that account', async () => {
+  const player = await newPlayer({ fullName: 'Direct message child' });
+  const notification = await call(`/notifications/player/${player._id}`, {
+    method: 'POST',
+    body: { title: 'Training update', message: 'Please check the schedule.', type: 'announcement' },
+    status: 201
+  });
+
+  assert.equal(notification.playerId, String(player._id));
+  assert.equal(notification.recipientUserId, String(parentUser._id));
+  assert.equal((await call('/notifications/count', { auth: parentToken })).count, 1);
+  assert.equal((await call('/notifications/count', { auth: token(otherUser) })).count, 0);
+});
+
 test('status announcements target each parent once and keep player audiences separate', async () => {
   await newPlayer({ fullName: 'Active one', status: 'active' });
   await newPlayer({ fullName: 'Active two', status: 'active' });

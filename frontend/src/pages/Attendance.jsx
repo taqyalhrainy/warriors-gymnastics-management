@@ -9,6 +9,7 @@ import { fetchParents } from '../services/parents.js';
 import { deletePlayer, getPlayer, updatePlayer } from '../services/players.js';
 import { fetchPackageOptions } from '../services/packageOptions.js';
 import { createWaitingListEntry } from '../services/waitingList.js';
+import { fetchSavedNotificationMessages, sendPlayerNotification } from '../services/notifications.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
 import { compressProfileImage } from '../utils/imageUpload.js';
@@ -377,6 +378,12 @@ const AttendancePage = () => {
   const [pendingFrozenVisibilitySave, setPendingFrozenVisibilitySave] = useState(null);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showLevelModal, setShowLevelModal] = useState(false);
+  const [showPlayerMessageModal, setShowPlayerMessageModal] = useState(false);
+  const [playerMessageForm, setPlayerMessageForm] = useState({ title: '', message: '' });
+  const [playerMessageSavedMessages, setPlayerMessageSavedMessages] = useState([]);
+  const [playerMessageStatus, setPlayerMessageStatus] = useState('');
+  const [isLoadingPlayerMessages, setIsLoadingPlayerMessages] = useState(false);
+  const [isSendingPlayerMessage, setIsSendingPlayerMessage] = useState(false);
   const [levelForm, setLevelForm] = useState(emptySkillLevels);
   const [levelMessage, setLevelMessage] = useState('');
   const [isSavingLevel, setIsSavingLevel] = useState(false);
@@ -1951,7 +1958,57 @@ const AttendancePage = () => {
     setSelectedPlayerForm(null);
     setPreviewProfileImage('');
     setShowLevelModal(false);
+    setShowPlayerMessageModal(false);
     setSelectedPlayer(null);
+  };
+
+  const openPlayerMessageModal = async () => {
+    if (!selectedPlayer?._id) return;
+    setPlayerMessageForm({ title: '', message: '' });
+    setPlayerMessageSavedMessages([]);
+    setPlayerMessageStatus('');
+    setShowPlayerMessageModal(true);
+    setIsLoadingPlayerMessages(true);
+    try {
+      const items = await fetchSavedNotificationMessages({ force: true });
+      setPlayerMessageSavedMessages((items || []).map((item) => ({ ...item, id: item._id || item.id })));
+    } catch (error) {
+      setPlayerMessageStatus(error.response?.data?.message || 'Unable to load saved messages.');
+    } finally {
+      setIsLoadingPlayerMessages(false);
+    }
+  };
+
+  const closePlayerMessageModal = () => {
+    if (!isSendingPlayerMessage) setShowPlayerMessageModal(false);
+  };
+
+  const handlePlayerSavedMessageChange = (event) => {
+    const savedMessage = playerMessageSavedMessages.find((item) => item.id === event.target.value);
+    if (savedMessage) {
+      setPlayerMessageForm({ title: savedMessage.title || '', message: savedMessage.message || '' });
+      setPlayerMessageStatus('');
+    }
+  };
+
+  const handleSendPlayerMessage = async (event) => {
+    event.preventDefault();
+    if (!selectedPlayer?._id || isSendingPlayerMessage) return;
+    setIsSendingPlayerMessage(true);
+    setPlayerMessageStatus('');
+    try {
+      await sendPlayerNotification(selectedPlayer._id, {
+        title: playerMessageForm.title,
+        message: playerMessageForm.message,
+        type: 'announcement'
+      });
+      setMessage(`Message sent to ${selectedPlayer.fullName}'s parent.`);
+      setShowPlayerMessageModal(false);
+    } catch (error) {
+      setPlayerMessageStatus(error.response?.data?.message || 'Unable to send message.');
+    } finally {
+      setIsSendingPlayerMessage(false);
+    }
   };
 
   const openLevelModal = () => {
@@ -3599,12 +3656,20 @@ const AttendancePage = () => {
                       <strong>{selectedPlayer.status || t('notSet')}</strong>
                     </div>
                     <div><span>{t('makeupClasses')}</span><strong>{decodeDisplayText(selectedPlayer.makeupClassesNote) || t('notSet')}</strong></div>
-                    <div className="student-info-grid-full">
+                    <div className="player-note-summary">
                       <span>{t('note')}</span>
                       <strong>{decodeDisplayText(selectedPlayer.note) || t('notSet')}</strong>
                       {decodeDisplayText(selectedPlayer.note) && (
                         <small className="player-note-timestamp">{t('lastEdit')}: {formatNoteTimestamp(selectedPlayer.noteUpdatedAt)}</small>
                       )}
+                    </div>
+                    <div className="player-direct-message-card">
+                      <span>{t('directNotification')}</span>
+                      <button type="button" className="player-direct-message-button" onClick={openPlayerMessageModal}>
+                        <span aria-hidden="true">✉</span>
+                        <strong>{t('sendMessage')}</strong>
+                      </button>
+                      <small>{t('sendDirectlyToParent')}</small>
                     </div>
                     {selectedPlayer.freezeNote && (
                       <div className="student-info-grid-full freeze-note-panel">
@@ -3965,6 +4030,69 @@ const AttendancePage = () => {
                 </div>
               </form>
             </div>
+          </div>
+        )}
+
+        {showPlayerMessageModal && selectedPlayer && (
+          <div className="student-modal-backdrop player-message-modal-backdrop" role="presentation" onClick={closePlayerMessageModal}>
+            <section
+              className="student-modal player-message-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="player-message-title"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="student-modal-header">
+                <div>
+                  <h2 id="player-message-title">{t('sendMessage')}</h2>
+                  <p>{selectedPlayer.fullName} — {t('sendDirectlyToParent')}</p>
+                </div>
+                <button type="button" className="btn-secondary" onClick={closePlayerMessageModal} disabled={isSendingPlayerMessage}>{t('close')}</button>
+              </div>
+              <form className="player-message-form" onSubmit={handleSendPlayerMessage}>
+                <label>
+                  <span>{t('savedMessage')}</span>
+                  <select defaultValue="" onChange={handlePlayerSavedMessageChange} disabled={isLoadingPlayerMessages || isSendingPlayerMessage}>
+                    <option value="">{isLoadingPlayerMessages ? t('loadingSavedMessages') : t('chooseSavedMessage')}</option>
+                    {playerMessageSavedMessages.map((item) => (
+                      <option key={item.id} value={item.id}>{item.title}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>{t('title')}</span>
+                  <input
+                    value={playerMessageForm.title}
+                    onChange={(event) => setPlayerMessageForm((current) => ({ ...current, title: event.target.value }))}
+                    maxLength={160}
+                    disabled={isSendingPlayerMessage}
+                    required
+                  />
+                </label>
+                <label>
+                  <span>{t('message')}</span>
+                  <textarea
+                    value={playerMessageForm.message}
+                    onChange={(event) => setPlayerMessageForm((current) => ({ ...current, message: event.target.value }))}
+                    maxLength={2000}
+                    disabled={isSendingPlayerMessage}
+                    required
+                  />
+                </label>
+                {playerMessageStatus && <p className="alert-error" role="alert">{playerMessageStatus}</p>}
+                <div className="player-message-form-actions">
+                  <button
+                    type="submit"
+                    className="player-direct-message-button is-submit"
+                    disabled={isSendingPlayerMessage || !playerMessageForm.title.trim() || !playerMessageForm.message.trim()}
+                  >
+                    <span aria-hidden="true">✉</span>
+                    <strong>{isSendingPlayerMessage ? 'Sending...' : t('sendMessage')}</strong>
+                  </button>
+                  <button type="button" className="btn-secondary" onClick={closePlayerMessageModal} disabled={isSendingPlayerMessage}>{t('cancel')}</button>
+                </div>
+              </form>
+            </section>
           </div>
         )}
 
