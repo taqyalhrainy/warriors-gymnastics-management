@@ -25,6 +25,8 @@ const ParentSettingsPage = ({ theme, toggleTheme }) => {
     notifications: 'الإشعارات',
     phoneAlerts: 'تنبيهات الهاتف',
     account: 'الحساب',
+    privacyPolicy: 'سياسة الخصوصية',
+    privacyDetails: 'عرض السياسة',
     logout: 'تسجيل الخروج',
     session: 'الجلسة'
   } : {
@@ -41,6 +43,8 @@ const ParentSettingsPage = ({ theme, toggleTheme }) => {
     notifications: 'Notifications',
     phoneAlerts: 'Phone alerts',
     account: 'Account',
+    privacyPolicy: 'Privacy Policy',
+    privacyDetails: 'View policy',
     logout: 'Logout',
     session: 'Session'
   };
@@ -127,6 +131,10 @@ const ParentSettingsPage = ({ theme, toggleTheme }) => {
             </button>
             {openPanel === 'account' && (
               <div className="parent-setting-panel">
+                <button type="button" className="parent-setting-choice" onClick={() => navigate('/privacy-policy')}>
+                  <span>{copy.privacyPolicy}</span>
+                  <strong>{copy.privacyDetails}</strong>
+                </button>
                 <button type="button" className="parent-setting-choice is-danger" onClick={handleLogout}>
                   <span>{copy.session}</span>
                   <strong>{copy.logout}</strong>

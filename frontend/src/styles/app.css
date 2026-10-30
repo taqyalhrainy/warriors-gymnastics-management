@@ -20,6 +20,209 @@
     linear-gradient(180deg, #151515 0%, #111111 100%);
 }
 
+/* Public privacy policy */
+.privacy-policy-page {
+  min-height: 100vh;
+  padding: 24px 18px 56px;
+  color: #172033;
+  background:
+    radial-gradient(circle at 10% 5%, rgba(237, 28, 36, 0.1), transparent 28%),
+    radial-gradient(circle at 92% 2%, rgba(20, 184, 166, 0.12), transparent 26%),
+    linear-gradient(180deg, #fff9fa 0%, #f5fbfb 48%, #fff 100%);
+}
+
+.privacy-policy-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  width: min(980px, 100%);
+  margin: 0 auto 22px;
+}
+
+.privacy-policy-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #111827;
+  font: inherit;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.privacy-policy-brand img {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(17, 24, 39, 0.12);
+}
+
+.privacy-language-switch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(163, 19, 29, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.privacy-language-switch button {
+  min-width: 48px;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #5f6675;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.privacy-language-switch button.is-active {
+  background: linear-gradient(135deg, #a3131d, #ed1c24);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(237, 28, 36, 0.22);
+}
+
+.privacy-policy-document {
+  width: min(980px, 100%);
+  margin: 0 auto;
+  padding: clamp(24px, 4vw, 48px);
+  border: 1px solid rgba(163, 19, 29, 0.13);
+  border-top: 4px solid #ed1c24;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 24px 60px rgba(17, 24, 39, 0.12);
+}
+
+.privacy-policy-title {
+  padding-bottom: 22px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.privacy-policy-title span {
+  color: #008c82;
+  font-size: 0.78rem;
+  font-weight: 950;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.privacy-policy-title h1 {
+  margin: 8px 0;
+  color: #111827;
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  line-height: 1.05;
+}
+
+.privacy-policy-title p,
+.privacy-policy-section p,
+.privacy-policy-section li,
+.privacy-review-notice p {
+  line-height: 1.75;
+}
+
+.privacy-policy-title p {
+  margin: 0;
+  color: #6b7280;
+}
+
+.privacy-review-notice {
+  margin: 24px 0;
+  padding: 16px 18px;
+  border-inline-start: 4px solid #d97706;
+  border-radius: 10px;
+  background: #fff7ed;
+  color: #7c2d12;
+}
+
+.privacy-review-notice p {
+  margin: 6px 0 0;
+}
+
+.privacy-review-notice a {
+  display: inline-block;
+  margin-top: 8px;
+  color: #9a3412;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.privacy-policy-section {
+  padding: 22px 0;
+  border-bottom: 1px solid #edf0f3;
+}
+
+.privacy-policy-section h2 {
+  margin: 0 0 10px;
+  color: #111827;
+  font-size: clamp(1.14rem, 2.4vw, 1.4rem);
+}
+
+.privacy-policy-section p {
+  margin: 8px 0;
+  color: #3f4756;
+}
+
+.privacy-policy-section ul {
+  margin: 8px 0 0;
+  padding-inline-start: 24px;
+  color: #3f4756;
+}
+
+.privacy-policy-section li + li {
+  margin-top: 7px;
+}
+
+.privacy-policy-back {
+  min-width: 132px;
+  min-height: 46px;
+  margin-top: 28px;
+  padding: 10px 20px;
+  border: 0;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #a3131d, #ed1c24);
+  color: #fff;
+  font-weight: 950;
+  box-shadow: 0 12px 26px rgba(237, 28, 36, 0.2);
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .privacy-policy-page {
+    padding: 14px 10px 34px;
+  }
+
+  .privacy-policy-header {
+    margin-bottom: 14px;
+  }
+
+  .privacy-policy-brand span {
+    font-size: 0.88rem;
+  }
+
+  .privacy-policy-brand img {
+    width: 40px;
+    height: 40px;
+  }
+
+  .privacy-language-switch button {
+    min-width: 42px;
+    min-height: 36px;
+    padding: 7px 9px;
+  }
+
+  .privacy-policy-document {
+    padding: 22px 17px;
+    border-radius: 14px;
+  }
+}
+
 body.theme-light {
   --bg: #f6f6f6;
   --surface: #ffffff;

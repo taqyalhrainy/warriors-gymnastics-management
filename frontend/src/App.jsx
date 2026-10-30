@@ -36,6 +36,7 @@ const ParentSettingsPage = lazy(() => import('./pages/ParentSettings.jsx'));
 const ParentChildrenPage = lazy(() => import('./pages/ParentChildren.jsx'));
 const ParentSubscriptionSummaryPage = lazy(() => import('./pages/ParentSubscriptionSummary.jsx'));
 const NotificationDetailPage = lazy(() => import('./pages/NotificationDetail.jsx'));
+const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicy.jsx'));
 const adminRoles = ['admin', 'coach', 'receptionist'];
 const parentRoles = ['parent'];
 
@@ -122,6 +123,7 @@ function App() {
       <Suspense fallback={<div className="route-loading"><img src={warriorsLogo} alt="" /><span className="loading-spinner" />Loading...</div>}>
         <NativeAppLifecycle />
         <Routes>
+          <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/parent/login" element={<LoginPage />} />
           <Route path="/admin/login" element={<LoginPage initialRole="admin" />} />

@@ -17,6 +17,7 @@ const ParentSettingsPage = lazy(() => import('./pages/ParentSettings.jsx'));
 const ParentChildrenPage = lazy(() => import('./pages/ParentChildren.jsx'));
 const ParentSubscriptionSummaryPage = lazy(() => import('./pages/ParentSubscriptionSummary.jsx'));
 const ParentNotificationDetailPage = lazy(() => import('./pages/ParentNotificationDetail.jsx'));
+const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicy.jsx'));
 
 function ParentApp() {
   const { user } = useAuth();
@@ -88,6 +89,7 @@ function ParentApp() {
       <Suspense fallback={<div className="route-loading"><img src={warriorsLogo} alt="" /><span className="loading-spinner" />Loading...</div>}>
         <NativeAppLifecycle />
         <Routes>
+          <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
           <Route path="/login" element={<ParentLoginPage />} />
           <Route path="/parent/login" element={<ParentLoginPage />} />
           <Route element={<ParentProtectedRoute />}>

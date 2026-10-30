@@ -10,7 +10,8 @@ const allowedParentPages = new Set([
   'ParentNotifications.jsx',
   'ParentPayments.jsx',
   'ParentSettings.jsx',
-  'ParentSubscriptionSummary.jsx'
+  'ParentSubscriptionSummary.jsx',
+  'PrivacyPolicy.jsx'
 ]);
 
 const forbiddenModules = [
