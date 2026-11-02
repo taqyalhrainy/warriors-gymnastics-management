@@ -240,6 +240,42 @@ const getCurrentSubscriptionPaymentMatch = (player) => {
   return match;
 };
 
+// A payment is the financial source of truth. Once MongoDB confirms the insert,
+// optional bookkeeping must never turn that successful write into a failed API
+// response (older clients used to remove the row when that happened).
+const runAfterPaymentCommit = (label, task) => {
+  return Promise.resolve()
+    .then(task)
+    .catch((error) => console.error(`Committed payment ${label} failed:`, error.message));
+};
+
+const recordCommittedPayment = (payment, req, action) => Promise.all([
+  runAfterPaymentCommit('history', async () => {
+    const paymentForHistory = await loadPaymentForHistory(payment._id);
+    await createHistoryEntry({
+      entityType: 'payment',
+      entityId: payment._id,
+      action: 'create',
+      after: snapshotPaymentDocument(paymentForHistory || payment),
+      userId: req.user._id,
+      req
+    });
+  }),
+  runAfterPaymentCommit('audit', () => createAuditLog({
+    userId: req.user._id,
+    action,
+    entity: 'Payment',
+    entityId: payment._id,
+    req
+  }))
+]);
+
+const sendCommittedPayment = (res, payment) => {
+  const response = formatPaymentResponse(payment);
+  response.persisted = true;
+  res.status(201).json(response);
+};
+
 const getPayments = async (req, res, next) => {
   try {
     const filter = { isDeleted: { $ne: true } };
@@ -333,18 +369,9 @@ const createPayment = async (req, res, next) => {
         notesEncrypted: encrypt(notes || ''),
         createdBy: req.user._id
       });
-      const paymentForHistory = await loadPaymentForHistory(payment._id);
-      await createHistoryEntry({
-        entityType: 'payment',
-        entityId: payment._id,
-        action: 'create',
-        after: snapshotPaymentDocument(paymentForHistory),
-        userId: req.user._id,
-        req
-      });
-      await createAuditLog({ userId: req.user._id, action: 'create custom payment', entity: 'Payment', entityId: payment._id, req });
-      const createdPayment = await populatePaymentQuery(Payment.findById(payment._id));
-      return res.status(201).json(await formatPaymentsWithAttendanceCounts(createdPayment));
+      await recordCommittedPayment(payment, req, 'create custom payment');
+      sendCommittedPayment(res, payment);
+      return;
     }
     const player = await Player.findById(playerId);
     if (!player) {
@@ -381,31 +408,23 @@ const createPayment = async (req, res, next) => {
       notesEncrypted: encrypt(notes || ''),
       createdBy: req.user._id
     });
+
+    // Return the committed receipt first. The proof, notification and audit are
+    // valuable side effects, but none of them is allowed to make a saved DSR
+    // payment look as if it disappeared.
+    await recordCommittedPayment(payment, req, 'create payment');
+    sendCommittedPayment(res, payment);
     if (subscriptionPayment && parsedPaidAmount > 0) {
-      await confirmSubscriptionPaymentProof(player, payment);
+      runAfterPaymentCommit('subscription proof', () => confirmSubscriptionPaymentProof(player, payment));
     }
     if (parentRecord?.userId) {
-      await createNotification({
+      runAfterPaymentCommit('notification', () => createNotification({
         recipientUserId: parentRecord.userId._id,
         title: 'Payment received',
         message: `Payment recorded for ${player.fullName}.`,
         type: 'payment'
-      }, { waitForPush: false }).catch((error) => {
-        console.error('Payment notification failed:', error.message);
-      });
+      }, { waitForPush: false }));
     }
-    const paymentForHistory = await loadPaymentForHistory(payment._id);
-    await createHistoryEntry({
-      entityType: 'payment',
-      entityId: payment._id,
-      action: 'create',
-      after: snapshotPaymentDocument(paymentForHistory),
-      userId: req.user._id,
-      req
-    });
-    await createAuditLog({ userId: req.user._id, action: 'create payment', entity: 'Payment', entityId: payment._id, req });
-    const createdPayment = await populatePaymentQuery(Payment.findById(payment._id));
-    res.status(201).json(await formatPaymentsWithAttendanceCounts(createdPayment));
   } catch (error) {
     next(error);
   }

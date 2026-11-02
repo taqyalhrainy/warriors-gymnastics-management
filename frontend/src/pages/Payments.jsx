@@ -10,7 +10,7 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 import { normalizeDigits, parseLocalizedNumber } from '../utils/numberInput.js';
 import { attendanceCycleStart } from '../utils/attendanceRecords.js';
 import { getRemainingAmount, sumRemainingByPlayer } from '../utils/manualRemaining.js';
-import { PAYMENT_TIME_ZONE, getPaymentDayKey, getPaymentMonthKey, mergePaymentRows, rollPaymentDayForward } from '../utils/paymentDates.js';
+import { PAYMENT_TIME_ZONE, getPaymentDayKey, getPaymentMonthKey, mergePaymentRows, mergeConfirmedPaymentRows, rollPaymentDayForward } from '../utils/paymentDates.js';
 import { PAYMENT_PLAYER_MODES, getPaymentPlayerMode, playerMatchesPaymentMode } from '../utils/paymentPlayerModes.js';
 
 const formatDate = (date) => {
@@ -142,6 +142,7 @@ const PaymentsPage = () => {
   const [paymentsHasMore, setPaymentsHasMore] = useState(false);
   const paymentsLoadRequestIdRef = useRef(0);
   const paymentsRevisionRef = useRef(0);
+  const confirmedPaymentRowsRef = useRef(new Map());
   const submittingRef = useRef(false);
   const currentPaymentDayRef = useRef(getDateInputValue());
   const paymentDateWasChosenRef = useRef(false);
@@ -173,8 +174,22 @@ const PaymentsPage = () => {
       await loadSection('payments', () => fetchPayments(params), (data) => {
         const rows = Array.isArray(data) ? data : (data?.items || []);
         const paymentRows = sortPaymentsNewestFirst(rows);
+        paymentRows.forEach((payment) => {
+          const id = String(payment._id || '');
+          if (confirmedPaymentRowsRef.current.has(id)) confirmedPaymentRowsRef.current.set(id, payment);
+        });
+        const protectedRows = sortPaymentsNewestFirst(mergeConfirmedPaymentRows(
+          paymentRows,
+          [...confirmedPaymentRowsRef.current.values()],
+          {
+            view,
+            day: params.day,
+            month: params.month || (view === 'thisMonth' ? getPaymentMonthKey(new Date()) : selectedMonth),
+            search: query
+          }
+        ));
         if (requestId === paymentsLoadRequestIdRef.current && startedRevision === paymentsRevisionRef.current) {
-          setPayments((current) => (append ? sortPaymentsNewestFirst(mergePaymentRows(current, paymentRows)) : paymentRows));
+          setPayments((current) => (append ? sortPaymentsNewestFirst(mergePaymentRows(current, protectedRows)) : protectedRows));
           setPaymentsPage(Array.isArray(data) ? 1 : (data?.page || page));
           setPaymentsTotal(Array.isArray(data) ? rows.length : (data?.total || rows.length));
           setPaymentTotals(Array.isArray(data) ? null : (data?.totals || null));
@@ -455,6 +470,7 @@ const PaymentsPage = () => {
         ? await updatePayment(editingPaymentId, payload)
         : await createPayment(payload);
       paymentsRevisionRef.current += 1;
+      confirmedPaymentRowsRef.current.set(String(savedPayment._id), savedPayment);
       setPayments((current) => sortPaymentsNewestFirst(
         [savedPayment, ...current.filter((payment) => payment._id !== savedPayment._id)]
       ));
@@ -511,7 +527,9 @@ const PaymentsPage = () => {
 
     setError('');
     const previousPayments = payments;
+    const previousConfirmedPayment = confirmedPaymentRowsRef.current.get(String(payment._id));
     paymentsRevisionRef.current += 1;
+    confirmedPaymentRowsRef.current.delete(String(payment._id));
     setPayments((current) => current.filter((item) => item._id !== payment._id));
     try {
       await deletePayment(payment._id);
@@ -522,6 +540,9 @@ const PaymentsPage = () => {
       refreshPaymentsInBackground();
     } catch (err) {
       paymentsRevisionRef.current += 1;
+      if (previousConfirmedPayment) {
+        confirmedPaymentRowsRef.current.set(String(payment._id), previousConfirmedPayment);
+      }
       setPayments(previousPayments);
       setError(err.response?.data?.message || 'Unable to delete payment.');
     }

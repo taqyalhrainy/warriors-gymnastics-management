@@ -77,6 +77,38 @@ test('DSR payment is committed and reloadable while phone push delivery is still
   assert.equal(reloaded.items[0].remainingAmount, saved.remainingAmount);
 });
 
+test('a committed DSR payment stays successful when a post-save proof task fails', async () => {
+  const isolatedGroup = await Group.create({ name: 'Committed payment group', days: ['Tuesday'], startTime: '12:00', endTime: '13:00' });
+  const subject = await Player.create({
+    fullName: 'Committed payment player',
+    parentId: player.parentId,
+    parentPhoneEncrypted: 'test',
+    groupId: isolatedGroup._id,
+    groupIds: [isolatedGroup._id],
+    payment: 70,
+    currentSubscriptionCreatedAt: new Date()
+  });
+  const originalUpdateOne = Player.updateOne;
+  let proofAttempted = false;
+  Player.updateOne = async () => {
+    proofAttempted = true;
+    throw new Error('simulated proof failure after commit');
+  };
+  try {
+    const saved = await request('/payments', {
+      playerId: String(subject._id),
+      paidAmount: 70,
+      paymentMethod: 'Cash'
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(saved.persisted, true);
+    assert.equal(proofAttempted, true);
+    assert.ok(await Payment.findOne({ _id: saved._id, isDeleted: { $ne: true } }));
+  } finally {
+    Player.updateOne = originalUpdateOne;
+  }
+});
+
 test('attendance due 70 to zero, other amounts and credit persist across fresh reads and unrelated edits', async () => {
   for (const due of [0, 35, -10, 0]) {
     const saved = await request(`/players/${player._id}`, { previousDueBalance: due, dueAdjustment: 0 });

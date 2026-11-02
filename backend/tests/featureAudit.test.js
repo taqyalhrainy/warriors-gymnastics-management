@@ -542,7 +542,7 @@ test('a saved receipt stays available after 25 later payments and search scans b
   assert.equal((await Payment.findById(saved._id)).paidAmount, 110);
 });
 
-test('payment deletion archives the original receipt and snapshot can reactivate that same ID', async () => {
+test('payment deletion archives the original receipt while snapshot restore preserves newer receipts', async () => {
   const player = await newPlayer();
   const saved = await call('/payments', { method: 'POST', body: { playerId: String(player._id),
     paidAmount: 110, paymentMethod: 'Cash' }, status: 201 });
@@ -567,10 +567,10 @@ test('payment deletion archives the original receipt and snapshot can reactivate
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   assert.equal((await Payment.findById(saved._id)).isDeleted, false);
-  assert.equal((await Payment.findById(later._id)).isDeleted, true);
+  assert.equal((await Payment.findById(later._id)).isDeleted, false);
   assert.equal((await Payment.findById(later._id)).paidAmount, 25);
-  assert.equal((await call('/payments'))[0]._id, saved._id);
-  assert.equal((await call('/reports/revenue')).totalPaid, 110);
+  assert.deepEqual((await call('/payments')).map((row) => row._id).sort(), [saved._id, later._id].sort());
+  assert.equal((await call('/reports/revenue')).totalPaid, 135);
 });
 
 test('snapshot restores custom DSR payments that have no player link', async () => {

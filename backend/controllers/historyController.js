@@ -36,7 +36,7 @@ const restoreWithHistory = async (entityType, restore, req) => {
     const changedFields = diffChangedFields(oldRow, newRow);
     if (!changedFields.length) continue;
     entries.push({ entityType, entityId: id, action: !oldRow ? 'create' : !newRow ? 'delete' : 'update',
-      before: oldRow, after: newRow, changedFields, changedBy: req.user._id });
+      before: oldRow, after: newRow, changedFields, changedBy: req.user._id, source: 'snapshot-restore' });
   }
   if (entries.length) await HistoryEntry.insertMany(entries);
   return result;
@@ -329,6 +329,7 @@ const restorePayments = async (targetPayments, req) => {
   const operations = [];
   let restored = 0;
   let removed = 0;
+  let preserved = 0;
   let skipped = 0;
 
   for (const payment of currentPayments) {
@@ -336,14 +337,10 @@ const restorePayments = async (targetPayments, req) => {
     const target = targetById.get(paymentId);
 
     if (!target) {
-      if (payment.isDeleted) continue;
-      operations.push({
-        updateOne: {
-          filter: { _id: payment._id },
-          update: { $set: { isDeleted: true, deletedAt: new Date(), deletedBy: req.user._id } }
-        }
-      });
-      removed += 1;
+      // Financial receipts are append-only evidence. Restoring an older
+      // snapshot may reactivate or repair an older receipt, but it must never
+      // archive a newer receipt that was recorded after the target time.
+      if (!payment.isDeleted) preserved += 1;
       continue;
     }
 
@@ -385,7 +382,7 @@ const restorePayments = async (targetPayments, req) => {
     await Payment.bulkWrite(operations, { ordered: false });
   }
 
-  return { restored, removed, skipped };
+  return { restored, removed, preserved, skipped };
 };
 
 const getHistorySnapshot = async (req, res, next) => {

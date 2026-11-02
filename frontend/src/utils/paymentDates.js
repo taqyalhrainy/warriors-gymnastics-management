@@ -25,3 +25,20 @@ export const rollPaymentDayForward = ({ previousToday, formDay, selectedDay, pre
 export const mergePaymentRows = (current, incoming) => [...new Map(
   [...current, ...incoming].map((row) => [String(row._id), row])
 ).values()];
+
+export const mergeConfirmedPaymentRows = (incoming, confirmed, options = {}) => {
+  const view = options.view || 'day';
+  const search = String(options.search || '').trim();
+  if (view === 'pending' || search) return incoming;
+
+  const relevantConfirmed = confirmed.filter((payment) => {
+    const day = getPaymentDayKey(payment.paymentDate);
+    if (view === 'day') return day === options.day;
+    if (view === 'month' || view === 'thisMonth') return day.slice(0, 7) === options.month;
+    return view === 'all';
+  });
+
+  // The server row wins once it appears, while a just-confirmed receipt stays
+  // visible if an older background read finishes after the write.
+  return mergePaymentRows(relevantConfirmed, incoming);
+};
