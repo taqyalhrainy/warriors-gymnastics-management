@@ -331,7 +331,9 @@ const getNotificationById = async (req, res, next) => {
     if (!validateObjectId(id)) {
       return res.status(400).json({ message: 'Invalid notification ID.' });
     }
-    const notification = await Notification.findById(id).populate('recipientUserId', 'name email');
+    const notification = await Notification.findById(id)
+      .populate('recipientUserId', 'name email')
+      .populate({ path: 'attachmentId', select: '+dataUrl kind mimeType fileName byteLength' });
     if (!notification) {
       return res.status(404).json({ message: 'Notification not found.' });
     }
@@ -343,7 +345,18 @@ const getNotificationById = async (req, res, next) => {
       notification.viewedAt = new Date();
       await notification.save();
     }
-    res.json(notification);
+    const response = notification.toObject();
+    if (response.attachmentId?.dataUrl) {
+      response.attachment = {
+        kind: response.attachmentId.kind,
+        dataUrl: response.attachmentId.dataUrl,
+        mimeType: response.attachmentId.mimeType,
+        fileName: response.attachmentId.fileName,
+        byteLength: response.attachmentId.byteLength
+      };
+      response.attachmentId = response.attachmentId._id;
+    }
+    res.json(response);
   } catch (error) {
     next(error);
   }
@@ -367,7 +380,7 @@ const getUnreadNotificationCount = async (req, res, next) => {
 const createNotification = async (req, res, next) => {
   try {
     const payload = sanitizeObject(req.body);
-    const { recipientUserId, playerId, title, message, type } = payload;
+    const { recipientUserId, playerId, title, message, type, attachment } = payload;
     if (!recipientUserId || !title || !message) {
       return res.status(400).json({ message: 'Recipient, title, and message are required.' });
     }
@@ -377,7 +390,7 @@ const createNotification = async (req, res, next) => {
       title,
       message,
       type
-    });
+    }, { attachment, createdBy: req.user._id });
     await createAuditLog({ userId: req.user._id, action: 'create notification', entity: 'Notification', entityId: notification._id, req });
     res.status(201).json(notification);
   } catch (error) {
@@ -389,7 +402,7 @@ const createPlayerNotification = async (req, res, next) => {
   try {
     const { playerId } = req.params;
     const payload = sanitizeObject(req.body);
-    const { title, message, type } = payload;
+    const { title, message, type, attachment } = payload;
     if (!validateObjectId(playerId) || !title || !message) {
       return res.status(400).json({ message: 'Player, title, and message are required.' });
     }
@@ -415,7 +428,7 @@ const createPlayerNotification = async (req, res, next) => {
       title,
       message,
       type: type || 'announcement'
-    });
+    }, { attachment, createdBy: req.user._id });
     await createAuditLog({
       userId: req.user._id,
       action: 'create player notification',
@@ -432,7 +445,7 @@ const createPlayerNotification = async (req, res, next) => {
 const announceAllParents = async (req, res, next) => {
   try {
     const payload = sanitizeObject(req.body);
-    const { title, message, type } = payload;
+    const { title, message, type, attachment } = payload;
     if (!title || !message) {
       return res.status(400).json({ message: 'Title and message are required.' });
     }
@@ -447,7 +460,7 @@ const announceAllParents = async (req, res, next) => {
         isRead: false
     }));
     if (notifications.length > 0) {
-      await createNotifications(notifications);
+      await createNotifications(notifications, { attachment, createdBy: req.user._id });
     }
     await createAuditLog({ userId: req.user._id, action: 'announce all parents', entity: 'Notification', entityId: null, req });
     res.json({ count: notifications.length });
@@ -459,7 +472,7 @@ const announceAllParents = async (req, res, next) => {
 const announceGroupParents = async (req, res, next) => {
   try {
     const payload = sanitizeObject(req.body);
-    const { groupId, title, message, type } = payload;
+    const { groupId, title, message, type, attachment } = payload;
     if (!validateObjectId(groupId) || !title || !message) {
       return res.status(400).json({ message: 'Group, title, and message are required.' });
     }
@@ -491,7 +504,7 @@ const announceGroupParents = async (req, res, next) => {
     }));
 
     if (notifications.length > 0) {
-      await createNotifications(notifications);
+      await createNotifications(notifications, { attachment, createdBy: req.user._id });
     }
     await createAuditLog({ userId: req.user._id, action: 'announce group parents', entity: 'Notification', entityId: null, req });
     res.json({ count: notifications.length });
@@ -504,7 +517,7 @@ const announceParentsByPlayerStatus = async (req, res, next) => {
   try {
     const payload = sanitizeObject(req.body);
     const status = String(payload.status || '').trim().toLowerCase();
-    const { title, message, type } = payload;
+    const { title, message, type, attachment } = payload;
     if (!playerAudienceStatuses.includes(status) || !title || !message) {
       return res.status(400).json({ message: 'Valid player status, title, and message are required.' });
     }
@@ -530,7 +543,7 @@ const announceParentsByPlayerStatus = async (req, res, next) => {
       isRead: false
     }));
 
-    if (notifications.length) await createNotifications(notifications);
+    if (notifications.length) await createNotifications(notifications, { attachment, createdBy: req.user._id });
     await createAuditLog({
       userId: req.user._id,
       action: `announce ${status} player parents`,

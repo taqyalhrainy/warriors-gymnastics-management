@@ -2,6 +2,10 @@ const Notification = require('../models/Notification');
 const NativePushToken = require('../models/NativePushToken');
 const { sendPushToUser } = require('./pushNotifications');
 const { sendNativePushToUser } = require('./nativePushNotifications');
+const {
+  createNotificationAttachment,
+  deleteNotificationAttachment
+} = require('./notificationAttachments');
 
 const safeInternalUrl = (url, type, id) => {
   const fallback = id ? `/parent/notifications/${id}` : '/parent/notifications';
@@ -45,17 +49,37 @@ const pushNotification = async (notification) => {
   });
 };
 
-const createNotification = async (data, { waitForPush = true } = {}) => {
-  const notification = await Notification.create(data);
+const createNotification = async (data, { waitForPush = true, attachment, createdBy } = {}) => {
+  const attachmentRecord = await createNotificationAttachment(attachment, createdBy);
+  let notification;
+  try {
+    notification = await Notification.create({
+      ...data,
+      ...(attachmentRecord && { attachmentId: attachmentRecord._id })
+    });
+  } catch (error) {
+    await deleteNotificationAttachment(attachmentRecord?._id).catch(() => {});
+    throw error;
+  }
   const delivery = pushNotification(notification);
   if (waitForPush) await delivery;
   else delivery.catch((error) => console.error('Push delivery failed:', error.message));
   return notification;
 };
 
-const createNotifications = async (items) => {
+const createNotifications = async (items, { attachment, createdBy } = {}) => {
   if (!items.length) return [];
-  const notifications = await Notification.insertMany(items);
+  const attachmentRecord = await createNotificationAttachment(attachment, createdBy);
+  let notifications;
+  try {
+    notifications = await Notification.insertMany(items.map((item) => ({
+      ...item,
+      ...(attachmentRecord && { attachmentId: attachmentRecord._id })
+    })));
+  } catch (error) {
+    await deleteNotificationAttachment(attachmentRecord?._id).catch(() => {});
+    throw error;
+  }
   await Promise.all(notifications.map(pushNotification));
   return notifications;
 };

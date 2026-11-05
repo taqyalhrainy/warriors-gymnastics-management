@@ -6,6 +6,7 @@ const notificationSchema = new mongoose.Schema({
   title: { type: String, required: true, trim: true },
   message: { type: String, required: true, trim: true },
   type: { type: String, trim: true },
+  attachmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'NotificationAttachment' },
   isRead: { type: Boolean, default: false },
   viewedAt: { type: Date },
   createdAt: { type: Date, default: Date.now }

@@ -97,7 +97,7 @@ const ParentNotificationsPage = () => {
                   }}
                 >
                   <td>{!note.isRead && <span className="parent-notification-alert" aria-label="New message">!</span>}</td>
-                  <td>{note.title}</td>
+                  <td>{note.title}{note.attachmentId && <span className="notification-attachment-mark" title="Image attached" aria-label="Image attached"> &#128206;</span>}</td>
                   <td>{new Date(note.createdAt).toLocaleString()}</td>
                 </tr>
               )) : <tr><td colSpan="3">{t('noNotificationsFound')}</td></tr>}

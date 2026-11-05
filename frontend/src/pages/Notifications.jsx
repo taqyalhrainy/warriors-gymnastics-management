@@ -18,6 +18,7 @@ import { fetchParentsCompact } from '../services/parents.js';
 import { fetchGroups } from '../services/groups.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { birthdayDay } from '../utils/birthdayAlerts.js';
+import { compressProfileImage } from '../utils/imageUpload.js';
 
 const SAVED_MESSAGES_KEY = 'warriors-saved-notification-messages';
 const todayInputValue = () => birthdayDay();
@@ -46,6 +47,9 @@ const NotificationsPage = () => {
   const [historyDate, setHistoryDate] = useState(todayInputValue);
   const [message, setMessage] = useState('');
   const [form, setForm] = useState({ recipientUserId: '', groupId: '', title: '', message: '', type: 'announcement' });
+  const [attachment, setAttachment] = useState(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [attachmentInputKey, setAttachmentInputKey] = useState(0);
   const [search, setSearch] = useState('');
   const [messagesPage, setMessagesPage] = useState(1);
   const [messagesTotal, setMessagesTotal] = useState(0);
@@ -160,25 +164,69 @@ const NotificationsPage = () => {
 
   const handleSend = async (e) => {
     e.preventDefault();
+    if (attachmentBusy) return;
     try {
+      const outgoing = { ...form, ...(attachment && { attachment }) };
       if (form.recipientUserId === 'all') {
-        const result = await announceAllParents({ title: form.title, message: form.message, type: form.type });
+        const result = await announceAllParents({ title: form.title, message: form.message, type: form.type, ...(attachment && { attachment }) });
         setMessage(`Announcement sent to ${result.count} parents.`);
       } else if (form.recipientUserId === 'group') {
-        const result = await announceGroupParents({ groupId: form.groupId, title: form.title, message: form.message, type: form.type });
+        const result = await announceGroupParents({ groupId: form.groupId, title: form.title, message: form.message, type: form.type, ...(attachment && { attachment }) });
         setMessage(`Announcement sent to ${result.count} parents in this session.`);
       } else if (form.recipientUserId.startsWith('status:')) {
         const status = form.recipientUserId.slice('status:'.length);
-        const result = await announceParentsByStatus({ status, title: form.title, message: form.message, type: form.type });
+        const result = await announceParentsByStatus({ status, title: form.title, message: form.message, type: form.type, ...(attachment && { attachment }) });
         setMessage(`Announcement sent to ${result.count} parents of ${status} players.`);
       } else {
-        await sendNotification(form);
+        await sendNotification(outgoing);
         setMessage('Notification sent successfully.');
       }
       setForm({ recipientUserId: '', groupId: '', title: '', message: '', type: 'announcement' });
+      setAttachment(null);
+      setAttachmentInputKey((current) => current + 1);
       loadNotifications({ force: true });
     } catch (error) {
       setMessage(error.response?.data?.message || 'Unable to send notification.');
+    }
+  };
+
+  const handleAttachmentChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      setAttachment(null);
+      return;
+    }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setMessage('Choose a JPEG, PNG, or WebP image.');
+      setAttachment(null);
+      setAttachmentInputKey((current) => current + 1);
+      return;
+    }
+    if (file.size > 12 * 1024 * 1024) {
+      setMessage('The original image is too large. Choose an image smaller than 12 MB.');
+      setAttachment(null);
+      setAttachmentInputKey((current) => current + 1);
+      return;
+    }
+
+    setAttachmentBusy(true);
+    setMessage('Preparing image...');
+    try {
+      const dataUrl = await compressProfileImage(file, { maxSide: 1280, quality: 0.78 });
+      const encoded = dataUrl.split(',')[1] || '';
+      const byteLength = Math.ceil(encoded.length * 3 / 4);
+      if (byteLength > 1250 * 1024) {
+        throw new Error('The prepared image is still too large. Choose a smaller image.');
+      }
+      const baseName = file.name.replace(/\.[^.]+$/, '').slice(0, 110) || 'notification-image';
+      setAttachment({ dataUrl, fileName: `${baseName}.jpg` });
+      setMessage('Image attached and ready to send.');
+    } catch (error) {
+      setAttachment(null);
+      setAttachmentInputKey((current) => current + 1);
+      setMessage(error.message || 'Unable to prepare this image.');
+    } finally {
+      setAttachmentBusy(false);
     }
   };
 
@@ -310,7 +358,35 @@ const NotificationsPage = () => {
               <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
               <label>{t('message')}</label>
               <textarea value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} required />
-              <button className="btn-primary" type="submit">{t('send')}</button>
+              <label>Image attachment (optional)</label>
+              <input
+                key={attachmentInputKey}
+                className="notification-attachment-input"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleAttachmentChange}
+                disabled={attachmentBusy}
+              />
+              {attachment && (
+                <div className="notification-attachment-preview">
+                  <img src={attachment.dataUrl} alt="Notification attachment preview" />
+                  <div>
+                    <strong>{attachment.fileName}</strong>
+                    <span>Attached once and shared with the selected parents.</span>
+                  </div>
+                  <button
+                    className="btn-secondary"
+                    type="button"
+                    onClick={() => {
+                      setAttachment(null);
+                      setAttachmentInputKey((current) => current + 1);
+                    }}
+                  >Remove</button>
+                </div>
+              )}
+              <button className="btn-primary" type="submit" disabled={attachmentBusy}>
+                {attachmentBusy ? 'Preparing image...' : t('send')}
+              </button>
             </form>
             <section className="saved-message-panel">
               <h3>Saved messages</h3>

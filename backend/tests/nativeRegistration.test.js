@@ -44,6 +44,10 @@ test('one admin action persists once and independently fans out Web Push and FCM
       if (name === '../models/NativePushToken') return { exists: async () => ({ _id: 'native-token' }) };
       if (name === './pushNotifications') return { sendPushToUser: async (user, data, options) => { deliveries.push({ transport: 'web', user, data, options }); throw new Error('Web unavailable'); } };
       if (name === './nativePushNotifications') return { sendNativePushToUser: async (user, data) => deliveries.push({ transport: 'fcm', user, data }) };
+      if (name === './notificationAttachments') return {
+        createNotificationAttachment: async () => null,
+        deleteNotificationAttachment: async () => undefined
+      };
       throw new Error(name);
     }
   });

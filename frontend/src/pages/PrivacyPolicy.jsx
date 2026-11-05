@@ -6,7 +6,7 @@ const policy = {
   en: {
     title: 'Privacy Policy',
     subtitle: 'Warriors Gymnastics parent website and application',
-    updated: 'Last updated: 30 October 2026',
+    updated: 'Last updated: 4 November 2026',
     back: 'Back',
     reviewTitle: 'Privacy and account-deletion requests',
     reviewText: 'Contact us by email. We may ask for information needed to verify the requester’s identity and relationship to the account or child.',
@@ -27,7 +27,7 @@ const policy = {
           'Child information, such as name, date of birth, group, coach, program, skill level, profile image, subscription dates, package details, notes, freeze information, and makeup classes.',
           'Attendance information, including attendance status, date, and check-in time.',
           'Subscription and payment records, including package value, paid and remaining amounts, payment type and method, receipt image when supplied, and related notes. The reviewed application does not collect payment-card credentials.',
-          'Messages and notifications, including title, message, recipient, delivery/read status, and relevant timestamps.',
+          'Messages and notifications, including title, message, optional image attachments, recipient, delivery/read status, and relevant timestamps.',
           'Technical and security information, including push-subscription or Firebase Cloud Messaging tokens, device/app version information, session information, IP address, user agent, and audit records of authorized administrative changes.',
           'Language, theme, notification preferences, and limited cached application data stored on the user’s device.'
         ]
@@ -104,7 +104,7 @@ const policy = {
   ar: {
     title: 'سياسة الخصوصية',
     subtitle: 'موقع وتطبيق الأهالي الخاص بـ Warriors Gymnastics',
-    updated: 'آخر تحديث: 30 أكتوبر 2026',
+    updated: 'آخر تحديث: 4 نوفمبر 2026',
     back: 'رجوع',
     reviewTitle: 'طلبات الخصوصية وحذف الحساب',
     reviewText: 'تواصل معنا عبر البريد الإلكتروني. قد نطلب معلومات لازمة للتحقق من هوية مقدم الطلب وعلاقته بالحساب أو الطفل.',
@@ -125,7 +125,7 @@ const policy = {
           'بيانات الطفل، مثل الاسم وتاريخ الميلاد والمجموعة والمدرب والبرنامج والمستوى وصورة الملف ومواعيد الاشتراك وتفاصيل الباقة والملاحظات والتجميد والحصص التعويضية.',
           'بيانات الحضور، بما فيها حالة الحضور والتاريخ ووقت تسجيل الدخول.',
           'سجلات الاشتراك والدفع، بما فيها قيمة الباقة والمبلغ المدفوع والمتبقي ونوع وطريقة الدفع وصورة الإيصال عند إضافتها والملاحظات المرتبطة. التطبيق الذي تمت مراجعته لا يجمع بيانات بطاقات الدفع.',
-          'الرسائل والإشعارات، بما فيها العنوان والنص والمستلم وحالة التسليم أو القراءة والتواريخ ذات الصلة.',
+          'الرسائل والإشعارات، بما فيها العنوان والنص ومرفقات الصور الاختيارية والمستلم وحالة التسليم أو القراءة والتواريخ ذات الصلة.',
           'بيانات تقنية وأمنية، مثل اشتراك الإشعارات أو رمز Firebase Cloud Messaging وبيانات الجهاز وإصدار التطبيق والجلسة وعنوان IP ومتصفح أو نظام المستخدم وسجلات تدقيق تعديلات الموظفين المخولين.',
           'اللغة والمظهر وتفضيلات الإشعارات وبيانات مؤقتة محدودة يحفظها التطبيق على جهاز المستخدم.'
         ]

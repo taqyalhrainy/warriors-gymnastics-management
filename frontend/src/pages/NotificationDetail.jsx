@@ -53,6 +53,11 @@ const NotificationDetailPage = () => {
           <div className="details-card">
             <h2>{notification.title}</h2>
             <p>{notification.message}</p>
+            {notification.attachment?.kind === 'image' && (
+              <figure className="notification-attachment-view">
+                <img src={notification.attachment.dataUrl} alt={notification.attachment.fileName || 'Notification attachment'} />
+              </figure>
+            )}
             <div style={{ marginTop: '16px', color: '#6b7280' }}>
               <p>{t('type')}: {notification.type || t('general')}</p>
               <p>{t('received')}: {new Date(notification.createdAt).toLocaleString()}</p>

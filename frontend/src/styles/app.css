@@ -8478,3 +8478,80 @@ body.theme-dark .parent-sidebar .sidebar-links a:hover {
   color: #ff4b55;
   background: rgba(255, 75, 85, 0.12);
 }
+.notification-attachment-input {
+  width: 100%;
+  padding: 10px;
+  border: 1px dashed var(--border-color, #d1d5db);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.notification-attachment-preview {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 14px;
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.notification-attachment-preview img {
+  width: 88px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+
+.notification-attachment-preview div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.notification-attachment-preview strong,
+.notification-attachment-preview span {
+  overflow-wrap: anywhere;
+}
+
+.notification-attachment-preview span {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.notification-attachment-view {
+  margin: 18px 0 8px;
+}
+
+.notification-attachment-view img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: min(70vh, 760px);
+  margin: 0 auto;
+  object-fit: contain;
+  border-radius: 16px;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.18);
+}
+
+.notification-attachment-mark {
+  display: inline-block;
+  margin-inline-start: 6px;
+}
+
+@media (max-width: 640px) {
+  .notification-attachment-preview {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .notification-attachment-preview img {
+    width: 72px;
+    height: 64px;
+  }
+
+  .notification-attachment-preview button {
+    grid-column: 1 / -1;
+  }
+}
