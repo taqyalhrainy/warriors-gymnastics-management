@@ -3082,8 +3082,9 @@ const AttendancePage = () => {
       const isSubscriptionSnapshot = entry.after?.startDate
         && changedFields.some((field) => subscriptionFields.includes(field));
       if (isSubscriptionSnapshot) {
-        const startsNewSubscription = changedFields.includes('currentSubscriptionStartedAt')
-          || (changedFields.includes('startDate')
+        const startsNewSubscription = entry.source === 'new-subscription'
+          || (!entry.source
+            && changedFields.includes('currentSubscriptionStartedAt')
             && getSubscriptionHistoryKey(entry.before) !== getSubscriptionHistoryKey(entry.after));
         const nextCycle = makeCycle(entry.after, entry.changedAt);
         if (!nextCycle) return;
@@ -3098,7 +3099,11 @@ const AttendancePage = () => {
           return;
         }
 
-        if (cycles.length) {
+        const previousKey = getSubscriptionHistoryKey(entry.before);
+        const editedCycleIndex = cycles.findIndex((cycle) => cycle.key === previousKey);
+        if (editedCycleIndex >= 0) {
+          cycles[editedCycleIndex] = nextCycle;
+        } else if (cycles.length) {
           cycles[cycles.length - 1] = nextCycle;
         }
       }

@@ -55,6 +55,8 @@ const createNotification = async (data, { waitForPush = true, attachment, create
   try {
     notification = await Notification.create({
       ...data,
+      source: data.source || (createdBy ? 'manual' : 'system'),
+      createdBy: data.createdBy || createdBy,
       ...(attachmentRecord && { attachmentId: attachmentRecord._id })
     });
   } catch (error) {
@@ -74,6 +76,8 @@ const createNotifications = async (items, { attachment, createdBy } = {}) => {
   try {
     notifications = await Notification.insertMany(items.map((item) => ({
       ...item,
+      source: item.source || (createdBy ? 'manual' : 'system'),
+      createdBy: item.createdBy || createdBy,
       ...(attachmentRecord && { attachmentId: attachmentRecord._id })
     })));
   } catch (error) {

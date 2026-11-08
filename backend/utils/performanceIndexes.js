@@ -11,7 +11,14 @@ const performanceIndexes = {
   notifications: [
     { recipientUserId: 1, createdAt: -1 },
     { recipientUserId: 1, isRead: 1 },
+    { recipientUserId: 1, source: 1, createdAt: -1 },
+    { playerId: 1, source: 1, createdAt: -1 },
     { createdAt: -1 }
+  ],
+  notificationresponses: [
+    { key: { notificationId: 1 }, options: { unique: true } },
+    { updatedAt: -1, _id: -1 },
+    { adminViewedAt: 1, updatedAt: -1 }
   ],
   attendances: [{ date: -1, _id: -1 }],
   parents: [{ userId: 1 }],
@@ -26,9 +33,11 @@ const ensurePerformanceIndexes = async (db) => {
       if (error.code === 26) return [];
       throw error;
     });
-    for (const key of indexes) {
+    for (const definition of indexes) {
+      const key = definition.key || definition;
+      const options = definition.key ? (definition.options || {}) : {};
       if (existing.some((index) => JSON.stringify(index.key) === JSON.stringify(key))) continue;
-      await collection.createIndex(key);
+      await collection.createIndex(key, options);
     }
   }
 };

@@ -30,6 +30,32 @@ export const fetchNotificationById = async (id) => {
   return response.data;
 };
 
+export const fetchManualPlayerNotificationHistory = async (playerId, params = {}) => {
+  const response = await api.get(`/notifications/manual-history/${playerId}`, { params });
+  return response.data;
+};
+
+export const fetchNotificationResponses = async (params = {}) => {
+  const response = await api.get('/notifications/responses', { params });
+  return response.data;
+};
+
+export const fetchNotificationResponseCount = async () => {
+  const response = await api.get('/notifications/responses/count');
+  return response.data;
+};
+
+export const markNotificationResponsesViewed = async (ids) => {
+  const response = await api.post('/notifications/responses/mark-viewed', { ids });
+  return response.data;
+};
+
+export const saveNotificationResponse = async (id, data) => {
+  const response = await api.put(`/notifications/${id}/response`, data);
+  invalidateCache(['notifications:', 'parent:']);
+  return response.data;
+};
+
 export const fetchUnreadCount = async () => {
   const response = await api.get('/notifications/count');
   return response.data;

@@ -154,7 +154,10 @@ const buildSubscriptionHistory = (entries = [], player = null) => {
       && changedFields.some((field) => subscriptionFields.includes(field));
     if (!isSubscriptionSnapshot) return;
 
-    const startsNewSubscription = changedFields.includes('currentSubscriptionStartedAt') || changedFields.includes('startDate');
+    const startsNewSubscription = entry.source === 'new-subscription'
+      || (!entry.source
+        && changedFields.includes('currentSubscriptionStartedAt')
+        && getSubscriptionHistoryKey(entry.before) !== getSubscriptionHistoryKey(entry.after));
     const nextCycle = makeCycle(entry.after, entry.changedAt);
     if (!nextCycle) return;
 
@@ -168,7 +171,11 @@ const buildSubscriptionHistory = (entries = [], player = null) => {
       return;
     }
 
-    if (cycles.length) {
+    const previousKey = getSubscriptionHistoryKey(entry.before);
+    const editedCycleIndex = cycles.findIndex((cycle) => cycle.key === previousKey);
+    if (editedCycleIndex >= 0) {
+      cycles[editedCycleIndex] = nextCycle;
+    } else if (cycles.length) {
       cycles[cycles.length - 1] = nextCycle;
     }
   });
@@ -608,8 +615,19 @@ const getParentAttendanceHistory = async (req, res, next) => {
         $project: {
           entityId: 1,
           action: 1,
+          source: 1,
           changedFields: 1,
           changedAt: 1,
+          before: {
+            startDate: '$before.startDate',
+            endDate: '$before.endDate',
+            currentSubscriptionStartedAt: '$before.currentSubscriptionStartedAt',
+            createdAt: '$before.createdAt',
+            packageName: '$before.packageName',
+            packageClasses: '$before.packageClasses',
+            packageHours: '$before.packageHours',
+            payment: '$before.payment'
+          },
           after: {
             startDate: '$after.startDate',
             endDate: '$after.endDate',

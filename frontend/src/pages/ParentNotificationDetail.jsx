@@ -4,6 +4,7 @@ import ParentSidebar from '../components/ParentSidebar.jsx';
 import { fetchNotificationById } from '../services/notifications.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import warriorsLogo from '../assets/warriors-logo.png';
+import ParentNotificationResponse from '../components/ParentNotificationResponse.jsx';
 
 const ParentNotificationDetailPage = () => {
   const { id } = useParams();
@@ -53,6 +54,10 @@ const ParentNotificationDetailPage = () => {
               <p>{t('received')}: {new Date(notification.createdAt).toLocaleString()}</p>
               {notification.viewedAt && <p>{t('userSawMessageAt')} {new Date(notification.viewedAt).toLocaleString()}</p>}
             </div>
+            <ParentNotificationResponse
+              notification={notification}
+              onSaved={(response) => setNotification((current) => ({ ...current, response }))}
+            />
           </div>
         ) : !error ? (
           <div className="parent-loading-panel">

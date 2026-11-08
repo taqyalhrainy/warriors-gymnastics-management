@@ -12,7 +12,7 @@ const { parseLocalizedNumber } = require('../utils/numberInput');
 const { snapshotPlayerDocument, createHistoryEntry } = require('../utils/history');
 const { synchronizeSubscriptionAttendanceUsage } = require('../utils/subscriptionAttendance');
 const { getAppDateKey, getAppDateOnly } = require('../utils/appDate');
-const { getCurrentSubscriptionStart, isLaterSubscriptionStart } = require('../utils/subscriptionCycle');
+const { getCurrentSubscriptionStart } = require('../utils/subscriptionCycle');
 const { beginSubscriptionPaymentProof, reconcileOwnerSubscriptionPaymentProofs } = require('../utils/subscriptionPaymentProof');
 const { resolvePlayerNoteTimestamps } = require('../utils/playerNoteTimestamp');
 
@@ -419,8 +419,7 @@ const updatePlayer = async (req, res, next) => {
     if (!player) {
       return res.status(404).json({ message: 'Player not found.' });
     }
-    const startsNewSubscription = requestedNewSubscription
-      || isLaterSubscriptionStart(updates.startDate, player);
+    const startsNewSubscription = requestedNewSubscription;
     if (expectedVersion !== undefined && Number(expectedVersion) !== Number(player.__v || 0)) {
       return res.status(409).json({ message: 'This player changed while you were editing. Refresh before saving again.' });
     }
@@ -493,6 +492,11 @@ const updatePlayer = async (req, res, next) => {
       updates.currentSubscriptionAttendanceIds = [];
       updates.currentSubscriptionExcludedAttendanceIds = [];
       beginSubscriptionPaymentProof(player);
+    } else if (typeof updates.startDate !== 'undefined' && player.currentSubscriptionStartedAt) {
+      // Editing the current cycle's start date must move that same cycle in both
+      // directions. Keeping the old marker would make attendance continue from
+      // the later date and would create a second, phantom cycle in history.
+      updates.currentSubscriptionStartedAt = getDateAtStartOfDay(updates.startDate);
     }
     Object.assign(player, updates);
     await player.save();
@@ -531,7 +535,7 @@ const updatePlayer = async (req, res, next) => {
       before: beforeSnapshot,
       after: snapshotPlayerDocument(afterPlayer),
       userId: req.user._id,
-      source: requestedNewSubscription ? 'new-subscription' : 'player-edit',
+      source: startsNewSubscription ? 'new-subscription' : 'player-edit',
       req
     });
     await createAuditLog({ userId: req.user._id, action: 'edit player', entity: 'Player', entityId: player._id, req });

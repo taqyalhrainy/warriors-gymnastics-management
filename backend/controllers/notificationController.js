@@ -1,4 +1,5 @@
 const Notification = require('../models/Notification');
+const NotificationResponse = require('../models/NotificationResponse');
 const SavedNotificationMessage = require('../models/SavedNotificationMessage');
 const Parent = require('../models/Parent');
 const Player = require('../models/Player');
@@ -13,6 +14,18 @@ const { createNotification: createAndPushNotification, createNotifications } = r
 
 const adminNotificationRoles = ['admin', 'coach', 'receptionist'];
 const playerAudienceStatuses = ['active', 'frozen', 'expired', 'tryout', 'left'];
+const parentReactionOptions = ['', '👍', '❤️', '🙏', '😊', '😮', '😢'];
+const legacyAutomaticNotificationTypes = ['attendance', 'payment', 'test'];
+const manualNotificationFilter = {
+  $or: [
+    { source: 'manual' },
+    { source: { $exists: false }, type: { $nin: legacyAutomaticNotificationTypes } }
+  ]
+};
+const isManualNotification = (notification) => (
+  notification?.source === 'manual'
+  || (!notification?.source && !legacyAutomaticNotificationTypes.includes(notification?.type))
+);
 const getPaginationOptions = (query) => {
   const limit = Math.min(Math.max(parseInt(query.limit, 10) || 0, 0), 100);
   const page = Math.max(parseInt(query.page, 10) || 1, 1);
@@ -325,6 +338,161 @@ const getNotifications = async (req, res, next) => {
   }
 };
 
+const getManualPlayerNotificationHistory = async (req, res, next) => {
+  try {
+    const { playerId } = req.params;
+    if (!validateObjectId(playerId)) {
+      return res.status(400).json({ message: 'Invalid player ID.' });
+    }
+    const player = await Player.findOne({ _id: playerId, isDeleted: { $ne: true } }).populate({
+      path: 'parentId',
+      populate: { path: 'userId', select: '_id name email' }
+    });
+    const recipient = player?.parentId?.userId;
+    if (!player) return res.status(404).json({ message: 'Player not found.' });
+    if (!recipient) return res.json({ player: { _id: player._id, fullName: player.fullName }, items: [], total: 0, page: 1, limit: 50, hasMore: false });
+
+    const { limit: requestedLimit, page, skip: requestedSkip } = getPaginationOptions(req.query);
+    const limit = requestedLimit || 50;
+    const skip = requestedLimit ? requestedSkip : (page - 1) * limit;
+    const filter = {
+      $and: [
+        manualNotificationFilter,
+        { recipientUserId: recipient._id },
+        {
+          $or: [
+            { playerId: player._id },
+            { playerId: null },
+            { playerId: { $exists: false } }
+          ]
+        }
+      ]
+    };
+    const [items, total] = await Promise.all([
+      Notification.find(filter)
+        .sort({ createdAt: -1, _id: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('createdBy', 'name email')
+        .lean(),
+      Notification.countDocuments(filter)
+    ]);
+    res.json({
+      player: { _id: player._id, fullName: player.fullName, parentName: recipient.name },
+      items,
+      total,
+      page,
+      limit,
+      hasMore: skip + items.length < total
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getNotificationResponses = async (req, res, next) => {
+  try {
+    const filter = { $or: [{ reply: { $ne: '' } }, { reaction: { $ne: '' } }] };
+    if (req.query.date && /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date))) {
+      const { start, end } = getAppDayRangeUtc(req.query.date);
+      filter.updatedAt = { $gte: start, $lt: end };
+    }
+    const { limit: requestedLimit, page, skip: requestedSkip } = getPaginationOptions(req.query);
+    const limit = requestedLimit || 50;
+    const skip = requestedLimit ? requestedSkip : (page - 1) * limit;
+    const [items, total] = await Promise.all([
+      NotificationResponse.find(filter)
+        .sort({ updatedAt: -1, _id: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('recipientUserId', 'name email')
+        .populate('playerId', 'fullName')
+        .populate({ path: 'notificationId', select: 'title message type source createdAt recipientUserId playerId' })
+        .lean(),
+      NotificationResponse.countDocuments(filter)
+    ]);
+    res.json({ items, total, page, limit, hasMore: skip + items.length < total });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getUnviewedNotificationResponseCount = async (req, res, next) => {
+  try {
+    const count = await NotificationResponse.countDocuments({
+      adminViewedAt: null,
+      $or: [{ reply: { $ne: '' } }, { reaction: { $ne: '' } }]
+    });
+    res.json({ count });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const markNotificationResponsesViewed = async (req, res, next) => {
+  try {
+    const ids = [...new Set((Array.isArray(req.body?.ids) ? req.body.ids : [])
+      .filter(validateObjectId)
+      .map(String))].slice(0, 100);
+    if (!ids.length) return res.json({ count: 0 });
+    const result = await NotificationResponse.updateMany(
+      { _id: { $in: ids }, adminViewedAt: null },
+      { $set: { adminViewedAt: new Date() } }
+    );
+    res.json({ count: result.modifiedCount || 0 });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const saveParentNotificationResponse = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!validateObjectId(id)) return res.status(400).json({ message: 'Invalid notification ID.' });
+    const notification = await Notification.findById(id).lean();
+    if (!notification) return res.status(404).json({ message: 'Notification not found.' });
+    if (String(notification.recipientUserId) !== String(req.user._id)) {
+      return res.status(403).json({ message: 'Forbidden.' });
+    }
+    if (!isManualNotification(notification)) {
+      return res.status(400).json({ message: 'Replies are available for messages sent by the club.' });
+    }
+
+    const payload = sanitizeObject(req.body);
+    const hasReply = Object.prototype.hasOwnProperty.call(payload || {}, 'reply');
+    const hasReaction = Object.prototype.hasOwnProperty.call(payload || {}, 'reaction');
+    if (!hasReply && !hasReaction) return res.status(400).json({ message: 'A reply or reaction is required.' });
+    const existing = await NotificationResponse.findOne({ notificationId: notification._id });
+    const reply = hasReply ? String(payload.reply || '').trim() : String(existing?.reply || '');
+    const reaction = hasReaction ? String(payload.reaction || '').trim() : String(existing?.reaction || '');
+    if (reply.length > 2000) return res.status(400).json({ message: 'Reply is too long.' });
+    if (!parentReactionOptions.includes(reaction)) return res.status(400).json({ message: 'Invalid reaction.' });
+
+    if (!reply && !reaction) {
+      if (existing) await existing.deleteOne();
+      return res.json({ response: null });
+    }
+    const response = await NotificationResponse.findOneAndUpdate(
+      { notificationId: notification._id },
+      {
+        $set: {
+          recipientUserId: req.user._id,
+          playerId: notification.playerId || undefined,
+          reply,
+          reaction,
+          adminViewedAt: null,
+          updatedAt: new Date()
+        },
+        $setOnInsert: { createdAt: new Date() }
+      },
+      { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
+    );
+    res.json({ response });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getNotificationById = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -356,6 +524,9 @@ const getNotificationById = async (req, res, next) => {
       };
       response.attachmentId = response.attachmentId._id;
     }
+    const parentResponse = await NotificationResponse.findOne({ notificationId: notification._id }).lean();
+    response.response = parentResponse || null;
+    response.canRespond = req.user.role === 'parent' && isManualNotification(response);
     res.json(response);
   } catch (error) {
     next(error);
@@ -559,6 +730,11 @@ const announceParentsByPlayerStatus = async (req, res, next) => {
 
 module.exports = {
   getNotifications,
+  getManualPlayerNotificationHistory,
+  getNotificationResponses,
+  getUnviewedNotificationResponseCount,
+  markNotificationResponsesViewed,
+  saveParentNotificationResponse,
   getNotificationById,
   getUnreadNotificationCount,
   getPushPublicKey,

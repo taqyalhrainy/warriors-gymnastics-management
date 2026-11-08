@@ -5,6 +5,7 @@ import DataStatus from '../components/DataStatus.jsx';
 import { fetchNotificationById } from '../services/notifications.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import warriorsLogo from '../assets/warriors-logo.png';
+import ParentNotificationResponse from '../components/ParentNotificationResponse.jsx';
 
 const NotificationDetailPage = () => {
   const { id } = useParams();
@@ -63,6 +64,19 @@ const NotificationDetailPage = () => {
               <p>{t('received')}: {new Date(notification.createdAt).toLocaleString()}</p>
               {notification.viewedAt && <p>{t('userSawMessageAt')} {new Date(notification.viewedAt).toLocaleString()}</p>}
             </div>
+            {isParentArea ? (
+              <ParentNotificationResponse
+                notification={notification}
+                onSaved={(response) => setNotification((current) => ({ ...current, response }))}
+              />
+            ) : notification.response && (
+              <section className="admin-notification-response-summary">
+                <h3>Parent response</h3>
+                {notification.response.reaction && <strong>{notification.response.reaction}</strong>}
+                {notification.response.reply && <p>{notification.response.reply}</p>}
+                <small>{new Date(notification.response.updatedAt).toLocaleString()}</small>
+              </section>
+            )}
           </div>
         ) : !error ? (
           isParentArea ? (

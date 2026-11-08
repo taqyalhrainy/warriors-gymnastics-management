@@ -53,6 +53,7 @@ const setup = (failureStatus, recover = false) => {
   });
   const controller = loadModule('../controllers/notificationController.js', {
     '../models/Notification': {},
+    '../models/NotificationResponse': {},
     '../models/SavedNotificationMessage': {},
     '../models/Parent': {},
     '../models/Player': {},

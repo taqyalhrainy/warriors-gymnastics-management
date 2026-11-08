@@ -1,6 +1,11 @@
 const express = require('express');
 const {
   getNotifications,
+  getManualPlayerNotificationHistory,
+  getNotificationResponses,
+  getUnviewedNotificationResponseCount,
+  markNotificationResponsesViewed,
+  saveParentNotificationResponse,
   getNotificationById,
   getUnreadNotificationCount,
   getPushPublicKey,
@@ -34,7 +39,12 @@ router.get('/saved', authorize('admin', 'coach', 'receptionist'), getSavedMessag
 router.post('/saved', authorize('admin', 'coach', 'receptionist'), createSavedMessage);
 router.put('/saved/:id', authorize('admin', 'coach', 'receptionist'), updateSavedMessage);
 router.delete('/saved/:id', authorize('admin', 'coach', 'receptionist'), deleteSavedMessage);
+router.get('/manual-history/:playerId', authorize('admin', 'coach', 'receptionist'), getManualPlayerNotificationHistory);
+router.get('/responses/count', authorize('admin', 'coach', 'receptionist'), getUnviewedNotificationResponseCount);
+router.get('/responses', authorize('admin', 'coach', 'receptionist'), getNotificationResponses);
+router.post('/responses/mark-viewed', authorize('admin', 'coach', 'receptionist'), markNotificationResponsesViewed);
 router.post('/player/:playerId', authorize('admin', 'coach', 'receptionist'), createPlayerNotification);
+router.put('/:id/response', authorize('parent'), saveParentNotificationResponse);
 router.get('/:id', authorize('admin', 'coach', 'receptionist', 'parent'), getNotificationById);
 router.post('/', authorize('admin', 'coach', 'receptionist'), createNotification);
 router.post('/announce-all', authorize('admin', 'coach', 'receptionist'), announceAllParents);

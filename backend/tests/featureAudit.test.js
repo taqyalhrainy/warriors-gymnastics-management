@@ -13,6 +13,8 @@ const Attendance = require('../models/Attendance');
 const Subscription = require('../models/Subscription');
 const Payment = require('../models/Payment');
 const History = require('../models/HistoryEntry');
+const Notification = require('../models/Notification');
+const NotificationResponse = require('../models/NotificationResponse');
 const { getAppDateKey, dateKeyToUtc, getAppDateTimeUtc } = require('../utils/appDate');
 
 require('../utils/pushNotifications').sendPushToUser = async () => ({ attempted: 0, sent: 0 });
@@ -87,6 +89,116 @@ test('inactive users lose existing sessions and parent mutations remain forbidde
   await call('/players', { method: 'POST', auth: parentToken, body: {}, status: 403 });
   await User.updateOne({ _id: parentUser._id }, { $set: { isActive: false } });
   await call('/auth/me', { auth: parentToken, status: 401 });
+});
+
+test('manual player message history excludes automatic events and parents can reply or react only to their own manual messages', async () => {
+  const child = await newPlayer({ fullName: 'Message child' });
+  const foreignChild = await newPlayer({ fullName: 'Foreign message child', parentId: otherParent._id });
+  const manual = await call(`/notifications/player/${child._id}`, {
+    method: 'POST',
+    body: { title: 'Manual reminder', message: 'Please bring the uniform.', type: 'announcement' },
+    status: 201
+  });
+  await Notification.create({
+    recipientUserId: parentUser._id,
+    playerId: child._id,
+    title: 'Attendance Registered',
+    message: 'Automatic attendance event',
+    type: 'attendance',
+    source: 'system'
+  });
+  await Notification.create({
+    recipientUserId: parentUser._id,
+    title: 'Legacy manual note',
+    message: 'Sent before source tracking existed.',
+    type: 'announcement'
+  });
+
+  const history = await call(`/notifications/manual-history/${child._id}`);
+  assert.equal(history.total, 2);
+  assert.deepEqual(history.items.map((item) => item.title).sort(), ['Legacy manual note', 'Manual reminder']);
+  const detail = await call(`/notifications/${manual._id}`, { auth: parentToken });
+  assert.equal(detail.canRespond, true);
+
+  const saved = await call(`/notifications/${manual._id}/response`, {
+    method: 'PUT',
+    auth: parentToken,
+    body: { reply: 'Thank you, received.', reaction: '👍' }
+  });
+  assert.equal(saved.response.reply, 'Thank you, received.');
+  assert.equal(saved.response.reaction, '👍');
+  assert.equal(await NotificationResponse.countDocuments({ notificationId: manual._id }), 1);
+
+  const otherParentToken = token(otherUser);
+  await call(`/notifications/${manual._id}/response`, {
+    method: 'PUT', auth: otherParentToken, body: { reaction: '❤️' }, status: 403
+  });
+  const foreignManual = await call(`/notifications/player/${foreignChild._id}`, {
+    method: 'POST', body: { title: 'Other family', message: 'Private message' }, status: 201
+  });
+  assert.ok(foreignManual._id);
+
+  const responseDay = getAppDateKey(new Date());
+  const inbox = await call(`/notifications/responses?date=${responseDay}`);
+  assert.equal(inbox.total, 1);
+  assert.equal(inbox.items[0].notificationId.title, 'Manual reminder');
+  assert.equal((await call('/notifications/responses/count')).count, 1);
+  await call('/notifications/responses/mark-viewed', { method: 'POST', body: { ids: [inbox.items[0]._id] } });
+  assert.equal((await call('/notifications/responses/count')).count, 0);
+});
+
+test('editing the current subscription start date moves the same cycle backward and recounts existing attendance', async () => {
+  const child = await newPlayer({
+    fullName: 'Moved cycle child',
+    startDate: '2026-11-05',
+    currentSubscriptionStartedAt: '2026-11-05',
+    endDate: '2026-11-30',
+    packageName: '8 classes',
+    packageClasses: 8
+  });
+  const linked = await Subscription.create({
+    playerId: child._id,
+    type: 'sessions',
+    packageName: '8 classes',
+    totalSessions: 8,
+    usedSessions: 1,
+    remainingSessions: 7,
+    startDate: '2026-11-05',
+    endDate: '2026-11-30',
+    status: 'active'
+  });
+  child.subscriptionId = linked._id;
+  await child.save();
+  const records = await Attendance.insertMany(['2026-10-22', '2026-10-29', '2026-11-05'].map((date) => ({
+    playerId: child._id,
+    groupId: group._id,
+    markedBy: admin._id,
+    status: 'present',
+    date: `${date}T00:00:00Z`
+  })));
+  child.currentSubscriptionAttendanceIds = [records[2]._id];
+  await child.save();
+
+  const updated = await call(`/players/${child._id}`, {
+    method: 'PUT',
+    body: { startDate: '2026-10-22', endDate: '2026-11-16' }
+  });
+  assert.equal(updated.startDate.slice(0, 10), '2026-10-22');
+  assert.equal(updated.currentSubscriptionStartedAt.slice(0, 10), '2026-10-22');
+  assert.deepEqual(updated.currentSubscriptionAttendanceIds.map(String), [String(records[2]._id)]);
+
+  const savedSubscription = await Subscription.findById(linked._id).lean();
+  assert.equal(savedSubscription.startDate.toISOString().slice(0, 10), '2026-10-22');
+  assert.equal(savedSubscription.endDate.toISOString().slice(0, 10), '2026-11-16');
+  assert.equal(savedSubscription.usedSessions, 3);
+  assert.equal(savedSubscription.remainingSessions, 5);
+
+  const parentAttendance = await call('/parents/me/attendance', { auth: parentToken });
+  const parentChild = parentAttendance.children.find((item) => item._id === String(child._id));
+  assert.equal(parentChild.attendancePresentCount, 3);
+  const history = await call(`/parents/me/attendance/${child._id}/history`, { auth: parentToken });
+  assert.equal(history.subscriptionHistory.length, 1);
+  assert.equal(history.subscriptionHistory[0].startDate.slice(0, 10), '2026-10-22');
 });
 
 test('admin skill levels persist, enter history, and only the owning parent can read them', async () => {
