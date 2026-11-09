@@ -84,6 +84,35 @@ test('parent ownership applies to lists, arbitrary IDs, filters and group roster
   assert.equal((await call('/players', { auth: parentToken })).length, 0);
 });
 
+test('parent payment receipts keep their individual amounts instead of repeating the current subscription total', async () => {
+  const child = await newPlayer({
+    currentSubscriptionStartedAt: '2026-11-01',
+    currentSubscriptionCreatedAt: '2026-11-01T09:00:00Z'
+  });
+  const rows = await Payment.create([
+    { playerId: child._id, paidAmount: 80, transactionType: 'Partial payment', createdAt: '2026-11-02T10:00:00Z', paymentDate: '2026-11-02' },
+    { playerId: child._id, paidAmount: 80, transactionType: 'Full payment', createdAt: '2026-11-10T10:00:00Z', paymentDate: '2026-11-10' },
+    { playerId: child._id, paidAmount: 40, transactionType: 'Full payment', createdAt: '2026-10-02T10:00:00Z', paymentDate: '2026-10-02' }
+  ]);
+  const payments = await call('/parents/me/payments', { auth: parentToken });
+  assert.equal(payments.length, 3);
+  for (const receipt of payments) {
+    const stored = rows.find((row) => String(row._id) === receipt._id);
+    assert.equal(receipt.paidAmount, stored.paidAmount);
+    assert.equal(receipt.visiblePaidAmount, stored.paidAmount);
+    assert.equal(receipt.playerId.currentSubscriptionPaidAmount, 160);
+  }
+  const page = await call('/parents/me/payments?page=1&limit=1', { auth: parentToken });
+  assert.equal(page.items[0].visiblePaidAmount, 80);
+  assert.equal(page.items[0].playerId.currentSubscriptionPaidAmount, 160);
+  await Payment.updateOne({ _id: rows[1]._id }, { $set: { isDeleted: true } });
+  const fresh = await call('/parents/me/payments', { auth: parentToken });
+  assert.equal(fresh.length, 2);
+  assert.equal(fresh.find((row) => row._id === String(rows[0]._id)).visiblePaidAmount, 80);
+  assert.equal(fresh[0].playerId.currentSubscriptionPaidAmount, 80);
+  assert.equal((await Payment.findById(rows[0]._id)).paidAmount, 80);
+});
+
 test('inactive users lose existing sessions and parent mutations remain forbidden', async () => {
   await call('/players', { auth: null, status: 401 });
   await call('/players', { method: 'POST', auth: parentToken, body: {}, status: 403 });

@@ -41,6 +41,19 @@ test('attendance and subscription mutations invalidate each other and the board'
   }
 });
 
+test('due saves use the version displayed in the player card over a stale cached version', async () => {
+  cache.clearCache();
+  cache.setCached('players:item:p', { _id: 'p', __v: 3, paymentRemainingAmount: 70 });
+  const players = await service('players', { put: async (url, data) => {
+    assert.equal(data.expectedVersion, 7);
+    assert.equal(data.previousDueBalance, 0);
+    return { data: { _id: 'p', __v: 8, paymentRemainingAmount: 0 } };
+  } });
+  const saved = await players.updatePlayer('p', { __v: 7, previousDueBalance: 0, dueAdjustment: 0 });
+  assert.equal(saved.paymentRemainingAmount, 0);
+  assert.equal(cache.getCachedValue('players:item:p').__v, 8);
+});
+
 test('all report loaders run and forced refresh bypasses their saved results', async () => {
   cache.clearCache();
   let calls = 0;

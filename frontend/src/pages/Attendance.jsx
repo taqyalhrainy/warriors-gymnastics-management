@@ -16,6 +16,7 @@ import { compressProfileImage } from '../utils/imageUpload.js';
 import { getCacheVersion } from '../services/cache.js';
 import { attachAttendanceRecords, isAttendanceInCycle, getUnassignedAttendance, attendanceCycleStart, authoritativeField, packageCounter, countAttendanceForCycle, mergeCurrentAttendanceState, isAttendanceSubscriptionExpired } from '../utils/attendanceRecords.js';
 import { formatPlayerNoteTimestamp } from '../utils/playerNoteTimestamp.js';
+import { parseManualAttendanceDue } from '../utils/attendanceDue.js';
 
 const ATTENDANCE_BOARD_CACHE_TTL_MS = 5 * 60 * 1000;
 const LOCAL_ATTENDANCE_OVERRIDE_TTL_MS = 60 * 1000;
@@ -265,12 +266,6 @@ const mergeStablePlayerFields = (incomingPlayer, fallbackPlayer = null) => ({
 });
 
 const formatCompactMoney = (value) => Number(value || 0).toLocaleString('en-US');
-const parseManualAttendanceDue = (value) => {
-  const normalized = normalizeDigits(value).trim();
-  const amount = Math.abs(parseLocalizedNumber(normalized));
-  return normalized.startsWith('-') ? -amount : amount;
-};
-
 const getPlayerAge = (dateOfBirth) => {
   if (!dateOfBirth) return '';
   const birthDate = new Date(dateOfBirth);
@@ -372,6 +367,7 @@ const AttendancePage = () => {
   const [pendingAttendanceHistoryId, setPendingAttendanceHistoryId] = useState(null);
   const [dueAdjustmentForm, setDueAdjustmentForm] = useState('');
   const [isSavingDueAdjustment, setIsSavingDueAdjustment] = useState(false);
+  const [dueAdjustmentStatus, setDueAdjustmentStatus] = useState(null);
   const [isEditingSelectedPlayer, setIsEditingSelectedPlayer] = useState(false);
   const [selectedPlayerForm, setSelectedPlayerForm] = useState(null);
   const [showUnsavedExitConfirm, setShowUnsavedExitConfirm] = useState(false);
@@ -1681,6 +1677,7 @@ const AttendancePage = () => {
       setOpenSubscriptionHistoryKey('');
       setShowSelectedPlayerAttendanceHistory(false);
       setDueAdjustmentForm('');
+      setDueAdjustmentStatus(null);
       setEditingAttendanceHistoryId(null);
       setIsEditingSelectedPlayer(false);
 
@@ -2415,28 +2412,61 @@ const AttendancePage = () => {
     }
   };
 
-  const handleSetAttendanceDue = async () => {
-    if (!selectedPlayer?._id || pendingSelectedPlayerMutationRef.current) return;
-    const mutation = beginSelectedPlayerMutation('attendance-due');
-    const targetDue = parseManualAttendanceDue(dueAdjustmentForm);
-
+  const handleSetAttendanceDue = async (event) => {
+    event?.preventDefault();
+    if (!selectedPlayer?._id) return;
+    if (pendingSelectedPlayerMutationRef.current) {
+      setDueAdjustmentStatus({ kind: 'error', text: 'Please wait for the current save to finish.' });
+      return;
+    }
+    let mutation;
     try {
+      const targetDue = parseManualAttendanceDue(dueAdjustmentForm);
+      mutation = beginSelectedPlayerMutation('attendance-due');
       setMessage('');
+      setDueAdjustmentStatus(null);
       setIsSavingDueAdjustment(true);
       const savedPlayer = await updatePlayer(selectedPlayer._id, {
+        __v: selectedPlayer.__v,
         previousDueBalance: targetDue,
         dueAdjustment: 0
       });
+      if (!isLatestSelectedPlayerMutation(mutation)) return;
       const confirmedPlayer = mergeStablePlayerFields(savedPlayer, selectedPlayer);
       patchExistingPlayerInAttendanceBoard(confirmedPlayer);
       setSelectedPlayerIfOpen(confirmedPlayer);
-      setDueAdjustmentForm('');
-      setMessage('Due updated');
+      if (isCurrentSelectedPlayerMutation(mutation)) {
+        setDueAdjustmentForm('');
+        setDueAdjustmentStatus({ kind: 'success', text: 'Due saved.' });
+        setMessage('Due updated');
+      }
     } catch (error) {
-      setMessage(error.response?.data?.message || 'Unable to update due');
+      if (mutation && !isCurrentSelectedPlayerMutation(mutation)) return;
+      const failure = error.response?.data?.message || error.message || 'Unable to update due. Please try again.';
+      setDueAdjustmentStatus({ kind: 'error', text: failure });
+      if (error.response?.status === 409) {
+        // Refresh the version without automatically overwriting another user's
+        // change. Keep the typed amount so the admin can review and submit again.
+        try {
+          const latestPlayer = await getPlayer(selectedPlayer._id, { force: true });
+          if (!isLatestSelectedPlayerMutation(mutation)) return;
+          const refreshedPlayer = mergeStablePlayerFields(latestPlayer, selectedPlayer);
+          patchExistingPlayerInAttendanceBoard(refreshedPlayer);
+          setSelectedPlayerIfOpen(refreshedPlayer);
+          if (isCurrentSelectedPlayerMutation(mutation)) {
+            setDueAdjustmentStatus({ kind: 'error', text: 'Player data changed. The current due is refreshed. Review your amount and press Edit due again.' });
+          }
+        } catch {
+          if (isCurrentSelectedPlayerMutation(mutation)) {
+            setDueAdjustmentStatus({ kind: 'error', text: 'Unable to refresh changed player data. Reopen the player card and try again.' });
+          }
+        }
+      }
     } finally {
-      setIsSavingDueAdjustment(false);
-      finishSelectedPlayerMutation(mutation);
+      if (mutation && isLatestSelectedPlayerMutation(mutation)) {
+        setIsSavingDueAdjustment(false);
+        finishSelectedPlayerMutation(mutation);
+      }
     }
   };
 
@@ -3695,23 +3725,33 @@ const AttendancePage = () => {
                         <span>Attendance due</span>
                         <strong>{getAttendanceMoneyState(selectedPlayer.paymentRemainingAmount)?.label || 'Due 0'}</strong>
                       </div>
-                      <div className="due-adjustment-actions">
+                      <form className="due-adjustment-actions" onSubmit={handleSetAttendanceDue}>
                         <input
                           type="text"
                           inputMode="decimal"
                           value={dueAdjustmentForm}
-                          onChange={(event) => setDueAdjustmentForm(normalizeDigits(event.target.value))}
+                          onChange={(event) => {
+                            setDueAdjustmentForm(normalizeDigits(event.target.value));
+                            setDueAdjustmentStatus(null);
+                          }}
+                          aria-label="Attendance due amount"
+                          aria-invalid={dueAdjustmentStatus?.kind === 'error'}
                           placeholder="100 due / -100 credit"
                         />
                         <button
-                          type="button"
+                          type="submit"
                           className="btn-secondary"
-                          onClick={handleSetAttendanceDue}
                           disabled={Boolean(pendingSelectedPlayerMutation) || isSavingDueAdjustment || dueAdjustmentForm === ''}
                         >
                           {isSavingDueAdjustment ? 'Saving...' : 'Edit due'}
                         </button>
-                      </div>
+                        {dueAdjustmentStatus && (
+                          <small className="due-adjustment-status" role={dueAdjustmentStatus.kind === 'error' ? 'alert' : 'status'}>
+                            {dueAdjustmentStatus.text}
+                          </small>
+                        )}
+                        {pendingSelectedPlayerMutation && !isSavingDueAdjustment && <small role="status">Please wait for the current save to finish.</small>}
+                      </form>
                     </div>
                     <div className={`student-info-grid-full subscription-attention-box${selectedPlayer.subscriptionNeedsAttention ? ' is-active' : ''}`}>
                       <span>Subscription highlight</span>

@@ -690,11 +690,11 @@ const getParentPayments = async (req, res, next) => {
         ? {
           ...payment,
           totalAmount: paymentSummary?.totalAmount ?? payment.totalAmount,
-          visiblePaidAmount: paymentSummary?.paidAmount || 0,
+          visiblePaidAmount: Number(payment.paidAmount || 0),
           visibleRemainingAmount: paymentSummary?.remainingAmount ?? payment.remainingAmount,
           remainingAmount: paymentSummary?.remainingAmount ?? payment.remainingAmount
         }
-        : { ...payment, visiblePaidAmount: paymentSummary?.paidAmount || 0, visibleRemainingAmount: 0, remainingAmount: 0 };
+        : { ...payment, visiblePaidAmount: Number(payment.paidAmount || 0), visibleRemainingAmount: 0, remainingAmount: 0 };
     });
 
     const playersWithPaymentRows = new Set(paymentRows.map((payment) => String(payment.playerId?._id || payment.playerId || '')).filter(Boolean));
@@ -710,7 +710,7 @@ const getParentPayments = async (req, res, next) => {
         playerId: childObject,
         paymentDate: child.updatedAt || child.createdAt || new Date(),
         paidAmount: 0,
-        visiblePaidAmount: paymentSummaryMap.get(childId)?.paidAmount || 0,
+        visiblePaidAmount: 0,
         totalAmount: visibleRemainingAmount,
         remainingAmount: visibleRemainingAmount,
         visibleRemainingAmount,

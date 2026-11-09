@@ -7,7 +7,9 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 import warriorsLogo from '../assets/warriors-logo.png';
 
 const formatMoney = (value) => Number(value || 0).toLocaleString('en-US');
-const getVisiblePaid = (payment) => Number(payment?.visiblePaidAmount ?? payment?.playerId?.currentSubscriptionPaidAmount ?? 0);
+// A receipt is one payment; the current-cycle total belongs only in the summary.
+const getVisiblePaid = (payment) => Number(payment?.paidAmount ?? payment?.visiblePaidAmount ?? 0);
+const getCurrentCyclePaid = (payment) => Number(payment?.playerId?.currentSubscriptionPaidAmount ?? getVisiblePaid(payment));
 const getVisibleRemaining = (payment) => Number(payment?.visibleRemainingAmount ?? (payment?.playerId?.attendanceDueManual ? payment.remainingAmount : 0) ?? 0);
 const PAGE_SIZE = 20;
 const FIRST_PAGE_PARAMS = { page: 1, limit: PAGE_SIZE };
@@ -89,7 +91,7 @@ const ParentPaymentsPage = () => {
   const totalPaidByPlayer = new Map();
   payments.forEach((payment) => {
     const playerId = String(payment.playerId?._id || payment.playerId || payment._id);
-    if (!totalPaidByPlayer.has(playerId)) totalPaidByPlayer.set(playerId, getVisiblePaid(payment));
+    if (!totalPaidByPlayer.has(playerId)) totalPaidByPlayer.set(playerId, getCurrentCyclePaid(payment));
   });
   const totalPaid = [...totalPaidByPlayer.values()].reduce((sum, value) => sum + value, 0);
   const remainingByPlayer = new Map();

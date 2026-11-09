@@ -2225,6 +2225,9 @@ body.theme-light .new-subscription-warning {
   color: var(--text);
 }
 
+.due-adjustment-status { flex-basis: 100%; }
+.due-adjustment-status[role="alert"] { color: var(--text); }
+
 .table-card {
   width: 100%;
   max-width: 100%;
