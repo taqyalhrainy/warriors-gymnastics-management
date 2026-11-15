@@ -117,6 +117,7 @@ app.use('/api/attendance', lazyRouter(() => require('./routes/attendance')));
 app.use('/api/subscriptions', lazyRouter(() => require('./routes/subscriptions')));
 app.use('/api/payments', lazyRouter(() => require('./routes/payments')));
 app.use('/api/notifications', lazyRouter(() => require('./routes/notifications')));
+app.use('/api/chat', lazyRouter(() => require('./routes/chat')));
 app.use('/api/push', lazyRouter(() => require('./routes/push')));
 app.use('/api/reports', lazyRouter(() => require('./routes/reports')));
 app.use('/api/history', lazyRouter(() => require('./routes/history')));

@@ -4,12 +4,14 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { fetchUnreadCount } from '../services/notifications.js';
 import warriorsLogo from '../assets/warriors-logo.png';
+import { useChatUnreadCount } from '../hooks/useChatUnreadCount.js';
 
 const ParentSidebar = () => {
   const { user, logout } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
   const [unreadCount, setUnreadCount] = useState(0);
+  const chatUnreadCount = useChatUnreadCount();
 
   useEffect(() => {
     if (user?.role !== 'parent') {
@@ -39,7 +41,8 @@ const ParentSidebar = () => {
     { path: '/parent', key: 'home', label: 'Home' },
     { path: '/parent/attendance', key: 'attendance' },
     { path: '/parent/payments', key: 'payments' },
-    { path: '/parent/notifications', key: 'notifications' }
+    { path: '/parent/notifications', key: 'notifications' },
+    { path: '/parent/chat', key: 'chat' }
   ];
 
   return (
@@ -55,6 +58,7 @@ const ParentSidebar = () => {
             {link.key === 'notifications' && unreadCount > 0 && (
               <span className="notification-badge">{unreadCount}</span>
             )}
+            {link.key === 'chat' && chatUnreadCount > 0 && <span className="notification-badge">{chatUnreadCount}</span>}
           </NavLink>
         ))}
       </div>

@@ -7,13 +7,15 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
-test('notification admin page exposes manual player history and dated response inbox', () => {
+test('notification admin page exposes manual history and opens the two-way chat with dated messages', () => {
   const source = read('src/pages/Notifications.jsx');
   assert.match(source, /Player message history/);
   assert.match(source, /fetchManualPlayerNotificationHistory/);
-  assert.match(source, /Parent replies & reactions/);
-  assert.match(source, /fetchNotificationResponses\(\{ date: responsesDate/);
-  assert.match(source, /Open original message/);
+  assert.match(source, /to="\/chat"/);
+  assert.match(source, /useChatUnreadCount/);
+  const chat = read('src/components/ChatWorkspace.jsx');
+  assert.match(chat, /type="date"/);
+  assert.match(chat, /originalNotification/);
 });
 
 test('both parent notification detail routes support replies and reactions', () => {

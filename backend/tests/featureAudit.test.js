@@ -15,6 +15,7 @@ const Payment = require('../models/Payment');
 const History = require('../models/HistoryEntry');
 const Notification = require('../models/Notification');
 const NotificationResponse = require('../models/NotificationResponse');
+const ChatMessage = require('../models/ChatMessage');
 const { getAppDateKey, dateKeyToUtc, getAppDateTimeUtc } = require('../utils/appDate');
 
 require('../utils/pushNotifications').sendPushToUser = async () => ({ attempted: 0, sent: 0 });
@@ -38,10 +39,11 @@ before(async () => {
   process.env.ENCRYPTION_KEY = crypto.randomBytes(32).toString('hex');
   mongo = await MongoMemoryServer.create();
   await mongoose.connect(mongo.getUri());
+  await ChatMessage.init();
   const app = express();
   app.use(express.json({ limit: '5mb' }));
   for (const route of ['auth', 'players', 'parents', 'groups', 'attendance', 'subscriptions', 'payments',
-    'coaches', 'notifications', 'programs', 'packageOptions', 'waitingList', 'history', 'reports', 'clubMedia', 'security', 'auditLogs']) {
+    'coaches', 'notifications', 'chat', 'programs', 'packageOptions', 'waitingList', 'history', 'reports', 'clubMedia', 'security', 'auditLogs']) {
     app.use('/' + route, require('../routes/' + route));
   }
   app.use(require('../middleware/errorHandler'));
@@ -174,6 +176,79 @@ test('manual player message history excludes automatic events and parents can re
   assert.equal((await call('/notifications/responses/count')).count, 1);
   await call('/notifications/responses/mark-viewed', { method: 'POST', body: { ids: [inbox.items[0]._id] } });
   assert.equal((await call('/notifications/responses/count')).count, 0);
+});
+
+test('chat includes legacy notification replies and reactions with their original message on both sides', async () => {
+  const note = await Notification.create({ recipientUserId: parentUser._id, title: 'Training reminder', message: 'Please bring your uniform.', type: 'announcement' });
+  const response = await NotificationResponse.create({ notificationId: note._id, recipientUserId: parentUser._id, reply: 'We will be there.', reaction: '❤️' });
+  for (const auth of [adminToken, parentToken]) {
+    const chat = await call(`/chat/${parentUser._id}/messages`, { auth });
+    assert.equal(chat.items.length, 1);
+    assert.equal(chat.items[0].text, response.reply);
+    assert.equal(chat.items[0].reaction, '❤️');
+    assert.equal(chat.items[0].originalNotification.title, note.title);
+  }
+  assert.equal((await call('/chat/unread-count')).count, 1);
+  const inbox = await call('/chat/conversations');
+  assert.equal(inbox.items[0].name, parentUser.name);
+  assert.equal(inbox.items[0].unreadCount, 1);
+  await call(`/chat/${parentUser._id}/read`, { method: 'POST', body: { responses: [{ _id: response._id, updatedAt: response.updatedAt }] } });
+  assert.equal((await call('/chat/unread-count')).count, 0);
+});
+
+test('parent and club chat is private, idempotent and does not add club replies to notifications', async () => {
+  const url = `/chat/${parentUser._id}/messages`;
+  const request = { method: 'POST', auth: parentToken, status: 201, body: { text: 'Can we change training time?', clientMessageId: crypto.randomUUID(), fromClub: true, senderUserId: admin._id } };
+  const [one, retry] = await Promise.all([call(url, request), call(url, request)]);
+  assert.equal(one._id, retry._id);
+  assert.equal(one.fromClub, false);
+  assert.equal(one.senderUserId, String(parentUser._id));
+  assert.equal(await ChatMessage.countDocuments({}), 1);
+  await call(url, { ...request, body: { ...request.body, text: 'Changed payload' }, status: 409 });
+  const reply = await call(url, { method: 'POST', status: 201, body: { text: 'Of course, which day works for you?', clientMessageId: crypto.randomUUID() } });
+  assert.equal(reply.fromClub, true);
+  assert.equal(await Notification.countDocuments({}), 0);
+  assert.equal((await call('/chat/unread-count', { auth: parentToken })).count, 1);
+  const transcript = await call(url, { auth: parentToken });
+  assert.equal(transcript.items.length, 2);
+  await call(`/chat/${parentUser._id}/read`, { auth: parentToken, method: 'POST', body: { messageIds: [reply._id, one._id] } });
+  assert.equal((await call('/chat/unread-count', { auth: parentToken })).count, 0);
+  assert.equal((await ChatMessage.findById(one._id)).readAt, null, 'parents cannot mark their own messages as read by the club');
+  assert.equal((await call('/chat/unread-count')).count, 1);
+  const otherToken = token(otherUser);
+  for (const method of ['GET', 'POST']) {
+    await call(url, { auth: otherToken, method, body: method === 'POST' ? request.body : undefined, status: 403 });
+  }
+  await call(`/chat/${parentUser._id}/read`, { auth: otherToken, method: 'POST', body: { messageIds: [reply._id] }, status: 403 });
+  assert.equal((await call('/chat/conversations', { auth: otherToken })).items.length, 0);
+  await call(`/chat/${admin._id}/messages`, { status: 404 });
+});
+
+test('chat date filtering and cursor pagination preserve message order across pages', async () => {
+  const date = '2026-11-15T12:00:00.000Z';
+  await ChatMessage.insertMany(Array.from({ length: 45 }, (_, index) => ({ parentUserId: parentUser._id, senderUserId: parentUser._id, fromClub: false, text: `Message ${index}`, clientMessageId: crypto.randomUUID(), createdAt: date })));
+  await ChatMessage.create({ parentUserId: otherUser._id, senderUserId: otherUser._id, fromClub: false, text: 'Private other chat', clientMessageId: crypto.randomUUID(), createdAt: date });
+  const first = await call(`/chat/${parentUser._id}/messages?date=2026-11-15`, { auth: parentToken });
+  assert.equal(first.items.length, 40);
+  assert.equal(first.hasMore, true);
+  const second = await call(`/chat/${parentUser._id}/messages?date=2026-11-15&beforeAt=${encodeURIComponent(first.cursor.beforeAt)}&beforeId=${first.cursor.beforeId}`, { auth: parentToken });
+  assert.equal(second.items.length, 5);
+  assert.equal(second.hasMore, false);
+  assert.equal(new Set([...first.items, ...second.items].map((item) => item.key)).size, 45);
+  assert.equal((await call(`/chat/${parentUser._id}/messages?date=2026-11-16`)).items.length, 0);
+  await call(`/chat/${parentUser._id}/messages?date=2026-02-30`, { status: 400 });
+  await call(`/chat/${parentUser._id}/messages?beforeAt=invalid&beforeId=wrong`, { status: 400 });
+  await call(`/chat/${parentUser._id}/messages`, { method: 'POST', body: { text: ' ', clientMessageId: crypto.randomUUID() }, status: 400 });
+});
+
+test('marking an older notification response read does not acknowledge a newer reaction', async () => {
+  const note = await Notification.create({ recipientUserId: parentUser._id, title: 'Reminder', message: 'Hello', type: 'announcement' });
+  const response = await NotificationResponse.create({ notificationId: note._id, recipientUserId: parentUser._id, reply: 'Hello back', updatedAt: '2026-11-14T10:00:00Z' });
+  const older = response.updatedAt;
+  await NotificationResponse.updateOne({ _id: response._id }, { $set: { reaction: '👍', updatedAt: new Date('2026-11-15T10:00:00Z') } });
+  await call(`/chat/${parentUser._id}/read`, { method: 'POST', body: { responses: [{ _id: response._id, updatedAt: older }] } });
+  assert.equal((await call('/chat/unread-count')).count, 1);
+  assert.equal((await call(`/chat/${parentUser._id}/messages`)).items[0].reaction, '👍');
 });
 
 test('editing the current subscription start date moves the same cycle backward and recounts existing attendance', async () => {

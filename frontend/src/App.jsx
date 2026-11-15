@@ -22,6 +22,8 @@ const CoachProfilePage = lazy(() => import('./pages/CoachProfile.jsx'));
 const PaymentsPage = lazy(() => import('./pages/Payments.jsx'));
 const OwnerDashboardPage = lazy(() => import('./pages/OwnerDashboard.jsx'));
 const NotificationsPage = lazy(() => import('./pages/Notifications.jsx'));
+const ClubChatPage = lazy(() => import('./pages/ClubChat.jsx'));
+const ParentChatPage = lazy(() => import('./pages/ParentChat.jsx'));
 const ReportsPage = lazy(() => import('./pages/Reports.jsx'));
 const HistoryPage = lazy(() => import('./pages/History.jsx'));
 const AuditLogsPage = lazy(() => import('./pages/AuditLogs.jsx'));
@@ -142,6 +144,7 @@ function App() {
               <Route path="/coaches/:id" element={<CoachProfilePage />} />
               <Route path="/payments" element={<PaymentsPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
+              <Route path="/chat" element={<ClubChatPage />} />
               <Route path="/notifications/:id" element={<NotificationDetailPage />} />
               <Route path="/parents" element={<ParentsPage />} />
               <Route path="/reports" element={<ReportsPage />} />
@@ -159,6 +162,7 @@ function App() {
               <Route path="/parent/attendance" element={<ParentAttendancePage />} />
               <Route path="/parent/payments" element={<ParentPaymentsPage />} />
               <Route path="/parent/notifications" element={<ParentNotificationsPage />} />
+              <Route path="/parent/chat" element={<ParentChatPage />} />
               <Route path="/parent/settings" element={<ParentSettingsPage theme={theme} toggleTheme={toggleTheme} />} />
               <Route path="/parent/children" element={<ParentChildrenPage />} />
               <Route path="/parent/subscriptions" element={<ParentSubscriptionSummaryPage />} />

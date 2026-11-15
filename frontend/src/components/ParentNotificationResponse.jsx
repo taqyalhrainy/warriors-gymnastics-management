@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { saveNotificationResponse } from '../services/notifications.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
+import { Link } from 'react-router-dom';
+import { notifyChatChanged } from '../services/chat.js';
 
 const reactions = ['👍', '❤️', '🙏', '😊', '😮', '😢'];
 
@@ -30,6 +32,7 @@ const ParentNotificationResponse = ({ notification, onSaved }) => {
       setReply(result.response?.reply || '');
       setReaction(result.response?.reaction || '');
       onSaved?.(result.response || null);
+      notifyChatChanged();
       setMessage(arabic ? 'تم إرسال ردك للنادي.' : 'Your response was sent to the club.');
     } catch (error) {
       setMessage(error.response?.data?.message || (arabic ? 'تعذر إرسال الرد.' : 'Unable to send your response.'));
@@ -72,6 +75,7 @@ const ParentNotificationResponse = ({ notification, onSaved }) => {
         </button>
       </div>
       {message && <p className="notification-response-message">{message}</p>}
+      <Link to="/parent/chat" className="notification-response-chat-link">{arabic ? 'متابعة المحادثة مع النادي ←' : 'Continue in Chat →'}</Link>
     </section>
   );
 };

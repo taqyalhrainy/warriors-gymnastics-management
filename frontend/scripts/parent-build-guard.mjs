@@ -4,6 +4,7 @@ import path from 'node:path';
 const allowedParentPages = new Set([
   'ParentAttendance.jsx',
   'ParentChildren.jsx',
+  'ParentChat.jsx',
   'ParentDashboard.jsx',
   'ParentLogin.jsx',
   'ParentNotificationDetail.jsx',

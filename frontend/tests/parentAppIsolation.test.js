@@ -45,7 +45,7 @@ test('parent entry contains every existing parent route and no admin route', () 
   const source = readFileSync(resolve(sourceRoot, 'ParentApp.jsx'), 'utf8');
   for (const route of [
     '/parent', '/parent/attendance', '/parent/payments', '/parent/notifications',
-    '/parent/settings', '/parent/children', '/parent/subscriptions', '/parent/notifications/:id'
+    '/parent/settings', '/parent/children', '/parent/subscriptions', '/parent/notifications/:id', '/parent/chat'
   ]) {
     assert.match(source, new RegExp(`path=["']${route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`));
   }
@@ -60,7 +60,7 @@ test('parent production entry cannot reach admin page modules', () => {
     'AdminPasswordRecovery.jsx', 'AdminDashboard.jsx', 'Players.jsx', 'PlayerForm.jsx',
     'PlayerProfile.jsx', 'Groups.jsx', 'Attendance.jsx', 'Coaches.jsx', 'CoachProfile.jsx',
     'Payments.jsx', 'OwnerDashboard.jsx', 'Notifications.jsx', 'Reports.jsx', 'History.jsx',
-    'AuditLogs.jsx', 'Parents.jsx', 'ClubMedia.jsx', 'PublicHome.jsx', 'Login.jsx'
+    'AuditLogs.jsx', 'Parents.jsx', 'ClubMedia.jsx', 'PublicHome.jsx', 'Login.jsx', 'ClubChat.jsx'
   ];
   const leaked = [...reachable].filter((file) => forbiddenPages.includes(file.split(/[\\/]/).at(-1)));
   assert.deepEqual(leaked, []);

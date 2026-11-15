@@ -20,6 +20,11 @@ const performanceIndexes = {
     { updatedAt: -1, _id: -1 },
     { adminViewedAt: 1, updatedAt: -1 }
   ],
+  chatmessages: [
+    { parentUserId: 1, createdAt: -1, _id: -1 },
+    { parentUserId: 1, fromClub: 1, readAt: 1 },
+    { key: { parentUserId: 1, senderUserId: 1, clientMessageId: 1 }, options: { unique: true } }
+  ],
   attendances: [{ date: -1, _id: -1 }],
   parents: [{ userId: 1 }],
   historyentries: [{ entityType: 1, entityId: 1, changedAt: 1 }]

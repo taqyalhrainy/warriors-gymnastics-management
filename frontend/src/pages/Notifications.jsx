@@ -11,9 +11,6 @@ import {
   announceParentsByStatus,
   fetchSavedNotificationMessages,
   fetchManualPlayerNotificationHistory,
-  fetchNotificationResponses,
-  fetchNotificationResponseCount,
-  markNotificationResponsesViewed,
   createSavedNotificationMessage,
   updateSavedNotificationMessage,
   deleteSavedNotificationMessage
@@ -24,6 +21,7 @@ import { fetchPlayers } from '../services/players.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { birthdayDay } from '../utils/birthdayAlerts.js';
 import { compressProfileImage } from '../utils/imageUpload.js';
+import { useChatUnreadCount } from '../hooks/useChatUnreadCount.js';
 
 const SAVED_MESSAGES_KEY = 'warriors-saved-notification-messages';
 const todayInputValue = () => birthdayDay();
@@ -66,10 +64,7 @@ const NotificationsPage = () => {
   const [manualHistoryPlayerId, setManualHistoryPlayerId] = useState('');
   const [manualHistorySearch, setManualHistorySearch] = useState('');
   const [manualHistory, setManualHistory] = useState({ items: [], total: 0, page: 1, hasMore: false, player: null });
-  const [showResponses, setShowResponses] = useState(false);
-  const [responsesDate, setResponsesDate] = useState(todayInputValue);
-  const [responses, setResponses] = useState({ items: [], total: 0, page: 1, hasMore: false });
-  const [responseCount, setResponseCount] = useState(0);
+  const responseCount = useChatUnreadCount();
   const { t } = useLanguage();
   const location = useLocation();
   const prefillNotification = location.state?.prefillNotification || null;
@@ -110,21 +105,6 @@ const NotificationsPage = () => {
     });
   }, []);
 
-  const loadResponses = useCallback(async (page = 1, append = false) => {
-    const data = await loadSection('responses', () => fetchNotificationResponses({ date: responsesDate, page, limit: 50 }), (loaded) => {
-      setResponses((current) => ({
-        ...loaded,
-        items: append ? [...current.items, ...(loaded.items || [])] : (loaded.items || [])
-      }));
-    });
-    const ids = (data?.items || []).filter((item) => !item.adminViewedAt).map((item) => item._id);
-    if (ids.length) {
-      await markNotificationResponsesViewed(ids).catch(() => {});
-      setResponseCount((current) => Math.max(0, current - ids.length));
-    }
-    return data;
-  }, [responsesDate]);
-
   useEffect(() => {
     loadNotifications();
     const intervalId = window.setInterval(() => {
@@ -148,23 +128,6 @@ const NotificationsPage = () => {
     loadSection('groups', fetchGroups, setGroups);
     loadSection('players', () => fetchPlayers({ compact: true }), setPlayers);
   }, []);
-
-  useEffect(() => {
-    let active = true;
-    const refreshCount = () => fetchNotificationResponseCount()
-      .then((data) => { if (active) setResponseCount(Number(data.count || 0)); })
-      .catch(() => {});
-    refreshCount();
-    const intervalId = window.setInterval(refreshCount, 15000);
-    return () => {
-      active = false;
-      window.clearInterval(intervalId);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (showResponses) loadResponses();
-  }, [showResponses, loadResponses]);
 
   useEffect(() => {
     let isMounted = true;
@@ -371,11 +334,11 @@ const NotificationsPage = () => {
       <main className="page-content">
         <div className="page-header notification-page-header">
           <h1>{t('notifications')}</h1>
-          <button type="button" className="notification-chat-button" onClick={() => setShowResponses(true)}>
+          <Link className="notification-chat-button" to="/chat" style={{ textDecoration: 'none' }}>
             <span aria-hidden="true">💬</span>
             <strong>Chat</strong>
             {responseCount > 0 && <b>{responseCount}</b>}
-          </button>
+          </Link>
           <button type="button" className="btn-secondary notification-history-button" onClick={() => setShowManualHistory(true)}>
             Player message history
           </button>
@@ -590,51 +553,6 @@ const NotificationsPage = () => {
                 {manualHistory.hasMore && (
                   <button type="button" className="btn-secondary" onClick={() => loadManualHistory(manualHistoryPlayerId, manualHistory.page + 1, true)}>Show more</button>
                 )}
-              </div>
-            )}
-          </section>
-        </div>
-      )}
-      {showResponses && (
-        <div className="modal-overlay notification-tool-overlay" onMouseDown={() => setShowResponses(false)}>
-          <section className="notification-tool-modal notification-chat-modal" role="dialog" aria-modal="true" aria-labelledby="notification-chat-title" onMouseDown={(event) => event.stopPropagation()}>
-            <header>
-              <div>
-                <h2 id="notification-chat-title">💬 Parent replies & reactions</h2>
-                <p>Responses are grouped by the day the parent responded.</p>
-              </div>
-              <button type="button" className="btn-secondary" onClick={() => setShowResponses(false)}>Close</button>
-            </header>
-            <label className="notification-chat-date">
-              <span>Response date</span>
-              <input type="date" value={responsesDate} onChange={(event) => setResponsesDate(event.target.value || todayInputValue())} />
-            </label>
-            <DataStatus state={loadStates.responses} retry={() => loadResponses()} />
-            {!loadStates.responses?.loading && (
-              <div className="notification-response-list">
-                <div className="notification-tool-summary"><strong>{responses.total} responses</strong><span>{responsesDate}</span></div>
-                {responses.items.length ? responses.items.map((item) => (
-                  <article className="notification-response-card" key={item._id}>
-                    <div className="notification-response-card-head">
-                      <div>
-                        <strong>{item.recipientUserId?.name || 'Parent'}</strong>
-                        {item.playerId?.fullName && <span>{item.playerId.fullName}</span>}
-                      </div>
-                      <time>{new Date(item.updatedAt).toLocaleString()}</time>
-                    </div>
-                    <div className="notification-parent-answer">
-                      {item.reaction && <b>{item.reaction}</b>}
-                      {item.reply && <p>{item.reply}</p>}
-                    </div>
-                    <div className="notification-original-preview">
-                      <span>Original message</span>
-                      <strong>{item.notificationId?.title || 'Message'}</strong>
-                      <p>{item.notificationId?.message}</p>
-                    </div>
-                    {item.notificationId?._id && <Link to={`/notifications/${item.notificationId._id}`}>Open original message</Link>}
-                  </article>
-                )) : <p className="empty-state">No replies or reactions on this day.</p>}
-                {responses.hasMore && <button type="button" className="btn-secondary" onClick={() => loadResponses(responses.page + 1, true)}>Show more</button>}
               </div>
             )}
           </section>

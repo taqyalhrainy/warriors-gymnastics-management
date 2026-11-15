@@ -108,4 +108,5 @@ test('native detection does not fall back to Web Push when the plugin is missing
   }
   assert.equal(module.safeNotificationUrl('/parent/notifications/0123456789abcdef01234567'), '/parent/notifications/0123456789abcdef01234567');
   assert.equal(module.safeNotificationUrl('/parent/payments'), '/parent/payments');
+  assert.equal(module.safeNotificationUrl('/parent/chat'), '/parent/chat');
 });

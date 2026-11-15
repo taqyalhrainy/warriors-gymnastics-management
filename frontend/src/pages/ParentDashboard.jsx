@@ -7,6 +7,7 @@ import { formatCurrency } from '../utils/format.js';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import warriorsLogo from '../assets/warriors-logo.png';
+import { useChatUnreadCount } from '../hooks/useChatUnreadCount.js';
 
 const getDateTime = (date) => {
   const value = new Date(date || 0).getTime();
@@ -75,6 +76,7 @@ const ParentDashboard = () => {
   const { t } = useLanguage();
   const [loadError, setLoadError] = useState('');
   const { user } = useAuth();
+  const chatUnreadCount = useChatUnreadCount();
 
   useEffect(() => {
     let isMounted = true;
@@ -128,6 +130,7 @@ const ParentDashboard = () => {
     { path: '/parent/children', label: t('yourChildren'), icon: 'children', badge: children.length },
     { path: '/parent/payments', label: t('payments'), icon: 'payments' },
     { path: '/parent/notifications', label: t('notifications'), icon: 'notifications', badge: notifications.filter((note) => !note.isRead).length },
+    { path: '/parent/chat', label: t('chat'), icon: 'chat', badge: chatUnreadCount },
     { path: '/parent/settings', label: 'Settings', icon: 'settings' },
     { path: '/parent/attendance', label: t('attendance'), icon: 'attendance' },
     { path: '/parent/subscriptions', label: t('subscriptionSummary'), icon: 'subscription' }

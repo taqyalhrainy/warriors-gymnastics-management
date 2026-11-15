@@ -232,6 +232,9 @@
   gap: 16px;
 }
 
+.parent-app-icon.is-chat::after { content: '✉'; font-size: 28px; }
+.notification-response-chat-link { display: inline-block; margin-top: 12px; color: var(--text); font-weight: 700; }
+
 .notification-chat-button {
   position: absolute;
   left: 50%;

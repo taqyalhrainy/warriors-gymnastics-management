@@ -39,6 +39,7 @@ async function mount(file, services) {
     '../components/ParentSidebar.jsx': { default: () => null },
     '../components/DataStatus.jsx': { default: ({ state }) => state?.loading ? 'Loading...' : state?.error ? 'LOAD ERROR' : null },
     '../hooks/useSectionLoader.js': hook,
+    '../hooks/useChatUnreadCount.js': { useChatUnreadCount: () => 0 },
     '../context/LanguageContext.jsx': { useLanguage: () => ({ t: (key) => key, language: 'en' }) },
     '../utils/format.js': { formatCurrency: (value) => `MONEY:${value}` },
     '../utils/playerNoteTimestamp.js': { formatPlayerNoteTimestamp: (value, language, fallback) => value || fallback },

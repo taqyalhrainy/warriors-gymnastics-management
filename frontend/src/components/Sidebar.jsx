@@ -6,6 +6,7 @@ import { fetchUnreadCount } from '../services/notifications.js';
 import { fetchPlayerAlertCandidates } from '../services/players.js';
 import warriorsLogo from '../assets/warriors-logo.png';
 import { BirthdayBadge } from './BirthdayAlerts.jsx';
+import { useChatUnreadCount } from '../hooks/useChatUnreadCount.js';
 
 const EXPIRED_ALERT_READ_KEY = 'warriors-expired-alert-read-ids';
 
@@ -41,6 +42,7 @@ const Sidebar = () => {
   const navigate = useNavigate();
   const [unreadCount, setUnreadCount] = useState(0);
   const [expiredAlertCount, setExpiredAlertCount] = useState(0);
+  const chatUnreadCount = useChatUnreadCount();
 
   useEffect(() => {
     if (user?.role !== 'parent') {
@@ -114,7 +116,8 @@ const Sidebar = () => {
       { path: '/parent', key: 'home', label: 'Home' },
       { path: '/parent/attendance', key: 'attendance' },
       { path: '/parent/payments', key: 'payments' },
-      { path: '/parent/notifications', key: 'notifications' }
+      { path: '/parent/notifications', key: 'notifications' },
+      { path: '/parent/chat', key: 'chat' }
     ]
     : adminLinks;
 
@@ -131,6 +134,7 @@ const Sidebar = () => {
             {user?.role === 'parent' && link.key === 'notifications' && unreadCount > 0 && (
               <span className="notification-badge">{unreadCount}</span>
             )}
+            {link.key === 'chat' && chatUnreadCount > 0 && <span className="notification-badge">{chatUnreadCount}</span>}
             {user?.role !== 'parent' && link.key === 'dashboard' && expiredAlertCount > 0 && (
               <span className="notification-badge dashboard-alert-badge" title="Expired alert">{expiredAlertCount}</span>
             )}

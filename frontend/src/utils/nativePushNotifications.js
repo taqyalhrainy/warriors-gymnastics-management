@@ -14,7 +14,7 @@ export const isNativeAndroidApp = () => Boolean(
 
 export const safeNotificationUrl = (value) => {
   const url = String(value || '');
-  return /^\/parent(?:\/(?:notifications(?:\/[a-f\d]{24})?|attendance|payments|settings|children|subscriptions))?(?:\?[^\\#]*)?$/.test(url)
+  return /^\/parent(?:\/(?:notifications(?:\/[a-f\d]{24})?|attendance|payments|settings|children|subscriptions|chat))?(?:\?[^\\#]*)?$/.test(url)
     && !/[\x00-\x20\\]/.test(url) ? url : '/parent/notifications';
 };
 
