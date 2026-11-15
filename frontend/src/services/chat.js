@@ -1,8 +1,8 @@
 import api from './api.js';
-import { fetchCached, getCachedValue, invalidateCache } from './cache.js';
+import { fetchCached, getCachedValue, invalidateCache, setCached } from './cache.js';
 
-export const notifyChatChanged = () => {
-  invalidateCache(['chat:']);
+export const notifyChatChanged = ({ preserveMessages = false } = {}) => {
+  invalidateCache(preserveMessages ? ['chat:conversations:', 'chat:unread-count'] : ['chat:']);
   window.dispatchEvent(new Event('chat:changed'));
 };
 
@@ -34,13 +34,34 @@ export const mergeChatConversations = (current, incoming) => {
   });
   return [...byId.values()].sort((a, b) => new Date(b.lastMessage.createdAt) - new Date(a.lastMessage.createdAt) || b._id.localeCompare(a._id));
 };
-export const fetchChatMessages = async (parentUserId, params = {}, signal) => {
-  const { data } = await api.get(`/chat/${parentUserId}/messages`, { params, signal, __skipRetry: true });
+const messageParams = (params = {}) => ({
+  ...(params.date ? { date: params.date } : {}),
+  ...(params.beforeAt && params.beforeId ? { beforeAt: params.beforeAt, beforeId: params.beforeId } : {})
+});
+const messageKey = (parentUserId, params = {}) => `chat:messages:${parentUserId}:${JSON.stringify(messageParams(params))}`;
+// Keep the last confirmed thread visible for this login session while refreshing.
+// clearCache() discards it on logout; no private messages go into persistent storage.
+export const getCachedChatMessages = (parentUserId, params = {}) => getCachedValue(messageKey(parentUserId, params), { ttlMs: Infinity });
+
+export const fetchChatMessages = (parentUserId, params = {}, options = {}) => fetchCached(messageKey(parentUserId, params), async () => {
+  // Startup and the open thread share this request; only an open thread marks it read.
+  const { data } = await api.get(`/chat/${parentUserId}/messages`, { params: messageParams(params), __skipRetry: true });
   return data;
+}, { ttlMs: 15000, force: Boolean(options.force) });
+
+export const prefetchParentChat = (user = {}) => {
+  const id = user.id || user._id;
+  return id ? fetchChatMessages(id) : Promise.resolve();
 };
 export const sendChatMessage = async (parentUserId, text, clientMessageId) => {
   const { data } = await api.post(`/chat/${parentUserId}/messages`, { text, clientMessageId });
+  const cached = getCachedChatMessages(parentUserId);
   notifyChatChanged();
+  if (cached) {
+    const items = [...new Map([...cached.items, data].map((item) => [item.key, item])).values()]
+      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt) || String(a._id).localeCompare(String(b._id)));
+    setCached(messageKey(parentUserId), { ...cached, items });
+  }
   return data;
 };
 export const markChatRead = async (parentUserId, items) => {
@@ -49,5 +70,5 @@ export const markChatRead = async (parentUserId, items) => {
     .map((item) => ({ _id: item._id, updatedAt: item.createdAt }));
   if (!messageIds.length && !responses.length) return;
   await api.post(`/chat/${parentUserId}/read`, { messageIds, responses });
-  notifyChatChanged();
+  notifyChatChanged({ preserveMessages: true });
 };

@@ -79,3 +79,72 @@ test('pagination merges retain refreshed conversations and add ten more without 
   assert.equal(withOldPage[0]._id, '15');
   assert.equal(withOldPage[0].lastMessage.createdAt, '2026-11-15T12:00:00Z');
 });
+
+test('parent startup shares the thread request and never marks unread messages read', async () => {
+  let resolve, reads = 0, writes = 0;
+  const chat = await setup({ get: () => { reads++; return new Promise((done) => { resolve = done; }); }, post: () => { writes++; } });
+  const warming = chat.prefetchParentChat({ id: 'parent' });
+  const opening = chat.fetchChatMessages('parent');
+  const page = { parent: { name: 'Parent' }, items: [{ key: 'message-1', readAt: null }], cursor: null };
+  resolve({ data: page });
+  assert.equal(await warming, page);
+  assert.equal(await opening, page);
+  assert.equal(chat.getCachedChatMessages('parent'), page);
+  assert.equal(chat.getCachedChatMessages('other-parent'), undefined);
+  assert.equal(reads, 1);
+  assert.equal(writes, 0);
+});
+
+test('marking a thread read preserves ready messages while invalidating inbox badges', async () => {
+  const writes = [];
+  const page = { parent: { name: 'Parent' }, items: [{ _id: 'one', key: 'message-one', kind: 'message' }] };
+  const chat = await setup({ get: async () => ({ data: page }), post: async (url) => { writes.push(url); } });
+  await chat.prefetchParentChat({ id: 'parent' });
+  await chat.fetchChatConversations();
+  await chat.markChatRead('parent', page.items);
+  assert.equal(chat.getCachedChatMessages('parent'), page);
+  assert.equal(chat.getCachedChatConversations(), undefined);
+  assert.deepEqual(writes, ['/chat/parent/read']);
+});
+
+test('sending preserves a ready thread and an older pending read cannot remove the saved message', async () => {
+  let finishRead;
+  const old = { _id: 'one', key: 'message-one', createdAt: '2026-11-15T10:00:00Z' };
+  const saved = { _id: 'two', key: 'message-two', createdAt: '2026-11-15T11:00:00Z', text: 'Hello' };
+  const page = { parent: { name: 'Parent' }, items: [old], cursor: null };
+  let reads = 0;
+  const chat = await setup({
+    get: () => ++reads === 1 ? Promise.resolve({ data: page }) : new Promise((done) => { finishRead = done; }),
+    post: async () => ({ data: saved })
+  });
+  await chat.prefetchParentChat({ id: 'parent' });
+  const stale = chat.fetchChatMessages('parent', {}, { force: true });
+  await chat.sendChatMessage('parent', 'Hello', 'unique-send');
+  finishRead({ data: page });
+  assert.equal((await stale).items.length, 2);
+  assert.equal(chat.getCachedChatMessages('parent').items[1].text, 'Hello');
+});
+
+test('thread day filters, pagination and background refresh use separate cache entries', async () => {
+  let reads = 0;
+  const chat = await setup({ get: async () => ({ data: { items: [], version: ++reads } }) });
+  const first = await chat.fetchChatMessages('parent');
+  await chat.fetchChatMessages('parent', { date: '2026-11-15' });
+  await chat.fetchChatMessages('parent', { beforeAt: '2026-11-15T10:00:00Z', beforeId: 'old' });
+  assert.equal(chat.getCachedChatMessages('parent'), first);
+  assert.equal(reads, 3);
+  const fresh = await chat.fetchChatMessages('parent', {}, { force: true });
+  assert.equal(fresh.version, 4);
+  assert.equal(chat.getCachedChatMessages('parent'), fresh);
+});
+
+test('logout discards an in-flight parent thread and clears previously cached messages', async () => {
+  let resolve;
+  const chat = await setup({ get: () => new Promise((done) => { resolve = done; }) });
+  const warming = chat.prefetchParentChat({ id: 'parent' });
+  const rejected = assert.rejects(warming, { name: 'AbortError' });
+  cache.clearCache();
+  resolve({ data: { items: [{ text: 'Private' }] } });
+  await rejected;
+  assert.equal(chat.getCachedChatMessages('parent'), undefined);
+});

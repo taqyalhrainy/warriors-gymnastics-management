@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLanguage } from '../context/LanguageContext.jsx';
-import { fetchChatConversations, getCachedChatConversations, mergeChatConversations, fetchChatMessages, markChatRead, sendChatMessage } from '../services/chat.js';
+import { fetchChatConversations, getCachedChatConversations, mergeChatConversations, fetchChatMessages, getCachedChatMessages, markChatRead, sendChatMessage } from '../services/chat.js';
 import warriorsLogo from '../assets/warriors-logo.png';
 import './chat.css';
 
@@ -17,12 +17,13 @@ const mergeMessages = (current, incoming) => [...new Map([...current, ...incomin
   .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt) || String(a._id).localeCompare(String(b._id)));
 
 function ChatThread({ parentId, name, parentMode, language, c, onBack, draftStore }) {
-  const [items, setItems] = useState([]);
-  const [cursor, setCursor] = useState(null);
+  const cachedThread = getCachedChatMessages(parentId);
+  const [items, setItems] = useState(() => cachedThread?.items || []);
+  const [cursor, setCursor] = useState(() => cachedThread?.cursor || null);
   const [date, setDate] = useState('');
   const [draft, setDraft] = useState(() => draftStore.current[parentId] || '');
-  const [loading, setLoading] = useState(true);
-  const [parentName, setParentName] = useState(name);
+  const [loading, setLoading] = useState(() => !cachedThread);
+  const [parentName, setParentName] = useState(() => cachedThread?.parent.name || name);
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
   const [olderLoading, setOlderLoading] = useState(false);
@@ -45,17 +46,18 @@ function ChatThread({ parentId, name, parentMode, language, c, onBack, draftStor
     const requestVersion = ++fetchVersionRef.current;
     let busy = false;
     let first = true;
+    const cached = getCachedChatMessages(parentId, date ? { date } : {});
     pinnedRef.current = true;
-    setItems([]);
-    setCursor(null);
-    setLoading(true);
+    setItems(cached?.items || []);
+    setCursor(cached?.cursor || null);
+    setLoading(!cached);
     setError('');
-    const refresh = async () => {
+    const refresh = async (force = false) => {
       if (busy || controller.signal.aborted || document.hidden) return;
       busy = true;
       const writeVersion = writeVersionRef.current;
       try {
-        const data = await fetchChatMessages(parentId, date ? { date } : {}, controller.signal);
+        const data = await fetchChatMessages(parentId, date ? { date } : {}, { force });
         if (controller.signal.aborted || writeVersion !== writeVersionRef.current) return;
         setParentName(data.parent.name);
         setItems((current) => {
@@ -77,16 +79,17 @@ function ChatThread({ parentId, name, parentMode, language, c, onBack, draftStor
         if (!controller.signal.aborted) setLoading(false);
       }
     };
-    refresh();
-    const timer = window.setInterval(refresh, 4000);
-    window.addEventListener('chat:refresh', refresh);
-    document.addEventListener('visibilitychange', refresh);
+    refresh(reload > 0);
+    const refreshLatest = () => refresh(true);
+    const timer = window.setInterval(refreshLatest, 4000);
+    window.addEventListener('chat:refresh', refreshLatest);
+    document.addEventListener('visibilitychange', refreshLatest);
     return () => {
       controller.abort();
       if (fetchVersionRef.current === requestVersion) fetchVersionRef.current += 1;
       window.clearInterval(timer);
-      window.removeEventListener('chat:refresh', refresh);
-      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('chat:refresh', refreshLatest);
+      document.removeEventListener('visibilitychange', refreshLatest);
     };
   }, [parentId, date, reload, parentMode, c.error]);
 

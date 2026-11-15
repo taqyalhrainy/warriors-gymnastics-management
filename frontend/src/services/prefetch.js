@@ -17,7 +17,7 @@ import {
   fetchParentPayments
 } from './parents.js';
 import { birthdayDay } from '../utils/birthdayAlerts.js';
-import { fetchChatConversations } from './chat.js';
+import { fetchChatConversations, prefetchParentChat } from './chat.js';
 
 const warmed = new Set();
 
@@ -95,6 +95,8 @@ export const warmParentAppCache = async (user = {}) => {
   warmed.add(key);
 
   await runQuietly([
+    () => prefetchParentChat(user),
+    () => import('../pages/ParentChat.jsx'),
     () => fetchParentDashboard(),
     () => fetchParentChildren(),
     () => fetchParentAttendance(),
