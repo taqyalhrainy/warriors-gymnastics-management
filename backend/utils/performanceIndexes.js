@@ -18,7 +18,8 @@ const performanceIndexes = {
   notificationresponses: [
     { key: { notificationId: 1 }, options: { unique: true } },
     { updatedAt: -1, _id: -1 },
-    { adminViewedAt: 1, updatedAt: -1 }
+    { adminViewedAt: 1, updatedAt: -1 },
+    { recipientUserId: 1, updatedAt: -1, _id: -1 }
   ],
   chatmessages: [
     { parentUserId: 1, createdAt: -1, _id: -1 },

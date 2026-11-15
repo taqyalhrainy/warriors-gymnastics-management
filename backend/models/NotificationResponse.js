@@ -13,5 +13,6 @@ const notificationResponseSchema = new mongoose.Schema({
 
 notificationResponseSchema.index({ updatedAt: -1, _id: -1 });
 notificationResponseSchema.index({ adminViewedAt: 1, updatedAt: -1 });
+notificationResponseSchema.index({ recipientUserId: 1, updatedAt: -1, _id: -1 });
 
 module.exports = mongoose.model('NotificationResponse', notificationResponseSchema);

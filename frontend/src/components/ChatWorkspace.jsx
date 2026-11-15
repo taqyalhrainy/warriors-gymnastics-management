@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLanguage } from '../context/LanguageContext.jsx';
-import { fetchChatConversations, fetchChatMessages, markChatRead, sendChatMessage } from '../services/chat.js';
+import { fetchChatConversations, getCachedChatConversations, mergeChatConversations, fetchChatMessages, markChatRead, sendChatMessage } from '../services/chat.js';
 import warriorsLogo from '../assets/warriors-logo.png';
 import './chat.css';
 
@@ -199,44 +199,94 @@ export default function ChatWorkspace({ contacts = [], contactsLoading = false, 
   const userId = user?.id || user?._id;
   const [params, setParams] = useSearchParams();
   const selectedId = parentMode ? userId : params.get('parent') || '';
-  const [conversations, setConversations] = useState([]);
+  const cachedInbox = parentMode ? null : getCachedChatConversations();
+  const [conversations, setConversations] = useState(() => cachedInbox?.items || []);
+  const [cursor, setCursor] = useState(() => cachedInbox?.cursor || null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [search, setSearch] = useState('');
+  const [inboxSearch, setInboxSearch] = useState('');
   const [newChat, setNewChat] = useState(false);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !cachedInbox);
   const [refresh, setRefresh] = useState(0);
   const draftStore = useRef({});
+  const inboxRequestRef = useRef(0);
+  const expandedRef = useRef(false);
+  const loadingMoreRef = useRef(false);
   const select = useCallback((id) => { setParams(id ? { parent: id } : {}); setNewChat(false); }, [setParams]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setInboxSearch(search.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     if (parentMode) return undefined;
     const controller = new AbortController();
+    const version = ++inboxRequestRef.current;
+    const cached = getCachedChatConversations({ search: inboxSearch });
+    expandedRef.current = false;
+    loadingMoreRef.current = false;
+    setLoadingMore(false);
+    setConversations(cached?.items || []);
+    setCursor(cached?.cursor || null);
+    setLoading(!cached);
     let busy = false;
-    const load = async () => {
+    const load = async (force = false) => {
       if (busy || document.hidden || controller.signal.aborted) return;
       busy = true;
       try {
-        const data = await fetchChatConversations(controller.signal);
-        if (!controller.signal.aborted) { setConversations(data.items); setError(''); }
+        const data = await fetchChatConversations({ search: inboxSearch }, { force });
+        if (!controller.signal.aborted) {
+          setConversations((current) => expandedRef.current ? mergeChatConversations(current, data.items) : data.items);
+          if (!expandedRef.current) setCursor(data.cursor);
+          setError('');
+        }
       } catch (failure) {
         if (!controller.signal.aborted) setError(failure.response?.data?.message || c.error);
       } finally { busy = false; if (!controller.signal.aborted) setLoading(false); }
     };
-    load();
-    const timer = window.setInterval(load, 5000);
-    window.addEventListener('chat:changed', load);
-    document.addEventListener('visibilitychange', load);
+    load(refresh > 0);
+    const reloadInbox = () => load(true);
+    const timer = window.setInterval(reloadInbox, 15000);
+    window.addEventListener('chat:changed', reloadInbox);
+    document.addEventListener('visibilitychange', reloadInbox);
     return () => {
       controller.abort();
+      if (inboxRequestRef.current === version) inboxRequestRef.current += 1;
       window.clearInterval(timer);
-      window.removeEventListener('chat:changed', load);
-      document.removeEventListener('visibilitychange', load);
+      window.removeEventListener('chat:changed', reloadInbox);
+      document.removeEventListener('visibilitychange', reloadInbox);
     };
-  }, [parentMode, userId, refresh, c.error]);
+  }, [parentMode, userId, inboxSearch, refresh, c.error]);
+
+  const loadMoreConversations = async () => {
+    if (!cursor || loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    const version = inboxRequestRef.current;
+    try {
+      const data = await fetchChatConversations({ search: inboxSearch, ...cursor });
+      if (version !== inboxRequestRef.current) return;
+      expandedRef.current = true;
+      setConversations((current) => mergeChatConversations(current, data.items));
+      setCursor(data.cursor);
+      setError('');
+    } catch (failure) {
+      if (version === inboxRequestRef.current) setError(failure.response?.data?.message || c.error);
+    } finally {
+      if (version === inboxRequestRef.current) {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      }
+    }
+  };
 
   const contactById = new Map(contacts.filter((parent) => parent.userId?._id).map((parent) => [parent.userId._id, { _id: parent.userId._id, name: parent.name }]));
   const selected = conversations.find((item) => item._id === selectedId) || contactById.get(selectedId);
-  const visible = (newChat ? [...contactById.values()] : conversations).filter((item) => item.name?.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+  const visible = newChat
+    ? [...contactById.values()].filter((item) => item.name?.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
+    : conversations;
   return <div className={`warriors-chat${parentMode ? ' is-parent' : ''}${selectedId ? ' has-thread' : ''}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
     {!parentMode && <aside className="warriors-chat-inbox">
       <header><div><span className="chat-eyebrow">WARRIORS</span><h2>{c.messages}</h2></div><button type="button" className="chat-new-button" aria-label={c.newChat} title={c.newChat} onClick={() => { setNewChat((value) => !value); onRequestContacts?.(); }}>＋</button></header>
@@ -251,6 +301,7 @@ export default function ChatWorkspace({ contacts = [], contactsLoading = false, 
           <span className="chat-conversation-end">{item.lastMessage && <time>{formatTime(item.lastMessage.createdAt, language)}</time>}{item.unreadCount > 0 && <b>{item.unreadCount}</b>}</span>
         </button>)}
         {!loading && !visible.length && <p className="chat-empty-line">{c.noResults}</p>}
+        {!newChat && cursor && <button type="button" className="chat-load-older" disabled={loadingMore} onClick={loadMoreConversations}>{loadingMore ? c.loading : (language === 'ar' ? 'عرض المزيد' : 'View more')}</button>}
       </div>
       <footer><img src={warriorsLogo} alt="" /><span>Warriors Gymnastics</span></footer>
     </aside>}

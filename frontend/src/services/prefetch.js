@@ -17,6 +17,7 @@ import {
   fetchParentPayments
 } from './parents.js';
 import { birthdayDay } from '../utils/birthdayAlerts.js';
+import { fetchChatConversations } from './chat.js';
 
 const warmed = new Set();
 
@@ -61,6 +62,8 @@ export const warmAdminAppCache = async (user = {}) => {
   warmed.add(key);
 
   await runQuietly([
+    () => fetchChatConversations(),
+    () => import('../pages/ClubChat.jsx'),
     () => fetchGroups(),
     () => fetchPlayersPage({ page: 1, limit: 20, compact: true, status: 'all', groupId: 'all', subscription: 'all', search: '' }),
     () => fetchParentsPage({ page: 1, limit: 20, compact: true, search: '' }),

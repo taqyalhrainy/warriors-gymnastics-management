@@ -1,14 +1,38 @@
 import api from './api.js';
+import { fetchCached, getCachedValue, invalidateCache } from './cache.js';
 
-export const notifyChatChanged = () => window.dispatchEvent(new Event('chat:changed'));
-
-export const fetchChatConversations = async (signal) => {
-  const { data } = await api.get('/chat/conversations', { signal, __skipRetry: true });
-  return data;
+export const notifyChatChanged = () => {
+  invalidateCache(['chat:']);
+  window.dispatchEvent(new Event('chat:changed'));
 };
-export const fetchChatUnreadCount = async (signal) => {
-  const { data } = await api.get('/chat/unread-count', { signal, __skipRetry: true });
+
+const conversationParams = (params = {}) => ({
+  search: String(params.search || '').trim(),
+  ...(params.beforeAt && params.beforeId ? { beforeAt: params.beforeAt, beforeId: params.beforeId } : {})
+});
+const conversationKey = (params) => `chat:conversations:${JSON.stringify(conversationParams(params))}`;
+
+export const getCachedChatConversations = (params = {}) => getCachedValue(conversationKey(params));
+
+export const fetchChatConversations = (params = {}, options = {}) => fetchCached(conversationKey(params), async () => {
+  // This request is shared by startup prefetch and the chat screen. Cancelling
+  // a screen must not cancel the data another consumer is waiting for.
+  const { data } = await api.get('/chat/conversations', { params: conversationParams(params), __skipRetry: true });
   return data;
+}, { ttlMs: 30000, force: Boolean(options.force) });
+
+export const fetchChatUnreadCount = () => fetchCached('chat:unread-count', async () => {
+  const { data } = await api.get('/chat/unread-count', { __skipRetry: true });
+  return data;
+}, { ttlMs: 10000 });
+
+export const mergeChatConversations = (current, incoming) => {
+  const byId = new Map(current.map((item) => [item._id, item]));
+  incoming.forEach((item) => {
+    const previous = byId.get(item._id);
+    if (!previous || new Date(item.lastMessage.createdAt) >= new Date(previous.lastMessage.createdAt)) byId.set(item._id, item);
+  });
+  return [...byId.values()].sort((a, b) => new Date(b.lastMessage.createdAt) - new Date(a.lastMessage.createdAt) || b._id.localeCompare(a._id));
 };
 export const fetchChatMessages = async (parentUserId, params = {}, signal) => {
   const { data } = await api.get(`/chat/${parentUserId}/messages`, { params, signal, __skipRetry: true });

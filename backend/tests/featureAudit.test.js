@@ -224,6 +224,42 @@ test('parent and club chat is private, idempotent and does not add club replies 
   await call(`/chat/${admin._id}/messages`, { status: 404 });
 });
 
+test('chat inbox pages contain ten unique accounts, search all pages and retain cross-source unread counts', async () => {
+  const parents = await User.create(Array.from({ length: 25 }, (_, index) => ({
+    name: `Conversation ${String(index).padStart(2, '0')}`, email: `chat-${index}@audit.example`, role: 'parent', passwordHash: 'test'
+  })));
+  const date = new Date('2026-11-15T10:00:00Z');
+  await ChatMessage.insertMany(parents.map((person) => ({
+    parentUserId: person._id, senderUserId: person._id, fromClub: false,
+    text: 'Parent message', clientMessageId: crypto.randomUUID(), createdAt: date
+  })));
+  const note = await Notification.create({ recipientUserId: parents[24]._id, title: 'Reminder', message: 'Hello', type: 'announcement' });
+  await NotificationResponse.create({ notificationId: note._id, recipientUserId: parents[24]._id, reaction: '👍', updatedAt: new Date('2026-11-15T11:00:00Z') });
+  const first = await call('/chat/conversations');
+  assert.equal(first.items.length, 10);
+  assert.equal(first.items[0].name, 'Conversation 24');
+  assert.equal(first.items[0].lastMessage.reaction, '👍');
+  assert.equal(first.items[0].unreadCount, 2);
+  assert.equal(first.hasMore, true);
+  const nextUrl = (cursor) => `/chat/conversations?beforeAt=${encodeURIComponent(cursor.beforeAt)}&beforeId=${cursor.beforeId}`;
+  const second = await call(nextUrl(first.cursor));
+  const third = await call(nextUrl(second.cursor));
+  assert.equal(second.items.length, 10);
+  assert.equal(third.items.length, 5);
+  assert.equal(third.hasMore, false);
+  assert.equal(third.cursor, null);
+  assert.equal(new Set([...first.items, ...second.items, ...third.items].map((item) => item._id)).size, 25);
+  const searched = await call('/chat/conversations?search=Conversation%2000');
+  assert.equal(searched.items.length, 1);
+  assert.equal(searched.items[0].name, 'Conversation 00');
+  assert.equal((await call('/chat/conversations?search=%2E%2A')).items.length, 0, 'search treats regular expression syntax as literal text');
+  await call('/chat/conversations?beforeAt=invalid&beforeId=wrong', { status: 400 });
+  const own = await call('/chat/conversations', { auth: token(parents[24]) });
+  assert.equal(own.items.length, 1);
+  assert.equal(own.items[0]._id, String(parents[24]._id));
+  assert.equal(own.items[0].unreadCount, 0);
+});
+
 test('chat date filtering and cursor pagination preserve message order across pages', async () => {
   const date = '2026-11-15T12:00:00.000Z';
   await ChatMessage.insertMany(Array.from({ length: 45 }, (_, index) => ({ parentUserId: parentUser._id, senderUserId: parentUser._id, fromClub: false, text: `Message ${index}`, clientMessageId: crypto.randomUUID(), createdAt: date })));

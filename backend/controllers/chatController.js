@@ -51,23 +51,67 @@ const resolveParent = async (req, res) => {
 
 const getChatConversations = async (req, res, next) => {
   try {
-    const items = await ChatMessage.aggregate([
-      ...transcriptPipeline(isClub(req) ? null : req.user._id),
-      { $sort: { createdAt: -1, _id: -1 } },
+    const parentFilter = isClub(req) ? {} : { parentUserId: req.user._id };
+    const responseFilter = isClub(req) ? {} : { recipientUserId: req.user._id };
+    const unreadCount = { $sum: { $cond: [{ $and: [
+      { $eq: ['$fromClub', !isClub(req)] },
+      { $eq: [{ $ifNull: ['$readAt', null] }, null] }
+    ] }, 1, 0] } };
+    // Reduce each source to one row per account before merging the inbox.
+    // The message sort uses the parent/date index instead of sorting every
+    // message and reply together on each inbox refresh.
+    const pipeline = [
+      { $match: parentFilter },
+      { $sort: { parentUserId: 1, createdAt: -1, _id: -1 } },
       { $group: {
         _id: '$parentUserId', lastMessage: { $first: '$$ROOT' },
-        unreadCount: { $sum: { $cond: [{ $and: [
-          { $eq: ['$fromClub', !isClub(req)] },
-          { $eq: [{ $ifNull: ['$readAt', null] }, null] }
-        ] }, 1, 0] } }
+        unreadCount
       } },
+      { $set: { 'lastMessage.kind': 'message' } },
+      { $unionWith: {
+        coll: NotificationResponse.collection.name,
+        pipeline: [
+          { $match: { ...responseFilter, ...hasResponse } },
+          { $project: {
+            parentUserId: '$recipientUserId', fromClub: { $literal: false }, text: '$reply', reaction: 1,
+            createdAt: { $ifNull: ['$updatedAt', '$createdAt'] },
+            readAt: { $ifNull: ['$adminViewedAt', null] }, kind: { $literal: 'notification-response' }
+          } },
+          { $sort: { parentUserId: 1, createdAt: -1, _id: -1 } },
+          { $group: { _id: '$parentUserId', lastMessage: { $first: '$$ROOT' }, unreadCount } }
+        ]
+      } },
+      { $sort: { 'lastMessage.createdAt': -1, 'lastMessage._id': -1 } },
+      { $group: { _id: '$_id', lastMessage: { $first: '$lastMessage' }, unreadCount: { $sum: '$unreadCount' } } },
       { $lookup: { from: User.collection.name, localField: '_id', foreignField: '_id', as: 'parent' } },
       { $unwind: '$parent' },
-      { $match: { 'parent.role': 'parent', 'parent.isActive': true } },
-      { $project: { _id: 1, lastMessage: 1, unreadCount: 1, name: '$parent.name' } },
-      { $sort: { 'lastMessage.createdAt': -1, _id: -1 } }
-    ]);
-    res.json({ items });
+      { $match: { 'parent.role': 'parent', 'parent.isActive': true } }
+    ];
+    const search = typeof req.query.search === 'string' ? req.query.search.trim().slice(0, 100) : '';
+    if (search) pipeline.push({ $match: { 'parent.name': { $regex: search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' } } });
+    if (req.query.beforeAt || req.query.beforeId) {
+      const beforeAt = new Date(req.query.beforeAt);
+      if (!validateObjectId(req.query.beforeId) || Number.isNaN(beforeAt.getTime())) {
+        return res.status(400).json({ message: 'Invalid conversation cursor.' });
+      }
+      pipeline.push({ $match: { $or: [
+        { 'lastMessage.createdAt': { $lt: beforeAt } },
+        { 'lastMessage.createdAt': beforeAt, _id: { $lt: objectId(req.query.beforeId) } }
+      ] } });
+    }
+    pipeline.push(
+      { $sort: { 'lastMessage.createdAt': -1, _id: -1 } },
+      { $limit: 11 },
+      { $project: { _id: 1, unreadCount: 1, name: '$parent.name', lastMessage: {
+        _id: '$lastMessage._id', createdAt: '$lastMessage.createdAt', text: '$lastMessage.text',
+        reaction: '$lastMessage.reaction', fromClub: '$lastMessage.fromClub', kind: '$lastMessage.kind'
+      } } }
+    );
+    const rows = await ChatMessage.aggregate(pipeline);
+    const items = rows.slice(0, 10);
+    const oldest = items.at(-1);
+    res.json({ items, hasMore: rows.length > 10, cursor: rows.length > 10 && oldest
+      ? { beforeAt: oldest.lastMessage.createdAt, beforeId: oldest._id } : null });
   } catch (error) { next(error); }
 };
 
