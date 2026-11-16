@@ -19,6 +19,7 @@ const ParentNotificationResponse = ({ notification, onSaved }) => {
     setReaction(notification.response?.reaction || '');
   }, [notification._id, notification.response]);
 
+  if (notification.response?.deletedAt) return <section className="parent-notification-response"><p>{arabic ? 'تم حذف هذه الرسالة' : 'This message was deleted.'}</p><Link to="/parent/chat">{arabic ? 'متابعة المحادثة في الشات' : 'Continue in Chat'}</Link></section>;
   if (!notification.canRespond) return null;
 
   const save = async (nextReply, nextReaction) => {

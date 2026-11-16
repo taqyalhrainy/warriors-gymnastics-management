@@ -11,6 +11,7 @@ const { normalizeChatAttachment, publicChatMessage } = require('../utils/chatAtt
 const hasResponse = { $or: [{ reply: { $ne: '' } }, { reaction: { $ne: '' } }] };
 const isClub = (req) => req.user.role !== 'parent';
 const objectId = (id) => new mongoose.Types.ObjectId(String(id));
+const DELETED_TEXT = 'This message was deleted.';
 
 // Read existing notification responses directly so old replies remain available
 // without copying or rewriting any existing messages.
@@ -20,14 +21,14 @@ const transcriptPipeline = (parentUserId) => {
   return [
     { $match: filter },
     { $unset: ['attachment.data', 'attachment.checksum'] },
-    { $project: { parentUserId: 1, senderUserId: 1, fromClub: 1, text: 1, attachment: 1, readAt: 1, createdAt: 1, kind: { $literal: 'message' } } },
+    { $project: { parentUserId: 1, senderUserId: 1, fromClub: 1, text: 1, attachment: 1, readAt: 1, deletedAt: 1, createdAt: 1, kind: { $literal: 'message' } } },
     { $unionWith: {
       coll: NotificationResponse.collection.name,
       pipeline: [
         { $match: { ...responseFilter, ...hasResponse } },
         { $project: {
           parentUserId: '$recipientUserId', senderUserId: '$recipientUserId', fromClub: { $literal: false },
-          text: '$reply', reaction: 1, notificationId: 1, playerId: 1,
+          text: '$reply', reaction: 1, notificationId: 1, playerId: 1, deletedAt: 1,
           readAt: { $ifNull: ['$adminViewedAt', null] },
           createdAt: { $ifNull: ['$updatedAt', '$createdAt'] }, kind: { $literal: 'notification-response' }
         } }
@@ -57,6 +58,7 @@ const getChatConversations = async (req, res, next) => {
     const responseFilter = isClub(req) ? {} : { recipientUserId: req.user._id };
     const unreadCount = { $sum: { $cond: [{ $and: [
       { $eq: ['$fromClub', !isClub(req)] },
+      { $eq: [{ $ifNull: ['$deletedAt', null] }, null] },
       { $eq: [{ $ifNull: ['$readAt', null] }, null] }
     ] }, 1, 0] } };
     // Reduce each source to one row per account before merging the inbox.
@@ -76,7 +78,7 @@ const getChatConversations = async (req, res, next) => {
         pipeline: [
           { $match: { ...responseFilter, ...hasResponse } },
           { $project: {
-            parentUserId: '$recipientUserId', fromClub: { $literal: false }, text: '$reply', reaction: 1,
+            parentUserId: '$recipientUserId', fromClub: { $literal: false }, text: '$reply', reaction: 1, deletedAt: 1,
             createdAt: { $ifNull: ['$updatedAt', '$createdAt'] },
             readAt: { $ifNull: ['$adminViewedAt', null] }, kind: { $literal: 'notification-response' }
           } },
@@ -107,7 +109,7 @@ const getChatConversations = async (req, res, next) => {
       { $limit: 11 },
       { $project: { _id: 1, unreadCount: 1, name: '$parent.name', lastMessage: {
         _id: '$lastMessage._id', createdAt: '$lastMessage.createdAt', text: '$lastMessage.text',
-        reaction: '$lastMessage.reaction', attachment: '$lastMessage.attachment', fromClub: '$lastMessage.fromClub', kind: '$lastMessage.kind'
+        reaction: '$lastMessage.reaction', attachment: '$lastMessage.attachment', deletedAt: '$lastMessage.deletedAt', fromClub: '$lastMessage.fromClub', kind: '$lastMessage.kind'
       } } }
     );
     const rows = await ChatMessage.aggregate(pipeline);
@@ -122,8 +124,8 @@ const getChatUnreadCount = async (req, res, next) => {
   try {
     const parentFilter = isClub(req) ? {} : { parentUserId: req.user._id };
     const [messages, responses] = await Promise.all([
-      ChatMessage.countDocuments({ ...parentFilter, fromClub: !isClub(req), readAt: null }),
-      isClub(req) ? NotificationResponse.countDocuments({ ...hasResponse, adminViewedAt: null }) : 0
+      ChatMessage.countDocuments({ ...parentFilter, fromClub: !isClub(req), readAt: null, deletedAt: null }),
+      isClub(req) ? NotificationResponse.countDocuments({ ...hasResponse, adminViewedAt: null, deletedAt: null }) : 0
     ]);
     res.json({ count: messages + responses });
   } catch (error) { next(error); }
@@ -134,6 +136,8 @@ const getChatMessages = async (req, res, next) => {
     const parent = await resolveParent(req, res);
     if (!parent) return;
     const pipeline = transcriptPipeline(parent._id);
+    const loadedSince = req.query.loadedSince ? new Date(req.query.loadedSince) : null;
+    if (loadedSince && Number.isNaN(loadedSince.getTime())) return res.status(400).json({ message: 'Invalid loaded message date.' });
     const limit = 40;
     if (req.query.date) {
       if (!getAppDateTimeUtc(String(req.query.date), '00:00')) return res.status(400).json({ message: 'Invalid chat date.' });
@@ -158,8 +162,15 @@ const getChatMessages = async (req, res, next) => {
       .select('_id title message attachmentId').lean();
     const originals = new Map(notifications.map((item) => [String(item._id), item]));
     const oldest = items.at(-1);
+    // Synchronize deleted older messages that the viewer has already paged into,
+    // without downloading those pages or their media again.
+    const [deletedMessages, deletedResponses] = loadedSince ? await Promise.all([
+      ChatMessage.find({ parentUserId: parent._id, deletedAt: { $ne: null }, createdAt: { $gte: loadedSince } }).select('_id deletedAt').lean(),
+      NotificationResponse.find({ recipientUserId: parent._id, deletedAt: { $ne: null }, updatedAt: { $gte: loadedSince } }).select('_id deletedAt').lean()
+    ]) : [[], []];
     res.json({
       parent,
+      deleted: [...deletedMessages.map((item) => ({ ...item, key: `message-${item._id}` })), ...deletedResponses.map((item) => ({ ...item, key: `notification-response-${item._id}` }))],
       items: items.reverse().map((item) => ({
         ...item, key: `${item.kind}-${item._id}`, originalNotification: originals.get(String(item.notificationId)) || null
       })),
@@ -188,7 +199,7 @@ const sendChatMessage = async (req, res, next) => {
     } catch (error) {
       if (error.code !== 11000) throw error;
       message = await ChatMessage.findOne(key).select('+attachment.checksum');
-      if (!message || message.text !== text || message.attachment?.checksum !== attachment?.checksum || message.attachment?.mimeType !== attachment?.mimeType) return res.status(409).json({ message: 'Message ID already used. Refresh before sending again.' });
+      if (!message || (!message.deletedAt && (message.text !== text || message.attachment?.checksum !== attachment?.checksum || message.attachment?.mimeType !== attachment?.mimeType))) return res.status(409).json({ message: 'Message ID already used. Refresh before sending again.' });
     }
     res.status(201).json(publicChatMessage(message));
     if (created && isClub(req)) {
@@ -208,9 +219,37 @@ const getChatAttachment = async (req, res, next) => {
     if (!parent) return;
     if (!validateObjectId(req.params.messageId)) return res.status(400).json({ message: 'Invalid message.' });
     const message = await ChatMessage.findOne({ _id: req.params.messageId, parentUserId: parent._id }).select('+attachment.data');
-    if (!message?.attachment?.data) return res.status(404).json({ message: 'Attachment not found.' });
+    if (message?.deletedAt || !message?.attachment?.data) return res.status(404).json({ message: 'Attachment not found.' });
     res.set({ 'Content-Type': message.attachment.mimeType, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
     res.send(message.attachment.data);
+  } catch (error) { next(error); }
+};
+
+const deleteChatMessage = async (req, res, next) => {
+  try {
+    const parent = await resolveParent(req, res);
+    if (!parent) return;
+    const kind = req.query.kind || 'message';
+    if (!validateObjectId(req.params.messageId) || !['message', 'notification-response'].includes(kind)) return res.status(400).json({ message: 'Invalid message.' });
+    const response = kind === 'notification-response';
+    const Model = response ? NotificationResponse : ChatMessage;
+    const filter = { _id: req.params.messageId, [response ? 'recipientUserId' : 'parentUserId']: parent._id };
+    const existing = await Model.findOne(filter);
+    if (!existing) return res.status(404).json({ message: 'Message not found.' });
+    const sender = response ? existing.recipientUserId : existing.senderUserId;
+    if (String(sender) !== String(req.user._id)) return res.status(403).json({ message: 'You can delete only messages you sent.' });
+    const deletedAt = new Date();
+    const update = response
+      ? { $set: { reply: DELETED_TEXT, reaction: '', deletedAt, adminViewedAt: deletedAt } }
+      : { $set: { text: DELETED_TEXT, deletedAt }, $unset: { attachment: '' } };
+    const message = await Model.findOneAndUpdate({ ...filter, deletedAt: null }, update, { new: true }) || await Model.findOne(filter);
+    if (!message) return res.status(404).json({ message: 'Message not found.' });
+    res.json(response ? {
+      _id: message._id, key: `notification-response-${message._id}`, kind,
+      senderUserId: message.recipientUserId, fromClub: false, text: DELETED_TEXT,
+      createdAt: message.updatedAt || message.createdAt, deletedAt: message.deletedAt,
+      notificationId: message.notificationId, readAt: message.adminViewedAt
+    } : publicChatMessage(message));
   } catch (error) { next(error); }
 };
 
@@ -220,7 +259,7 @@ const markChatRead = async (req, res, next) => {
     if (!parent) return;
     const ids = (Array.isArray(req.body?.messageIds) ? req.body.messageIds : []).filter(validateObjectId).slice(0, 100);
     const readAt = new Date();
-    await ChatMessage.updateMany({ parentUserId: parent._id, _id: { $in: ids }, fromClub: !isClub(req), readAt: null }, { $set: { readAt } });
+    await ChatMessage.updateMany({ parentUserId: parent._id, _id: { $in: ids }, fromClub: !isClub(req), readAt: null, deletedAt: null }, { $set: { readAt } });
     if (isClub(req)) {
       const responses = (Array.isArray(req.body?.responses) ? req.body.responses : []).slice(0, 100)
         .filter((item) => validateObjectId(item?._id) && item.updatedAt && !Number.isNaN(new Date(item.updatedAt).getTime()));
@@ -233,4 +272,4 @@ const markChatRead = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-module.exports = { getChatConversations, getChatUnreadCount, getChatMessages, sendChatMessage, markChatRead, getChatAttachment };
+module.exports = { getChatConversations, getChatUnreadCount, getChatMessages, sendChatMessage, markChatRead, getChatAttachment, deleteChatMessage };

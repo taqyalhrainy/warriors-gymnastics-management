@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLanguage } from '../context/LanguageContext.jsx';
-import { fetchChatConversations, getCachedChatConversations, mergeChatConversations, fetchChatMessages, getCachedChatMessages, markChatRead, sendChatMessage } from '../services/chat.js';
+import { fetchChatConversations, getCachedChatConversations, mergeChatConversations, fetchChatMessages, getCachedChatMessages, markChatRead, sendChatMessage, deleteChatMessage, mergeChatMessages, applyChatDeletions } from '../services/chat.js';
 import warriorsLogo from '../assets/warriors-logo.png';
 import ChatComposer from './ChatComposer.jsx';
 import ChatMedia from './ChatMedia.jsx';
@@ -15,10 +15,13 @@ const copy = {
 const formatTime = (value, language) => new Date(value).toLocaleTimeString(language === 'ar' ? 'ar-JO' : 'en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Amman' });
 const dayKey = (value) => new Date(value).toLocaleDateString('en-CA', { timeZone: 'Asia/Amman' });
 const formatDay = (value, language) => new Date(value).toLocaleDateString(language === 'ar' ? 'ar-JO' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Amman' });
-const mergeMessages = (current, incoming) => [...new Map([...current, ...incoming].map((item) => [item.key, item])).values()]
-  .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt) || String(a._id).localeCompare(String(b._id)));
+const mergeMessages = mergeChatMessages;
+const deletionCopy = {
+  en: { deleted: 'This message was deleted.', remove: 'Delete', cancel: 'Cancel', confirm: 'Delete this message for everyone?', failed: 'Unable to delete this message. Try again.' },
+  ar: { deleted: 'تم حذف هذه الرسالة', remove: 'حذف', cancel: 'إلغاء', confirm: 'حذف هذه الرسالة لدى الجميع؟', failed: 'تعذّر حذف الرسالة. حاول مجددًا.' }
+};
 
-function ChatThread({ parentId, name, parentMode, language, c, onBack, draftStore }) {
+function ChatThread({ parentId, actorId, name, parentMode, language, c, onBack, draftStore }) {
   const cachedThread = getCachedChatMessages(parentId);
   const [items, setItems] = useState(() => cachedThread?.items || []);
   const [cursor, setCursor] = useState(() => cachedThread?.cursor || null);
@@ -30,6 +33,12 @@ function ChatThread({ parentId, name, parentMode, language, c, onBack, draftStor
   const [sending, setSending] = useState(false);
   const [olderLoading, setOlderLoading] = useState(false);
   const [reload, setReload] = useState(0);
+  const [confirmDelete, setConfirmDelete] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const deletingRef = useRef(false);
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const d = deletionCopy[language] || deletionCopy.en;
   const scrollRef = useRef(null);
   const pinnedRef = useRef(true);
   const mountedRef = useRef(true);
@@ -60,13 +69,13 @@ function ChatThread({ parentId, name, parentMode, language, c, onBack, draftStor
       busy = true;
       const writeVersion = writeVersionRef.current;
       try {
-        const data = await fetchChatMessages(parentId, date ? { date } : {}, { force });
+        const data = await fetchChatMessages(parentId, date ? { date } : {}, { force, ...(force && itemsRef.current.length ? { loadedSince: itemsRef.current[0].createdAt } : {}) });
         if (controller.signal.aborted || writeVersion !== writeVersionRef.current) return;
         setParentName(data.parent.name);
         setItems((current) => {
           const cutoff = data.hasMore ? new Date(data.items[0]?.createdAt).getTime() : -Infinity;
           const older = current.filter((item) => new Date(item.createdAt).getTime() < cutoff);
-          return mergeMessages(older, data.items);
+          return applyChatDeletions(mergeMessages(older, data.items), data.deleted);
         });
         if (first) setCursor(data.cursor);
         setError('');
@@ -117,6 +126,21 @@ function ChatThread({ parentId, name, parentMode, language, c, onBack, draftStor
     } catch (failure) {
       if (mountedRef.current && version === fetchVersionRef.current) setError(failure.response?.data?.message || c.error);
     } finally { if (mountedRef.current) setOlderLoading(false); }
+  };
+
+  const remove = async (item) => {
+    if (deletingRef.current) return;
+    deletingRef.current = true;
+    setDeleting(true);
+    writeVersionRef.current += 1;
+    try {
+      const deleted = await deleteChatMessage(parentId, item);
+      if (!mountedRef.current) return;
+      setItems((current) => applyChatDeletions(current, [deleted]));
+      setConfirmDelete('');
+      setError('');
+    } catch { if (mountedRef.current) setError(d.failed); }
+    finally { deletingRef.current = false; if (mountedRef.current) setDeleting(false); }
   };
 
   const send = async (event, attachment) => {
@@ -178,12 +202,13 @@ function ChatThread({ parentId, name, parentMode, language, c, onBack, draftStor
           return <div className="chat-timeline-item" key={item.key}>
             {(!index || dayKey(items[index - 1].createdAt) !== dayKey(item.createdAt)) && <div className="chat-day-divider"><span>{formatDay(item.createdAt, language)}</span></div>}
             <article className={`chat-message${mine ? ' is-mine' : ''}${item.kind === 'notification-response' ? ' is-notification-reply' : ''}`}>
-              {item.kind === 'notification-response' && <div className="chat-reply-context">
+              {!item.deletedAt && item.kind === 'notification-response' && <div className="chat-reply-context">
                 <span>↩ {c.reply}</span>
                 {original ? <Link to={`${parentMode ? '/parent' : ''}/notifications/${original._id}`}><strong>{original.title}</strong><p>{original.message}</p><small>{c.original} ↗</small></Link> : <small>{c.unavailable}</small>}
               </div>}
-              <div className="chat-bubble">{item.reaction && <span className="chat-inline-reaction" aria-label={c.reaction}>{item.reaction}</span>}{item.attachment?.kind && <ChatMedia parentId={parentId} item={item} language={language} />}{item.text && <p dir="auto">{item.text}</p>}</div>
-              <div className="chat-message-meta"><time dateTime={item.createdAt}>{formatTime(item.createdAt, language)}</time>{mine && item.kind === 'message' && <span>{item.readAt ? c.seen : c.sent}</span>}</div>
+              <div className={`chat-bubble${item.deletedAt ? ' is-deleted' : ''}`}>{item.deletedAt ? <p>{d.deleted}</p> : <>{item.reaction && <span className="chat-inline-reaction" aria-label={c.reaction}>{item.reaction}</span>}{item.attachment?.kind && <ChatMedia parentId={parentId} item={item} language={language} />}{item.text && <p dir="auto">{item.text}</p>}</>}</div>
+              <div className="chat-message-meta"><time dateTime={item.createdAt}>{formatTime(item.createdAt, language)}</time>{mine && !item.deletedAt && item.kind === 'message' && <span>{item.readAt ? c.seen : c.sent}</span>}{!item.deletedAt && String(item.senderUserId) === String(actorId) && <button type="button" className="chat-delete-button" onClick={() => setConfirmDelete(item.key)} aria-label={d.remove}>{d.remove}</button>}</div>
+              {confirmDelete === item.key && !item.deletedAt && <div className="chat-delete-confirm" role="group" aria-label={d.confirm}><span>{d.confirm}</span><button type="button" disabled={deleting} onClick={() => remove(item)}>{d.remove}</button><button type="button" disabled={deleting} onClick={() => setConfirmDelete('')}>{d.cancel}</button></div>}
             </article>
           </div>;
         })}
@@ -304,7 +329,7 @@ export default function ChatWorkspace({ contacts = [], contactsLoading = false, 
         {(newChat ? contactsLoading : loading) && <p className="chat-empty-line">{c.loading}</p>}
         {visible.map((item) => <button type="button" key={item._id} className={`chat-conversation${item._id === selectedId ? ' is-active' : ''}`} onClick={() => select(item._id)}>
           <span className="chat-avatar">{item.name?.charAt(0)}</span>
-          <span className="chat-conversation-copy"><strong>{item.name}</strong><span>{item.lastMessage?.reaction} {item.lastMessage?.fromClub ? `${c.you} · ` : ''}{item.lastMessage?.text || (item.lastMessage?.attachment?.kind ? ({ image: language === 'ar' ? 'صورة' : 'Photo', audio: language === 'ar' ? 'رسالة صوتية' : 'Voice message', video: language === 'ar' ? 'فيديو' : 'Video' }[item.lastMessage.attachment.kind]) : c.newChat)}</span></span>
+          <span className="chat-conversation-copy"><strong>{item.name}</strong><span>{item.lastMessage?.deletedAt ? (deletionCopy[language] || deletionCopy.en).deleted : <>{item.lastMessage?.reaction} {item.lastMessage?.fromClub ? `${c.you} · ` : ''}{item.lastMessage?.text || (item.lastMessage?.attachment?.kind ? ({ image: language === 'ar' ? 'صورة' : 'Photo', audio: language === 'ar' ? 'رسالة صوتية' : 'Voice message', video: language === 'ar' ? 'فيديو' : 'Video' }[item.lastMessage.attachment.kind]) : c.newChat)}</>}</span></span>
           <span className="chat-conversation-end">{item.lastMessage && <time>{formatTime(item.lastMessage.createdAt, language)}</time>}{item.unreadCount > 0 && <b>{item.unreadCount}</b>}</span>
         </button>)}
         {!loading && !visible.length && <p className="chat-empty-line">{c.noResults}</p>}
@@ -312,6 +337,6 @@ export default function ChatWorkspace({ contacts = [], contactsLoading = false, 
       </div>
       <footer><img src={warriorsLogo} alt="" /><span>Warriors Gymnastics</span></footer>
     </aside>}
-    {selectedId ? <ChatThread key={`${userId}-${selectedId}`} parentId={selectedId} name={selected?.name || c.messages} parentMode={parentMode} language={language} c={c} onBack={() => select('')} draftStore={draftStore} /> : <section className="chat-no-conversation"><div className="chat-empty-symbol" aria-hidden="true">✉</div><h2>{c.empty}</h2><p>{c.emptyHint}</p><button type="button" onClick={() => { setNewChat(true); onRequestContacts?.(); }}>{c.newChat}</button></section>}
+    {selectedId ? <ChatThread key={`${userId}-${selectedId}`} parentId={selectedId} actorId={userId} name={selected?.name || c.messages} parentMode={parentMode} language={language} c={c} onBack={() => select('')} draftStore={draftStore} /> : <section className="chat-no-conversation"><div className="chat-empty-symbol" aria-hidden="true">✉</div><h2>{c.empty}</h2><p>{c.emptyHint}</p><button type="button" onClick={() => { setNewChat(true); onRequestContacts?.(); }}>{c.newChat}</button></section>}
   </div>;
 }

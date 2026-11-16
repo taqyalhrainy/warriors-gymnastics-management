@@ -55,6 +55,13 @@
 [dir="rtl"] .chat-message.is-mine .chat-bubble { border-radius: 18px 18px 18px 4px; }
 .chat-inline-reaction { font-size: 24px; line-height: 1.4; }
 .chat-message-meta { display: flex; gap: 8px; margin: 6px 4px 0; color: var(--muted); font-size: 9px; }
+.chat-bubble.is-deleted p { font-style: italic; opacity: .8; }
+.chat-message-meta { align-items: center; flex-wrap: wrap; }
+.chat-delete-button { border: 0; background: transparent; color: var(--muted); font-size: 10px; padding: 5px; min-height: 28px; text-decoration: underline; }
+.chat-delete-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; padding: 9px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); font-size: 11px; }
+.chat-delete-confirm > span { flex-basis: 100%; }
+.chat-delete-confirm button { min-height: 32px; border: 1px solid var(--border); border-radius: 8px; padding: 5px 12px; background: var(--surface-alt); color: var(--text); }
+.chat-delete-confirm button:first-of-type { color: #ed1c24; }
 .chat-reply-context { max-width: 100%; margin-bottom: 8px; padding: 3px 12px; border-inline-start: 3px solid #bda9ed; color: var(--muted); }
 .chat-reply-context > span { display: block; font-size: 10px; margin-bottom: 9px; }
 .chat-reply-context a { color: inherit; text-decoration: none; }

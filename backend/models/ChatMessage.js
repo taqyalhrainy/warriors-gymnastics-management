@@ -13,11 +13,13 @@ const chatMessageSchema = new mongoose.Schema({
   }, { _id: false }), default: undefined },
   clientMessageId: { type: String, required: true, maxlength: 100 },
   readAt: { type: Date, default: null },
+  deletedAt: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now, immutable: true }
 });
 
 chatMessageSchema.index({ parentUserId: 1, createdAt: -1, _id: -1 });
 chatMessageSchema.index({ parentUserId: 1, fromClub: 1, readAt: 1 });
+chatMessageSchema.index({ parentUserId: 1, deletedAt: 1 });
 chatMessageSchema.index({ parentUserId: 1, senderUserId: 1, clientMessageId: 1 }, { unique: true });
 
 module.exports = mongoose.model('ChatMessage', chatMessageSchema);

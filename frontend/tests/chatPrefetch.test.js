@@ -148,3 +148,36 @@ test('logout discards an in-flight parent thread and clears previously cached me
   await rejected;
   assert.equal(chat.getCachedChatMessages('parent'), undefined);
 });
+
+test('deletion keeps a warm thread and an in-flight read cannot resurrect text or media', async () => {
+  let resolve;
+  const old = { _id: 'one', key: 'message-one', kind: 'message', text: 'Private', attachment: { kind: 'image' }, createdAt: '2026-11-16T08:00:00Z' };
+  const removed = { ...old, text: 'This message was deleted.', attachment: undefined, deletedAt: '2026-11-16T09:00:00Z' };
+  let reads = 0;
+  const chat = await setup({ get: () => ++reads === 1 ? Promise.resolve({ data: { parent: { name: 'Parent' }, items: [old] } }) : new Promise((done) => { resolve = done; }), delete: async () => ({ data: removed }) });
+  await chat.fetchChatMessages('parent');
+  const pending = chat.fetchChatMessages('parent', {}, { force: true });
+  await chat.deleteChatMessage('parent', old);
+  resolve({ data: { items: [old] } });
+  assert.ok((await pending).items[0].deletedAt);
+  const cached = chat.getCachedChatMessages('parent').items;
+  assert.equal(cached[0].attachment, undefined);
+  assert.equal(chat.mergeChatMessages(cached, [old])[0].text, 'This message was deleted.');
+});
+
+test('loaded older pages apply remote deletions while preserving message date and ordering', async () => {
+  const chat = await setup({});
+  const old = { _id: 'one', key: 'notification-response-one', text: 'Reply', reaction: 'reaction', createdAt: '2026-11-16T08:00:00Z' };
+  const updated = chat.applyChatDeletions([old], [{ key: old.key, deletedAt: '2026-11-16T10:00:00Z' }]);
+  assert.equal(updated[0].createdAt, old.createdAt);
+  assert.equal(updated[0].reaction, undefined);
+  assert.ok(updated[0].deletedAt);
+  assert.ok(chat.mergeChatMessages([old], updated)[0].deletedAt);
+});
+
+test('inbox pagination cannot replace a deleted preview with an older cached original', async () => {
+  const chat = await setup({});
+  const old = { _id: 'parent', lastMessage: { _id: 'one', text: 'Private', createdAt: '2026-11-16T08:00:00Z' } };
+  const deleted = { ...old, lastMessage: { ...old.lastMessage, text: 'This message was deleted.', deletedAt: '2026-11-16T09:00:00Z' } };
+  assert.ok(chat.mergeChatConversations([deleted], [old])[0].lastMessage.deletedAt);
+});

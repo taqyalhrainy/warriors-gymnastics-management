@@ -463,17 +463,18 @@ const saveParentNotificationResponse = async (req, res, next) => {
     const hasReaction = Object.prototype.hasOwnProperty.call(payload || {}, 'reaction');
     if (!hasReply && !hasReaction) return res.status(400).json({ message: 'A reply or reaction is required.' });
     const existing = await NotificationResponse.findOne({ notificationId: notification._id });
+    if (existing?.deletedAt) return res.status(409).json({ message: 'This response was deleted. Continue the conversation in Chat.' });
     const reply = hasReply ? String(payload.reply || '').trim() : String(existing?.reply || '');
     const reaction = hasReaction ? String(payload.reaction || '').trim() : String(existing?.reaction || '');
     if (reply.length > 2000) return res.status(400).json({ message: 'Reply is too long.' });
     if (!parentReactionOptions.includes(reaction)) return res.status(400).json({ message: 'Invalid reaction.' });
 
     if (!reply && !reaction) {
-      if (existing) await existing.deleteOne();
+      if (existing) await NotificationResponse.deleteOne({ _id: existing._id, deletedAt: null });
       return res.json({ response: null });
     }
     const response = await NotificationResponse.findOneAndUpdate(
-      { notificationId: notification._id },
+      { notificationId: notification._id, deletedAt: null },
       {
         $set: {
           recipientUserId: req.user._id,
@@ -486,7 +487,10 @@ const saveParentNotificationResponse = async (req, res, next) => {
         $setOnInsert: { createdAt: new Date() }
       },
       { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
-    );
+    ).catch((error) => {
+      if (error.code === 11000) { error.statusCode = 409; error.message = 'This response changed. Refresh and continue in Chat.'; }
+      throw error;
+    });
     res.json({ response });
   } catch (error) {
     next(error);
@@ -526,7 +530,7 @@ const getNotificationById = async (req, res, next) => {
     }
     const parentResponse = await NotificationResponse.findOne({ notificationId: notification._id }).lean();
     response.response = parentResponse || null;
-    response.canRespond = req.user.role === 'parent' && isManualNotification(response);
+    response.canRespond = req.user.role === 'parent' && isManualNotification(response) && !parentResponse?.deletedAt;
     res.json(response);
   } catch (error) {
     next(error);

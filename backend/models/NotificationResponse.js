@@ -7,6 +7,7 @@ const notificationResponseSchema = new mongoose.Schema({
   reply: { type: String, trim: true, maxlength: 2000, default: '' },
   reaction: { type: String, enum: ['', '👍', '❤️', '🙏', '😊', '😮', '😢'], default: '' },
   adminViewedAt: { type: Date },
+  deletedAt: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
@@ -14,5 +15,6 @@ const notificationResponseSchema = new mongoose.Schema({
 notificationResponseSchema.index({ updatedAt: -1, _id: -1 });
 notificationResponseSchema.index({ adminViewedAt: 1, updatedAt: -1 });
 notificationResponseSchema.index({ recipientUserId: 1, updatedAt: -1, _id: -1 });
+notificationResponseSchema.index({ recipientUserId: 1, deletedAt: 1 });
 
 module.exports = mongoose.model('NotificationResponse', notificationResponseSchema);

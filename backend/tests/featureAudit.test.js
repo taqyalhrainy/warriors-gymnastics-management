@@ -257,6 +257,74 @@ test('chat media persists atomically, stays private and never enters inbox or th
   assert.equal(await ChatMessage.countDocuments(), 1);
 });
 
+test('only the original sender can delete a chat message and retries never restore it', async () => {
+  const url = `/chat/${parentUser._id}/messages`;
+  const body = { text: 'Private original text', clientMessageId: crypto.randomUUID() };
+  const sent = await call(url, { method: 'POST', body, auth: parentToken, status: 201 });
+  const path = `${url}/${sent._id}`;
+  await call(path, { method: 'DELETE', status: 403 });
+  await call(path, { method: 'DELETE', auth: token(otherUser), status: 403 });
+  const [deleted, repeated] = await Promise.all([call(path, { method: 'DELETE', auth: parentToken }), call(path, { method: 'DELETE', auth: parentToken })]);
+  assert.ok(deleted.deletedAt);
+  assert.equal(deleted.deletedAt, repeated.deletedAt);
+  assert.equal(deleted.createdAt, sent.createdAt);
+  assert.equal(deleted.text, 'This message was deleted.');
+  assert.equal(await ChatMessage.countDocuments(), 1);
+  const retriedSend = await call(url, { method: 'POST', body, auth: parentToken, status: 201 });
+  assert.equal(retriedSend.deletedAt, deleted.deletedAt);
+  assert.equal(retriedSend.text, 'This message was deleted.');
+  for (const auth of [parentToken, adminToken]) {
+    const thread = await call(url, { auth });
+    assert.ok(thread.items[0].deletedAt);
+    assert.doesNotMatch(JSON.stringify(thread), /Private original/);
+  }
+  assert.equal((await call('/chat/unread-count')).count, 0);
+  const inbox = await call('/chat/conversations');
+  assert.equal(inbox.items[0].lastMessage.deletedAt, deleted.deletedAt);
+  assert.equal(inbox.items[0].unreadCount, 0);
+  const otherStaff = await User.create({ name: 'Other admin', role: 'admin', email: 'other-staff@audit.example', passwordHash: 'test' });
+  const club = await call(url, { method: 'POST', body: { text: 'Club reply', clientMessageId: crypto.randomUUID() }, status: 201 });
+  await call(`${url}/${club._id}`, { method: 'DELETE', auth: token(otherStaff), status: 403 });
+  await call(`${url}/${club._id}`, { method: 'DELETE', auth: parentToken, status: 403 });
+  assert.ok((await call(`${url}/${club._id}`, { method: 'DELETE' })).deletedAt);
+});
+
+test('deleting chat media removes its bytes and propagates old-page tombstones without reloading history', async () => {
+  const url = `/chat/${parentUser._id}/messages`;
+  const sent = await call(url, { method: 'POST', status: 201, body: { clientMessageId: crypto.randomUUID(), attachment: { dataUrl: 'data:audio/ogg;base64,T2dnUzAwMDA=', fileName: 'voice.ogg' } } });
+  await call(`${url}/${sent._id}`, { method: 'DELETE' });
+  const raw = await ChatMessage.findById(sent._id).select('+attachment.data');
+  assert.equal(raw.attachment, undefined);
+  await call(`${url}/${sent._id}/attachment`, { auth: parentToken, status: 404 });
+  const rows = await ChatMessage.insertMany(Array.from({ length: 45 }, (_, index) => ({ parentUserId: parentUser._id, senderUserId: admin._id, fromClub: true, text: `Old ${index}`, clientMessageId: crypto.randomUUID(), createdAt: new Date(Date.UTC(2026, 10, 15, 0, index)) })));
+  await call(`${url}/${rows[0]._id}`, { method: 'DELETE' });
+  const data = await call(`${url}?loadedSince=${rows[0].createdAt.toISOString()}`, { auth: parentToken });
+  assert.equal(data.items.some((item) => item._id === String(rows[0]._id)), false);
+  assert.ok(data.deleted.some((item) => item.key === `message-${rows[0]._id}`));
+  await call(`${url}?loadedSince=invalid`, { status: 400 });
+});
+
+test('parents can delete notification replies from chat without deleting the original or reviving their response', async () => {
+  const note = await Notification.create({ recipientUserId: parentUser._id, title: 'Club reminder', message: 'Original stays', type: 'announcement', source: 'manual' });
+  const response = await NotificationResponse.create({ notificationId: note._id, recipientUserId: parentUser._id, reply: 'Private response', reaction: '👍' });
+  const url = `/chat/${parentUser._id}/messages/${response._id}?kind=notification-response`;
+  await call(url, { method: 'DELETE', status: 403 });
+  const deleted = await call(url, { method: 'DELETE', auth: parentToken });
+  assert.equal(deleted.createdAt, response.updatedAt.toISOString());
+  assert.ok(deleted.deletedAt);
+  assert.equal((await Notification.findById(note._id)).message, 'Original stays');
+  assert.equal((await call('/chat/unread-count')).count, 0);
+  const thread = await call(`/chat/${parentUser._id}/messages`);
+  assert.equal(thread.items.length, 1);
+  assert.equal(thread.items[0].reaction, '');
+  assert.doesNotMatch(JSON.stringify(thread), /Private response/);
+  const detail = await call(`/notifications/${note._id}`, { auth: parentToken });
+  assert.equal(detail.canRespond, false);
+  await call(`/notifications/${note._id}/response`, { method: 'PUT', auth: parentToken, body: { reply: 'Bring it back', reaction: '' }, status: 409 });
+  await call(`/notifications/${note._id}/response`, { method: 'PUT', auth: parentToken, body: { reply: '', reaction: '' }, status: 409 });
+  assert.equal(await NotificationResponse.countDocuments(), 1);
+});
+
 test('chat inbox pages contain ten unique accounts, search all pages and retain cross-source unread counts', async () => {
   const parents = await User.create(Array.from({ length: 25 }, (_, index) => ({
     name: `Conversation ${String(index).padStart(2, '0')}`, email: `chat-${index}@audit.example`, role: 'parent', passwordHash: 'test'

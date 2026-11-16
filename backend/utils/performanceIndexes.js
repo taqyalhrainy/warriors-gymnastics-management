@@ -19,11 +19,13 @@ const performanceIndexes = {
     { key: { notificationId: 1 }, options: { unique: true } },
     { updatedAt: -1, _id: -1 },
     { adminViewedAt: 1, updatedAt: -1 },
-    { recipientUserId: 1, updatedAt: -1, _id: -1 }
+    { recipientUserId: 1, updatedAt: -1, _id: -1 },
+    { recipientUserId: 1, deletedAt: 1 }
   ],
   chatmessages: [
     { parentUserId: 1, createdAt: -1, _id: -1 },
     { parentUserId: 1, fromClub: 1, readAt: 1 },
+    { parentUserId: 1, deletedAt: 1 },
     { key: { parentUserId: 1, senderUserId: 1, clientMessageId: 1 }, options: { unique: true } }
   ],
   attendances: [{ date: -1, _id: -1 }],
