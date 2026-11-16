@@ -660,6 +660,40 @@ test('reports include unlinked subscriptions and count a manual balance only onc
   assert.equal(revenue.totalRemaining, 50);
 });
 
+test('dashboard counts current-cycle days with overrides and Amman boundaries without mixing historical classes', async () => {
+  const today = getAppDateKey();
+  const current = dateKeyToUtc(today);
+  const oldDate = new Date(current.getTime() - 10 * 86400000);
+  const olderDate = new Date(current.getTime() - 11 * 86400000);
+  const anotherGroup = await Group.create({ name: 'Duplicate-day group', days: ['Tuesday'], startTime: '16:00', endTime: '17:00', maxCapacity: 30 });
+  const create = (name, extra = {}) => newPlayer({ fullName: name, startDate: current, currentSubscriptionStartedAt: current, packageClasses: 2, ...extra });
+  const [cycle, included, excluded, boundary, noStart, empty, frozen] = await Promise.all([
+    create('Current cycle'), create('Included old lesson'), create('Excluded lesson'),
+    create('Same local day', { packageClasses: 1, startDate: new Date(current.getTime() + 20 * 3600000), currentSubscriptionStartedAt: new Date(current.getTime() + 20 * 3600000) }),
+    create('No start', { startDate: null, currentSubscriptionStartedAt: null }), create('No attendance', { packageClasses: 8 }),
+    create('Frozen', { packageClasses: 1, status: 'frozen' })
+  ]);
+  const mark = (player, date, groupId = group._id) => Attendance.create({ playerId: player._id, groupId, date, status: 'present', markedBy: admin._id });
+  await mark(cycle, current); await mark(cycle, current, anotherGroup._id);
+  await Attendance.insertMany(Array.from({ length: 100 }, (_, index) => ({ playerId: cycle._id, groupId: group._id, date: new Date(current.getTime() - (index + 20) * 86400000), status: 'present', markedBy: admin._id })));
+  const includedOld = await mark(included, oldDate); await mark(included, current);
+  await Player.updateOne({ _id: included._id }, { $set: { currentSubscriptionAttendanceIds: [includedOld._id] } });
+  const excludedOld = await mark(excluded, oldDate), excludedCurrent = await mark(excluded, current);
+  await Player.updateOne({ _id: excluded._id }, { $set: { currentSubscriptionAttendanceIds: [excludedOld._id, excludedCurrent._id], currentSubscriptionExcludedAttendanceIds: [excludedCurrent._id] } });
+  await mark(boundary, new Date(getAppDateTimeUtc(today, '01:00')));
+  await mark(noStart, oldDate); await mark(noStart, olderDate); await mark(noStart, oldDate, anotherGroup._id);
+  await mark(frozen, current);
+  await create('Left', { status: 'left', packageClasses: 1 });
+  await create('Deleted', { isDeleted: true, packageClasses: 1 });
+  const dashboard = await call('/reports/dashboard');
+  assert.equal(dashboard.activePlayers, 6);
+  assert.equal(dashboard.expiredSubscriptions, 3, 'included old lesson, same local day and all-history fallback expire');
+  assert.equal(dashboard.soonSubscriptions, 2, 'current cycle and exclusion override each count one day');
+  assert.equal(dashboard.pendingAmounts, 0);
+  const revenue = await call('/reports/revenue');
+  assert.equal(revenue.totalRemaining, 0);
+});
+
 test('freeze notes survive status changes and owner summary returns current payment and attendance in one response', async () => {
   const player = await newPlayer({ payment: 100, startDate: new Date(), currentSubscriptionStartedAt: new Date() });
   await call(`/players/${player._id}`, {

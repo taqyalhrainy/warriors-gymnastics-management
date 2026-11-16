@@ -131,6 +131,7 @@ const AdminDashboard = () => {
   const [isSnapshotRestoring, setIsSnapshotRestoring] = useState(false);
   const [snapshotMessage, setSnapshotMessage] = useState('');
   const [isDashboardLoading, setIsDashboardLoading] = useState(false);
+  const [initialDashboardReadDone, setInitialDashboardReadDone] = useState(false);
   const [waitingForm, setWaitingForm] = useState(initialWaitingForm);
   const [editingWaitingEntryId, setEditingWaitingEntryId] = useState('');
   const [isWaitingFormOpen, setIsWaitingFormOpen] = useState(false);
@@ -213,6 +214,7 @@ const AdminDashboard = () => {
     let isMounted = true;
     setError('');
     setIsDashboardLoading(!dashboardStatsCache);
+    setInitialDashboardReadDone(false);
 
     fetchDashboard({ force: true })
       .then((data) => {
@@ -225,7 +227,7 @@ const AdminDashboard = () => {
         if (isMounted) setError(err.response?.data?.message || 'Unable to load dashboard data. Please refresh or try again.');
       })
       .finally(() => {
-        if (isMounted) setIsDashboardLoading(false);
+        if (isMounted) { setIsDashboardLoading(false); setInitialDashboardReadDone(true); }
       });
 
     return () => {
@@ -278,13 +280,13 @@ const AdminDashboard = () => {
   };
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || !initialDashboardReadDone) return;
     const timer = setTimeout(() => {
       loadWaitingListData();
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [token]);
+  }, [token, initialDashboardReadDone]);
 
   const handleWaitingFormChange = (event) => {
     const { name, value } = event.target;

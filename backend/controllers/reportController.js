@@ -4,10 +4,11 @@ const Payment = require('../models/Payment');
 const TrainingGroup = require('../models/TrainingGroup');
 const HistoryEntry = require('../models/HistoryEntry');
 require('../models/Subscription');
-const { getAppDateKey, getAppDateOnly, getAppDayStartUtc } = require('../utils/appDate');
+const { APP_TIME_ZONE, getAppDateKey, getAppDateOnly, getAppDayStartUtc } = require('../utils/appDate');
 const { getCurrentSubscriptionStart } = require('../utils/subscriptionCycle');
 const { getRemainingAmount } = require('../utils/manualRemaining');
 const { decrypt } = require('../utils/encryption');
+const mongoose = require('mongoose');
 
 const clearDashboardReportCache = () => {};
 const monthStart = () => getAppDayStartUtc(`${getAppDateKey().slice(0, 7)}-01`);
@@ -16,28 +17,35 @@ const getCurrentPlayerSummaries = async () => {
   const players = await Player.find({ isDeleted: { $ne: true }, status: { $ne: 'left' } })
     .select('_id status subscriptionId startDate endDate currentSubscriptionStartedAt packageClasses payment previousDueBalance dueAdjustment attendanceDueManual preservedRemainingBalance subscriptionNeedsAttention currentSubscriptionAttendanceIds currentSubscriptionExcludedAttendanceIds')
     .populate('subscriptionId', 'type startDate endDate totalSessions price').lean();
-  const ids = players.map((player) => player._id);
-  const attendance = await Attendance.find({ playerId: { $in: ids }, status: 'present' }).select('_id playerId date').lean();
-  const byPlayer = new Map(players.map((player) => [String(player._id), { player, dates: new Set(),
-    start: getCurrentSubscriptionStart(player),
-    included: new Set((player.currentSubscriptionAttendanceIds || []).map(String)),
-    excluded: new Set((player.currentSubscriptionExcludedAttendanceIds || []).map(String)) }]));
-  for (const record of attendance) {
-    const row = byPlayer.get(String(record.playerId));
-    if (!row || row.excluded.has(String(record._id))) continue;
-    if (!row.start || row.included.has(String(record._id)) || getAppDateOnly(record.date) >= getAppDateOnly(row.start)) {
-      row.dates.add(getAppDateKey(record.date));
-    }
-  }
+  const asIds = (values) => (Array.isArray(values) ? values : []).filter((id) => mongoose.Types.ObjectId.isValid(String(id))).map((id) => new mongoose.Types.ObjectId(String(id)));
+  const ranges = players.map((player) => {
+    const start = getCurrentSubscriptionStart(player);
+    const included = asIds(player.currentSubscriptionAttendanceIds);
+    const excluded = asIds(player.currentSubscriptionExcludedAttendanceIds);
+    return {
+      playerId: player._id,
+      ...(start ? { $or: [{ date: { $gte: getAppDayStartUtc(getAppDateKey(start)) } }, ...(included.length ? [{ _id: { $in: included } }] : [])] } : {}),
+      ...(excluded.length ? { _id: { $nin: excluded } } : {})
+    };
+  });
+  // Return one count per player, rather than transferring and formatting every
+  // historical attendance row in Node. Preserve cycle overrides and unique days.
+  const attendance = ranges.length ? await Attendance.aggregate([
+    { $match: { status: 'present', $or: ranges } },
+    { $group: { _id: { player: '$playerId', day: { $dateToString: { date: '$date', format: '%Y-%m-%d', timezone: APP_TIME_ZONE } } } } },
+    { $group: { _id: '$_id.player', count: { $sum: 1 } } }
+  ]) : [];
+  const counts = new Map(attendance.map((row) => [String(row._id), row.count]));
   const today = getAppDateOnly();
-  return [...byPlayer.values()].map(({ player, dates }) => {
+  return players.map((player) => {
+    const attended = counts.get(String(player._id)) || 0;
     const total = Number(player.packageClasses || player.subscriptionId?.totalSessions || 0);
     const end = player.endDate || player.subscriptionId?.endDate;
     const days = end ? Math.ceil((getAppDateOnly(end) - today) / 86400000) : null;
     const frozen = player.status === 'frozen';
     const expired = !frozen && (player.status === 'expired' || player.subscriptionNeedsAttention
-      || (days !== null && days <= 0) || (total > 0 && dates.size >= total));
-    const soon = !frozen && !expired && ((total > 0 && total - dates.size <= 2) || (days !== null && days <= 7));
+      || (days !== null && days <= 0) || (total > 0 && attended >= total));
+    const soon = !frozen && !expired && ((total > 0 && total - attended <= 2) || (days !== null && days <= 7));
     const remaining = getRemainingAmount(player);
     return { player, expired, soon, remaining };
   });
