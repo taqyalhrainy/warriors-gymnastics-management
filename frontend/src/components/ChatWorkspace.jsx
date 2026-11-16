@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { fetchChatConversations, getCachedChatConversations, mergeChatConversations, fetchChatMessages, getCachedChatMessages, markChatRead, sendChatMessage } from '../services/chat.js';
 import warriorsLogo from '../assets/warriors-logo.png';
+import ChatComposer from './ChatComposer.jsx';
+import ChatMedia from './ChatMedia.jsx';
 import './chat.css';
 
 const copy = {
@@ -33,6 +35,7 @@ function ChatThread({ parentId, name, parentMode, language, c, onBack, draftStor
   const mountedRef = useRef(true);
   const sendingRef = useRef(false);
   const sendIdRef = useRef(null);
+  const sendPayloadRef = useRef(null);
   const writeVersionRef = useRef(0);
   const fetchVersionRef = useRef(0);
 
@@ -116,17 +119,20 @@ function ChatThread({ parentId, name, parentMode, language, c, onBack, draftStor
     } finally { if (mountedRef.current) setOlderLoading(false); }
   };
 
-  const send = async (event) => {
+  const send = async (event, attachment) => {
     event.preventDefault();
     const text = draft.trim();
-    if (!text || sendingRef.current) return;
+    if ((!text && !attachment) || sendingRef.current) return false;
     sendingRef.current = true;
     setSending(true);
     setError('');
-    sendIdRef.current ||= crypto.randomUUID();
+    if (!sendIdRef.current || sendPayloadRef.current?.text !== text || sendPayloadRef.current?.attachment !== attachment) {
+      sendIdRef.current = crypto.randomUUID();
+      sendPayloadRef.current = { text, attachment };
+    }
     try {
-      const saved = await sendChatMessage(parentId, text, sendIdRef.current);
-      if (!mountedRef.current) return;
+      const saved = await sendChatMessage(parentId, text, sendIdRef.current, attachment);
+      if (!mountedRef.current) return false;
       writeVersionRef.current += 1;
       pinnedRef.current = true;
       setDate('');
@@ -134,8 +140,11 @@ function ChatThread({ parentId, name, parentMode, language, c, onBack, draftStor
       setDraft('');
       draftStore.current[parentId] = '';
       sendIdRef.current = null;
+      sendPayloadRef.current = null;
+      return true;
     } catch (failure) {
       if (mountedRef.current) setError(failure.response?.data?.message || c.failed);
+      return false;
     } finally {
       sendingRef.current = false;
       if (mountedRef.current) setSending(false);
@@ -145,6 +154,7 @@ function ChatThread({ parentId, name, parentMode, language, c, onBack, draftStor
   return (
     <section className="warriors-chat-thread" aria-label={parentMode ? c.club : name}>
       <header className="warriors-chat-thread-header">
+        {parentMode && <Link to="/parent" className="chat-page-back" aria-label={language === 'ar' ? 'الصفحة الرئيسية' : 'Home'}>‹</Link>}
         {!parentMode && <button type="button" className="chat-mobile-back" onClick={onBack} aria-label={c.back}>‹</button>}
         <span className={`chat-avatar${parentMode ? ' is-club' : ''}`}>{parentMode ? <img src={warriorsLogo} alt="" /> : parentName?.charAt(0)}</span>
         <div><h2>{parentMode ? c.club : parentName}</h2><span>{parentMode ? c.clubLabel : c.messages}</span></div>
@@ -172,24 +182,18 @@ function ChatThread({ parentId, name, parentMode, language, c, onBack, draftStor
                 <span>↩ {c.reply}</span>
                 {original ? <Link to={`${parentMode ? '/parent' : ''}/notifications/${original._id}`}><strong>{original.title}</strong><p>{original.message}</p><small>{c.original} ↗</small></Link> : <small>{c.unavailable}</small>}
               </div>}
-              <div className="chat-bubble">{item.reaction && <span className="chat-inline-reaction" aria-label={c.reaction}>{item.reaction}</span>}{item.text && <p dir="auto">{item.text}</p>}</div>
+              <div className="chat-bubble">{item.reaction && <span className="chat-inline-reaction" aria-label={c.reaction}>{item.reaction}</span>}{item.attachment?.kind && <ChatMedia parentId={parentId} item={item} language={language} />}{item.text && <p dir="auto">{item.text}</p>}</div>
               <div className="chat-message-meta"><time dateTime={item.createdAt}>{formatTime(item.createdAt, language)}</time>{mine && item.kind === 'message' && <span>{item.readAt ? c.seen : c.sent}</span>}</div>
             </article>
           </div>;
         })}
       </div>
       {error && <div className="chat-inline-error" role="alert"><span>{error}</span><button type="button" onClick={() => setReload((value) => value + 1)}>{c.retry}</button></div>}
-      <form className="warriors-chat-composer" onSubmit={send}>
-        <span aria-hidden="true" className="chat-composer-face">☺</span>
-        <textarea aria-label={c.placeholder} placeholder={c.placeholder} rows={1} maxLength={2000} value={draft} disabled={sending} onChange={(event) => {
-          setDraft(event.target.value);
-          draftStore.current[parentId] = event.target.value;
+      <ChatComposer draft={draft} sending={sending} language={language} c={c} onSend={send} onDraftChange={(value) => {
+          setDraft(value);
+          draftStore.current[parentId] = value;
           sendIdRef.current = null;
-        }} onKeyDown={(event) => {
-          if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send(event); }
         }} />
-        <button type="submit" disabled={sending || !draft.trim()}>{sending ? c.sending : c.send}<span aria-hidden="true">➤</span></button>
-      </form>
     </section>
   );
 }
@@ -300,7 +304,7 @@ export default function ChatWorkspace({ contacts = [], contactsLoading = false, 
         {(newChat ? contactsLoading : loading) && <p className="chat-empty-line">{c.loading}</p>}
         {visible.map((item) => <button type="button" key={item._id} className={`chat-conversation${item._id === selectedId ? ' is-active' : ''}`} onClick={() => select(item._id)}>
           <span className="chat-avatar">{item.name?.charAt(0)}</span>
-          <span className="chat-conversation-copy"><strong>{item.name}</strong><span>{item.lastMessage?.reaction} {item.lastMessage?.fromClub ? `${c.you} · ` : ''}{item.lastMessage?.text || c.newChat}</span></span>
+          <span className="chat-conversation-copy"><strong>{item.name}</strong><span>{item.lastMessage?.reaction} {item.lastMessage?.fromClub ? `${c.you} · ` : ''}{item.lastMessage?.text || (item.lastMessage?.attachment?.kind ? ({ image: language === 'ar' ? 'صورة' : 'Photo', audio: language === 'ar' ? 'رسالة صوتية' : 'Voice message', video: language === 'ar' ? 'فيديو' : 'Video' }[item.lastMessage.attachment.kind]) : c.newChat)}</span></span>
           <span className="chat-conversation-end">{item.lastMessage && <time>{formatTime(item.lastMessage.createdAt, language)}</time>}{item.unreadCount > 0 && <b>{item.unreadCount}</b>}</span>
         </button>)}
         {!loading && !visible.length && <p className="chat-empty-line">{c.noResults}</p>}

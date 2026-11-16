@@ -224,6 +224,39 @@ test('parent and club chat is private, idempotent and does not add club replies 
   await call(`/chat/${admin._id}/messages`, { status: 404 });
 });
 
+test('chat media persists atomically, stays private and never enters inbox or thread payloads', async () => {
+  const bytes = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0, 0]);
+  const attachment = { dataUrl: `data:audio/webm;base64,${bytes.toString('base64')}`, fileName: 'voice.webm' };
+  const payload = { text: '', attachment, clientMessageId: crypto.randomUUID() };
+  const path = `/chat/${parentUser._id}/messages`;
+  const [one, retry] = await Promise.all([call(path, { method: 'POST', body: payload, auth: parentToken, status: 201 }), call(path, { method: 'POST', body: payload, auth: parentToken, status: 201 })]);
+  assert.equal(one._id, retry._id);
+  assert.equal(await ChatMessage.countDocuments(), 1);
+  assert.equal(one.attachment.kind, 'audio');
+  assert.equal(one.attachment.data, undefined);
+  assert.equal(one.attachment.checksum, undefined);
+  for (const route of [path, '/chat/conversations']) {
+    const body = await call(route);
+    assert.equal(body.items[0].attachment?.data || body.items[0].lastMessage?.attachment?.data, undefined);
+    assert.doesNotMatch(JSON.stringify(body), /"checksum"|"data":|data:audio/);
+  }
+  const filePath = `${path}/${one._id}/attachment`;
+  for (const auth of [adminToken, parentToken]) {
+    const response = await fetch(origin + filePath, { headers: { Authorization: `Bearer ${auth}` } });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('content-type'), 'audio/webm');
+    assert.equal(response.headers.get('cache-control'), 'private, no-store');
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()), bytes);
+  }
+  assert.equal((await fetch(origin + filePath)).status, 401);
+  await call(filePath, { auth: token(otherUser), status: 403 });
+  await call(`/chat/${otherUser._id}/messages/${one._id}/attachment`, { auth: token(otherUser), status: 404 });
+  await call(path, { method: 'POST', body: { ...payload, attachment: { ...attachment, dataUrl: 'data:audio/webm;base64,GkXfowAB' } }, auth: parentToken, status: 409 });
+  await call(path, { method: 'POST', body: { ...payload, attachment: { ...attachment, dataUrl: attachment.dataUrl.replace('audio/webm', 'video/webm') } }, auth: parentToken, status: 409 });
+  await call(path, { method: 'POST', body: { ...payload, clientMessageId: crypto.randomUUID(), attachment: { ...attachment, dataUrl: 'data:audio/webm;base64,PGh0bWw+' } }, status: 400 });
+  assert.equal(await ChatMessage.countDocuments(), 1);
+});
+
 test('chat inbox pages contain ten unique accounts, search all pages and retain cross-source unread counts', async () => {
   const parents = await User.create(Array.from({ length: 25 }, (_, index) => ({
     name: `Conversation ${String(index).padStart(2, '0')}`, email: `chat-${index}@audit.example`, role: 'parent', passwordHash: 'test'

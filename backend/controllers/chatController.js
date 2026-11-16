@@ -6,6 +6,7 @@ const User = require('../models/User');
 const { validateObjectId } = require('../middleware/validate');
 const { getAppDayRangeUtc, getAppDateTimeUtc } = require('../utils/appDate');
 const { pushNotification } = require('../utils/notificationDelivery');
+const { normalizeChatAttachment, publicChatMessage } = require('../utils/chatAttachments');
 
 const hasResponse = { $or: [{ reply: { $ne: '' } }, { reaction: { $ne: '' } }] };
 const isClub = (req) => req.user.role !== 'parent';
@@ -18,7 +19,8 @@ const transcriptPipeline = (parentUserId) => {
   const responseFilter = parentUserId ? { recipientUserId: objectId(parentUserId) } : {};
   return [
     { $match: filter },
-    { $project: { parentUserId: 1, senderUserId: 1, fromClub: 1, text: 1, readAt: 1, createdAt: 1, kind: { $literal: 'message' } } },
+    { $unset: ['attachment.data', 'attachment.checksum'] },
+    { $project: { parentUserId: 1, senderUserId: 1, fromClub: 1, text: 1, attachment: 1, readAt: 1, createdAt: 1, kind: { $literal: 'message' } } },
     { $unionWith: {
       coll: NotificationResponse.collection.name,
       pipeline: [
@@ -63,6 +65,7 @@ const getChatConversations = async (req, res, next) => {
     const pipeline = [
       { $match: parentFilter },
       { $sort: { parentUserId: 1, createdAt: -1, _id: -1 } },
+      { $unset: ['attachment.data', 'attachment.checksum'] },
       { $group: {
         _id: '$parentUserId', lastMessage: { $first: '$$ROOT' },
         unreadCount
@@ -104,7 +107,7 @@ const getChatConversations = async (req, res, next) => {
       { $limit: 11 },
       { $project: { _id: 1, unreadCount: 1, name: '$parent.name', lastMessage: {
         _id: '$lastMessage._id', createdAt: '$lastMessage.createdAt', text: '$lastMessage.text',
-        reaction: '$lastMessage.reaction', fromClub: '$lastMessage.fromClub', kind: '$lastMessage.kind'
+        reaction: '$lastMessage.reaction', attachment: '$lastMessage.attachment', fromClub: '$lastMessage.fromClub', kind: '$lastMessage.kind'
       } } }
     );
     const rows = await ChatMessage.aggregate(pipeline);
@@ -171,30 +174,43 @@ const sendChatMessage = async (req, res, next) => {
     const parent = await resolveParent(req, res);
     if (!parent) return;
     const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+    const attachment = normalizeChatAttachment(req.body?.attachment);
     const clientMessageId = req.body?.clientMessageId;
-    if (!text || text.length > 2000 || typeof clientMessageId !== 'string' || !/^[a-zA-Z0-9_-]{8,100}$/.test(clientMessageId)) {
+    if ((!text && !attachment) || text.length > 2000 || typeof clientMessageId !== 'string' || !/^[a-zA-Z0-9_-]{8,100}$/.test(clientMessageId)) {
       return res.status(400).json({ message: 'Enter a message of 1–2000 characters with a valid message ID.' });
     }
     const key = { parentUserId: parent._id, senderUserId: req.user._id, clientMessageId };
     let message;
     let created = false;
     try {
-      message = await ChatMessage.create({ ...key, text, fromClub: isClub(req) });
+      message = await ChatMessage.create({ ...key, text, attachment, fromClub: isClub(req) });
       created = true;
     } catch (error) {
       if (error.code !== 11000) throw error;
-      message = await ChatMessage.findOne(key);
-      if (!message || message.text !== text) return res.status(409).json({ message: 'Message ID already used. Refresh before sending again.' });
+      message = await ChatMessage.findOne(key).select('+attachment.checksum');
+      if (!message || message.text !== text || message.attachment?.checksum !== attachment?.checksum || message.attachment?.mimeType !== attachment?.mimeType) return res.status(409).json({ message: 'Message ID already used. Refresh before sending again.' });
     }
-    res.status(201).json({ ...message.toObject(), key: `message-${message._id}`, kind: 'message' });
+    res.status(201).json(publicChatMessage(message));
     if (created && isClub(req)) {
       // Persist the chat message first. Phone delivery never adds a notification
       // record or delays the acknowledgement of a saved chat message.
       pushNotification({
         _id: message._id, recipientUserId: parent._id, title: 'Warriors Gymnastics',
-        message: text, type: 'chat', url: '/parent/chat'
+        message: text || ({ image: 'Photo', video: 'Video', audio: 'Voice message' }[attachment?.kind]), type: 'chat', url: '/parent/chat'
       }).catch((error) => console.error('Chat push delivery failed:', error.message));
     }
+  } catch (error) { next(error); }
+};
+
+const getChatAttachment = async (req, res, next) => {
+  try {
+    const parent = await resolveParent(req, res);
+    if (!parent) return;
+    if (!validateObjectId(req.params.messageId)) return res.status(400).json({ message: 'Invalid message.' });
+    const message = await ChatMessage.findOne({ _id: req.params.messageId, parentUserId: parent._id }).select('+attachment.data');
+    if (!message?.attachment?.data) return res.status(404).json({ message: 'Attachment not found.' });
+    res.set({ 'Content-Type': message.attachment.mimeType, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
+    res.send(message.attachment.data);
   } catch (error) { next(error); }
 };
 
@@ -217,4 +233,4 @@ const markChatRead = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-module.exports = { getChatConversations, getChatUnreadCount, getChatMessages, sendChatMessage, markChatRead };
+module.exports = { getChatConversations, getChatUnreadCount, getChatMessages, sendChatMessage, markChatRead, getChatAttachment };

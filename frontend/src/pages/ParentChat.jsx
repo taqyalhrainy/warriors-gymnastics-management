@@ -1,12 +1,23 @@
-import Sidebar from '../components/Sidebar.jsx';
 import ChatWorkspace from '../components/ChatWorkspace.jsx';
 import { useLanguage } from '../context/LanguageContext.jsx';
-import { Link } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
 
 export default function ParentChat() {
   const { language } = useLanguage();
-  return <div className="dashboard-layout parent-app-layout"><Sidebar /><main className="page-content parent-portal-page chat-page parent-chat-page">
-    <header className="chat-page-heading"><Link to="/parent" className="chat-page-back" aria-label={language === 'ar' ? 'الصفحة الرئيسية' : 'Home'}>‹</Link><div><span>WARRIORS GYMNASTICS</span><h1>{language === 'ar' ? 'الشات' : 'Chat'}</h1></div></header>
+  const ref = useRef(null);
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const resize = () => {
+      ref.current?.style.setProperty('--chat-viewport-height', `${viewport?.height || window.innerHeight}px`);
+      ref.current?.style.setProperty('--chat-viewport-top', `${viewport?.offsetTop || 0}px`);
+    };
+    resize();
+    viewport?.addEventListener('resize', resize);
+    viewport?.addEventListener('scroll', resize);
+    window.addEventListener('resize', resize);
+    return () => { viewport?.removeEventListener('resize', resize); viewport?.removeEventListener('scroll', resize); window.removeEventListener('resize', resize); };
+  }, []);
+  return <main ref={ref} className="chat-page parent-chat-page" aria-label={language === 'ar' ? 'الشات' : 'Chat'}>
     <ChatWorkspace />
-  </main></div>;
+  </main>;
 }

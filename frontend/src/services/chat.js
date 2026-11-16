@@ -53,8 +53,13 @@ export const prefetchParentChat = (user = {}) => {
   const id = user.id || user._id;
   return id ? fetchChatMessages(id) : Promise.resolve();
 };
-export const sendChatMessage = async (parentUserId, text, clientMessageId) => {
-  const { data } = await api.post(`/chat/${parentUserId}/messages`, { text, clientMessageId });
+export const fetchChatAttachment = async (parentUserId, messageId, signal) => {
+  const { data } = await api.get(`/chat/${parentUserId}/messages/${messageId}/attachment`, { responseType: 'blob', signal, __skipRetry: true });
+  return data;
+};
+
+export const sendChatMessage = async (parentUserId, text, clientMessageId, attachment) => {
+  const { data } = await api.post(`/chat/${parentUserId}/messages`, { text, clientMessageId, ...(attachment ? { attachment } : {}) }, { timeout: attachment ? 60000 : 12000 });
   const cached = getCachedChatMessages(parentUserId);
   notifyChatChanged();
   if (cached) {
