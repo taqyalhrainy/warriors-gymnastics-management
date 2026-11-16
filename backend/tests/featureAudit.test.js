@@ -907,7 +907,14 @@ test('owner subscription payment proof stays green after receipt deletion and re
     body: { playerId: String(player._id), paidAmount: 100, paymentMethod: 'Cash' },
     status: 201
   });
-  const paidCycle = await Player.findById(player._id);
+  // The API acknowledges the durable receipt before optional proof bookkeeping.
+  // Wait for that existing async contract instead of racing the background write.
+  const proofDeadline = Date.now() + 5000;
+  let paidCycle = await Player.findById(player._id);
+  while (!paidCycle.currentSubscriptionPaymentConfirmedAt && Date.now() < proofDeadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    paidCycle = await Player.findById(player._id);
+  }
   assert.ok(paidCycle.currentSubscriptionPaymentConfirmedAt);
   assert.equal(String(paidCycle.currentSubscriptionPaymentId), receipt._id);
 
