@@ -4,6 +4,19 @@ const isDatabaseUnavailable = (error) => (
   || /buffering timed out/i.test(error?.message || '')
 );
 
+// Log only fixed classifications: database errors can contain credentials or user data.
+const databaseFailureReason = (error) => {
+  const message = String(error?.message || '');
+  if (/bad auth|authentication failed|auth failed/i.test(message)) return 'authentication-failed';
+  if (/space quota|storage quota|storage limit|disk.*full|quota.*(?:space|storage)|over.*quota/i.test(message)) return 'storage-quota';
+  if (/rate limit|too many requests|throttl|transfer.*limit|bandwidth/i.test(message)) return 'rate-or-transfer-limit';
+  if (/too many connections|connection.*limit/i.test(message)) return 'connection-limit';
+  if (/not authorized|unauthorized|permission/i.test(message)) return 'authorization-failed';
+  if (/read.only|not writable|not primary|not master/i.test(message)) return 'not-writable';
+  if (/timed? ?out|timeout/i.test(message)) return 'timeout';
+  return 'unclassified';
+};
+
 const databaseHealth = (connection, isReady) => async (req, res) => {
   res.set('Cache-Control', 'no-store');
   try {
@@ -16,4 +29,4 @@ const databaseHealth = (connection, isReady) => async (req, res) => {
   }
 };
 
-module.exports = { isDatabaseUnavailable, databaseHealth };
+module.exports = { isDatabaseUnavailable, databaseHealth, databaseFailureReason };

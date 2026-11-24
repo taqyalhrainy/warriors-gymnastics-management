@@ -1,8 +1,8 @@
-const { isDatabaseUnavailable } = require('../utils/databaseAvailability');
+const { isDatabaseUnavailable, databaseFailureReason } = require('../utils/databaseAvailability');
 
 const errorHandler = (err, req, res, next) => {
   if (isDatabaseUnavailable(err)) {
-    console.error('Database unavailable:', err.name, err.code || '');
+    console.error('Database unavailable:', err.name, err.code || '', 'reason=' + databaseFailureReason(err), 'method=' + (req.method || 'unknown'));
     return res.status(503).json({ message: 'Database connection is temporarily unavailable. Please try again shortly.' });
   }
   if (err.code === 11000) return res.status(409).json({ message: 'This record already exists. Refresh and try again.' });

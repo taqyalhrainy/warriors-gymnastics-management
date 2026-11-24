@@ -2,11 +2,22 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const { databaseHealth } = require('../utils/databaseAvailability');
+const { databaseHealth, databaseFailureReason } = require('../utils/databaseAvailability');
 const errorHandler = require('../middleware/errorHandler');
 
 const response = () => ({ code: 200, headers: {}, set(key, value) { this.headers[key] = value; return this; }, status(code) { this.code = code; return this; }, json(body) { this.body = body; return this; } });
 const dbError = Object.assign(new Error('bad auth : authentication failed'), { name: 'MongoServerError', code: 8000 });
+
+test('database diagnostics distinguish Atlas failures without exposing message content', () => {
+  for (const [message, reason] of [
+    ['bad auth : authentication failed', 'authentication-failed'],
+    ['you are over your space quota', 'storage-quota'],
+    ['Too many connections', 'connection-limit'],
+    ['request rate limit exceeded', 'rate-or-transfer-limit'],
+    ['not authorized on database', 'authorization-failed'],
+    ['mongodb+srv://secret:password@example.test/account', 'unclassified']
+  ]) assert.equal(databaseFailureReason(new Error(message)), reason);
+});
 
 test('database authentication failure is a service error, not a logout', async () => {
   const module = { exports: {} };
